@@ -3,6 +3,7 @@ export const t = {
   title: "Morphogen",
   glass: "Terrariet. Dra med én finger for å bruke verktøyet, klyp for å zoome, dobbelttrykk for å zoome inn og ut.",
   tools: "Verktøy",
+  catchUp: (percent: number) => `Spoler fram … ${percent} %`,
   seeds: "Velg frø",
   creatures: "Velg kryp",
   tool: {

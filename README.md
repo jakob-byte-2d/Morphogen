@@ -18,6 +18,8 @@ npm run typecheck  # sjekk typer
 npm run build      # bygg til dist/
 ```
 
+Glasset lagres i nettleseren og spoles fram (opptil en time) når du åpner appen igjen. `?fresh` eller `?seed=123` starter et nytt glass, `?dev` slår på utviklermodus. Appen kan legges på hjemskjermen og virker uten nett når den er åpnet én gang.
+
 ## Struktur
 
 ```
