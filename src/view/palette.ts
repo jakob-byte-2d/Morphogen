@@ -1,4 +1,4 @@
-import { MAX_TYPES, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "../sim/cells";
+import { FEED, MAX_TYPES, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "../sim/cells";
 
 /** Colours per cell type. Each cell picks one by its shade, then varies it a little. */
 export const COLORS: Partial<Record<number, string[]>> = {
@@ -8,6 +8,7 @@ export const COLORS: Partial<Record<number, string[]>> = {
   [WATER]: ["#3f6f8a", "#4f84a0", "#46789a"],
   [ROOT]: ["#8a7458", "#7a6650", "#968062", "#6e5c48"],
   [WASTE]: ["#3a2e26", "#463628", "#2e241e", "#4a3a2c", "#52402e"],
+  [FEED]: ["#e0a060", "#c88850", "#d89a58", "#eab070"],
 };
 
 /** What a thirsty plant fades towards. */

@@ -76,8 +76,8 @@ body {
 }
 
 .tool {
-  width: 54px;
-  height: 54px;
+  width: min(54px, calc((100vw - 56px) / 6));
+  height: min(54px, calc((100vw - 56px) / 6));
   padding: 0;
   display: flex;
   align-items: center;
@@ -96,8 +96,8 @@ body {
 }
 
 .tool canvas {
-  width: 33px;
-  height: 30px;
+  width: 61%;
+  height: 56%;
   image-rendering: pixelated;
 }
 

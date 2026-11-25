@@ -4,6 +4,7 @@ export const t = {
   glass: "Terrariet. Dra med én finger for å bruke verktøyet, klyp for å zoome, dobbelttrykk for å zoome inn og ut.",
   tools: "Verktøy",
   seeds: "Velg frø",
+  creatures: "Velg kryp",
   tool: {
     water: "Vann",
     soil: "Jord",

@@ -1,21 +1,18 @@
 import { ABSORB, EMPTY, FIELD_CAPACITY, POROUS, POWDER, SOIL, WATER } from "./cells";
+import { updateCreatures, type Creature } from "./creatures";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
-import { PLANT_SPECIES, type PlantSpecies } from "./species";
+import { CREATURE_SPECIES, PLANT_SPECIES, type CreatureSpecies, type PlantSpecies } from "./species";
 
-/** The glass is W cells wide and H cells tall. y = 0 is the top. */
-export const W = 72;
-export const H = 128;
-export const SIZE = W * H;
+import { H, SIZE, W } from "./dims";
 
-/** Simulation steps per second at normal speed. */
-export const TICKS_PER_SECOND = 10;
+export { H, SIZE, TICKS_PER_SECOND, W } from "./dims";
 
 /**
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 2;
+export const SIM_VERSION = 3;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -69,12 +66,20 @@ export interface World {
   readonly plantSpecies: PlantSpecies[];
   /** Living plants, oldest first. */
   plants: Plant[];
+  /** Creature species in this glass. Creature cells refer to them by index (kind). */
+  readonly creatureSpecies: CreatureSpecies[];
+  /** Living creatures, oldest first. */
+  creatures: Creature[];
   /** Every living organism by id. */
-  readonly orgs: Map<number, Plant>;
+  readonly orgs: Map<number, Plant | Creature>;
   nextOrgId: number;
 }
 
-export function emptyWorld(seed: number, plantSpecies: PlantSpecies[] = PLANT_SPECIES): World {
+export function emptyWorld(
+  seed: number,
+  plantSpecies: PlantSpecies[] = PLANT_SPECIES,
+  creatureSpecies: CreatureSpecies[] = CREATURE_SPECIES,
+): World {
   return {
     seed,
     tick: 0,
@@ -92,6 +97,8 @@ export function emptyWorld(seed: number, plantSpecies: PlantSpecies[] = PLANT_SP
     humidity: 0,
     plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors } })),
     plants: [],
+    creatureSpecies: creatureSpecies.map((c) => ({ ...c })),
+    creatures: [],
     orgs: new Map(),
     nextOrgId: 1,
   };
@@ -326,6 +333,7 @@ export function stepWorld(w: World): void {
   if ((w.tick & 1) === 0) spreadMoisture(w);
   computeLight(w);
   updatePlants(w);
+  updateCreatures(w);
   if ((w.tick & 3) === 2) slowPass(w);
   condense(w);
   w.tick++;
@@ -347,6 +355,7 @@ export function totalUnits(w: World): number {
   let n = 0;
   for (let i = 0; i < SIZE; i++) n += w.food[i];
   for (const p of w.plants) n += p.store;
+  for (const c of w.creatures) n += c.store;
   return n;
 }
 

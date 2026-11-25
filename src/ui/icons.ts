@@ -55,6 +55,19 @@ export function plantIcon(form: string, colors: { leaf: string; stem: string; fl
   };
 }
 
+/** Creature icons by diet, coloured from the species. */
+const CREATURE_ICONS: Record<string, string[]> = {
+  plants: ["           ", "   k   k   ", "    k k    ", "   aaaaa   ", "  aAaaaaa  ", " kaaaaaaak ", "  aaaaaaa  ", " k aaaaa k "],
+  creatures: ["           ", "    yyy    ", "  yhyyYyy  ", " yhyyyyyYy ", "yyyyYyyyyyy", "YyyyyyyYyyY", " YYYyyYYY  "],
+};
+
+export function creatureIcon(diet: string, color: string, light: (c: string) => string, dark: (c: string) => string): Icon {
+  return {
+    c: { a: color, A: dark(color), y: color, Y: dark(color), h: light(color), k: INK },
+    r: CREATURE_ICONS[diet] ?? CREATURE_ICONS.plants,
+  };
+}
+
 /** Makes a canvas showing an icon; scale it up with CSS. */
 export function iconCanvas(icon: Icon): HTMLCanvasElement {
   const c = document.createElement("canvas");
