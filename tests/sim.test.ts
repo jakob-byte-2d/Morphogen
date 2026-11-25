@@ -109,9 +109,9 @@ describe("tools", () => {
 
   it("digs everything away with the spade", () => {
     const w = createWorld(8);
-    const i = at(36 * SCALE, 100 * SCALE);
+    const i = at(8 * SCALE, 110 * SCALE);
     expect(w.type[i]).not.toBe(EMPTY);
-    applyTool(w, "spade", 36 * SCALE, 100 * SCALE);
+    applyTool(w, "spade", 8 * SCALE, 110 * SCALE);
     expect(w.type[i]).toBe(EMPTY);
   });
 });
@@ -145,10 +145,11 @@ describe("determinism", () => {
 });
 
 describe("start scene", () => {
-  it("has soil, sand and a pond that stays, and no stones", () => {
+  it("has soil in the bottom quarter and a pond that stays, and no sand or stones", () => {
     const w = createWorld(42);
-    expect(count(w, SOIL)).toBeGreaterThan(1500);
-    expect(count(w, SAND)).toBeGreaterThan(200);
+    expect(count(w, SOIL)).toBeGreaterThan(W * H * 0.15);
+    expect(count(w, SOIL)).toBeLessThan(W * H * 0.3);
+    expect(count(w, SAND)).toBe(0);
     expect(count(w, STONE)).toBe(0);
     const water = count(w, WATER);
     expect(water).toBeGreaterThan(20);

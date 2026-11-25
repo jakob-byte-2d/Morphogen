@@ -1,8 +1,8 @@
-import { APHID, CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, SAND, SLIME, SOIL, STEM, WASTE, WATER, WORM } from "./cells";
+import { APHID, CREATURE_PART, EMPTY, FEED, FLOWER, LEAF, PLANT_PART, SLIME, STEM, WASTE, WATER } from "./cells";
 import type { CreatureSpecies } from "./species";
 import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
-import { clearCell, newOrgId, setCell, swapCells, type World } from "./world";
+import { clearCell, newOrgId, setCell, type World } from "./world";
 
 export interface Creature {
   kind: "creature";
@@ -43,9 +43,6 @@ const BUG_PER_UNIT = [62, 56, 50, 44, 38];
 /** Masses: energy per unit eaten, and how eagerly they grow (in thirds of the usual). */
 const MASS_PER_UNIT = [84, 77, 70, 63, 56];
 const MASS_GROW_AT = [5, 4, 3, 2, 1];
-/** Worms: energy per unit eaten, and energy at which they grow a segment. */
-const WORM_PER_UNIT = [72, 66, 60, 54, 48];
-const WORM_GROW_AT = [600, 500, 400, 300, 200];
 
 /** A bug breeds at this energy and gives the young this much (more for big ones). */
 function bugBreedAt(g: CreatureGenes): number {
@@ -96,7 +93,7 @@ function supported(w: World, i: number, self: number): boolean {
 
 
 function cellType(sp: CreatureSpecies): number {
-  return sp.diet === "plants" ? APHID : sp.diet === "creatures" ? SLIME : WORM;
+  return sp.diet === "plants" ? APHID : SLIME;
 }
 
 /** Puts a creature cell made of `units` units into an empty cell. */
@@ -137,17 +134,14 @@ function drop(w: World, c: Creature, i: number): void {
   }
 }
 
-/**
- * A dead creature becomes waste; what it had eaten goes with it. A worm was
- * made of the soil it dug through, and turns back into soil.
- */
+/** A dead creature becomes waste; what it had eaten goes with it. */
 function killCreature(w: World, c: Creature): void {
   c.dead = true;
   w.orgs.delete(c.id);
   let left = c.store;
   for (const i of c.cells) {
     if (w.org[i] !== c.id || !CREATURE_PART[w.type[i]]) continue;
-    w.type[i] = w.type[i] === WORM ? SOIL : WASTE;
+    w.type[i] = WASTE;
     w.kind[i] = 0;
     w.org[i] = 0;
     const add = Math.min(left, 255 - w.food[i]);
@@ -168,12 +162,7 @@ function eat(w: World, c: Creature, j: number, perUnit: number): void {
   c.energy += units * perUnit;
   const victim = w.org[j] ? w.orgs.get(w.org[j]) : undefined;
   w.food[j] = 0;
-  if (w.type[j] === WORM) {
-    // A bitten-off piece of worm leaves the soil it was made of.
-    w.type[j] = SOIL;
-    w.org[j] = 0;
-    w.kind[j] = 0;
-  } else clearCell(w, j);
+  clearCell(w, j);
   if (victim && victim.kind === "creature" && victim !== c) {
     victim.cells = victim.cells.filter((i) => i !== j);
     if (victim.cells.length === 0) {
@@ -448,200 +437,6 @@ function updateMass(w: World, c: Creature): void {
   }
 }
 
-/** Worms (waste eaters): a short line of cells burrowing through the soil. */
-const WORMS = {
-  sense: 8 * SCALE,
-  /** Updates between giving a unit back to the soil. */
-  castEvery: 4,
-  /** Updates between taking a unit from the soil, when there is nothing better. */
-  soilEvery: 32,
-  /** Energy to grow (and given back by losing) one segment. */
-  segmentCost: (120 / SCALE) | 0,
-};
-
-/** What worms eat: waste, feed, and the fungus that grows on waste. */
-function wormFood(t: number): boolean {
-  return t === WASTE || t === FEED || t === FUNGUS;
-}
-
-function isSoil(t: number): boolean {
-  return t === SOIL || t === SAND;
-}
-
-/** Where a worm's head can go: into soil, or along a tunnel under the ground. */
-function burrowable(w: World, j: number): boolean {
-  const t = w.type[j];
-  if (isSoil(t)) return true;
-  return t === EMPTY && j >= W && isSoil(w.type[j - W]);
-}
-
-/** Moves the worm's head into j; every segment follows, and the soil at j ends up behind the tail. */
-function crawl(w: World, c: Creature, j: number): void {
-  let prev = j;
-  for (let k = 0; k < c.cells.length; k++) {
-    swapCells(w, prev, c.cells[k]);
-    const was = c.cells[k];
-    c.cells[k] = prev;
-    prev = was;
-  }
-}
-
-/** How deep below the surface a worm likes to stay. */
-const WORM_DEPTH_MIN = 2 * SCALE;
-const WORM_DEPTH_MAX = 9 * SCALE;
-
-function updateWorm(w: World, c: Creature): void {
-  const n = c.cells.length;
-  const g = c.genes;
-  const splitAt = (2 + 2 * g.size) * SCALE;
-  // Living costs a little, more for a long worm (and a fast one).
-  if ((c.age & 3) === 0) c.energy -= upkeep(1 + ((n / (4 * SCALE)) | 0), g.speed, c.age >> 2);
-  if (c.energy <= 0) {
-    if (n === 1) {
-      killCreature(w, c);
-      return;
-    }
-    // A starving worm shrinks: its tail turns back into soil.
-    const tail = c.cells.pop()!;
-    w.type[tail] = SOIL;
-    w.org[tail] = 0;
-    w.kind[tail] = 0;
-    c.energy += WORMS.segmentCost >> 1;
-    return;
-  }
-  const head = c.cells[0];
-
-  // Eat waste, feed or fungus right next to the head.
-  let fed = false;
-  for (const d of NEIGHBOURS) {
-    const j = head + d;
-    if (!inGlass(j, head)) continue;
-    if (wormFood(w.type[j])) {
-      eat(w, c, j, WORM_PER_UNIT[g.growth - 1]);
-      fed = true;
-      break;
-    }
-  }
-  // Otherwise it lives, sparingly, on what is in the soil it swallows. It
-  // is enough to get by on, not to grow on; the units go back in its casts.
-  if (!fed && c.age % WORMS.soilEvery === 0) {
-    const j = head + W;
-    if (j < W * H && isSoil(w.type[j]) && w.food[j] > 0) {
-      w.food[j]--;
-      c.store++;
-      c.energy += WORM_PER_UNIT[g.growth - 1] >> 2;
-    }
-  }
-
-  // Give what it has eaten back to the soil around it: this is how waste
-  // becomes food for plants again.
-  if (c.store > 0 && c.age % WORMS.castEvery === 0) {
-    for (let k = 0; k < SCALE && c.store > 0; k++) {
-      const seg = c.cells[(c.age + k * 7) % n];
-      for (const d of [W, -1, 1, -W]) {
-        const j = seg + d;
-        if (inGlass(j, seg) && isSoil(w.type[j]) && w.food[j] < 250) {
-          w.food[j]++;
-          c.store--;
-          break;
-        }
-      }
-    }
-  }
-
-  // Grow a segment, or split in two when long.
-  if (c.energy > WORM_GROW_AT[g.growth - 1] && c.store >= 1 && n < splitAt) {
-    const tail = c.cells[n - 1];
-    for (const d of [W, -1, 1, -W]) {
-      const j = tail + d;
-      if (!inGlass(j, tail) || !isSoil(w.type[j])) continue;
-      c.store += w.food[j];
-      w.food[j] = 0;
-      clearCell(w, j);
-      addCell(w, c, j, 1);
-      c.store--;
-      c.energy -= WORMS.segmentCost;
-      break;
-    }
-  } else if (n >= splitAt) {
-    const back = c.cells.splice(n >> 1);
-    const other = spawnCreature(w, c.species, [], c.energy >> 1, inheritCreature(w, g));
-    if (other) {
-      c.energy -= other.energy;
-      other.store = c.store >> 1;
-      c.store -= other.store;
-      for (const i of back) w.org[i] = other.id;
-      other.cells = back.reverse();
-    } else c.cells.push(...back);
-  }
-
-  for (let k = moves(w, g); k > 0; k--) burrow(w, c);
-}
-
-/** Head for the nearest waste the worm can sense, else wander on. */
-function burrow(w: World, c: Creature): void {
-  const head = c.cells[0];
-  const hx = head % W;
-  const hy = (head / W) | 0;
-  let tx = -1;
-  let ty = -1;
-  let bestD = 1e9;
-  const r = WORMS.sense;
-  for (let y = Math.max(0, hy - r); y <= Math.min(H - 1, hy + r); y++) {
-    for (let x = Math.max(0, hx - r); x <= Math.min(W - 1, hx + r); x++) {
-      if (!wormFood(w.type[y * W + x])) continue;
-      const d = (x - hx) * (x - hx) + (y - hy) * (y - hy);
-      if (d < bestD) {
-        bestD = d;
-        tx = x;
-        ty = y;
-      }
-    }
-  }
-  let surface = 0;
-  while (surface < hy && !isSoil(w.type[surface * W + hx])) surface++;
-  const depth = hy - surface;
-  if (w.rng.below(40) === 0) c.dir = -c.dir;
-  // Eight ways, so it can slip between roots that grow on the slant.
-  const start = w.rng.below(8);
-  let best = -1;
-  if (tx >= 0) {
-    // Go for the food, if any move brings it closer.
-    let bestScore = -((hx - tx) * (hx - tx) + (hy - ty) * (hy - ty));
-    for (let k = 0; k < 8; k++) {
-      const j = head + NEIGHBOURS[(start + k) & 7];
-      if (!inGlass(j, head) || !burrowable(w, j)) continue;
-      const x = j % W;
-      const y = (j / W) | 0;
-      const score = -((x - tx) * (x - tx) + (y - ty) * (y - ty));
-      if (score > bestScore) {
-        bestScore = score;
-        best = j;
-      }
-    }
-  }
-  if (best < 0) {
-    // Nothing to go for, or no way to get closer to it (up in a heap,
-    // behind a stone): wander on sideways, keeping to the upper soil where
-    // things fall.
-    let bestScore = -1e9;
-    for (let k = 0; k < 8; k++) {
-      const j = head + NEIGHBOURS[(start + k) & 7];
-      if (!inGlass(j, head) || !burrowable(w, j)) continue;
-      const dx = (j % W) - hx;
-      const dy = ((j / W) | 0) - hy;
-      let score = (dx === c.dir ? 2 : 0) + w.rng.below(3);
-      if (depth > WORM_DEPTH_MAX) score -= dy * 4;
-      else if (depth < WORM_DEPTH_MIN) score += dy * 4;
-      if (score > bestScore) {
-        bestScore = score;
-        best = j;
-      }
-    }
-  }
-  if (best >= 0) crawl(w, c, best);
-}
-
 export function updateCreatures(w: World): void {
   const list = w.creatures;
   let anyDead = false;
@@ -663,8 +458,7 @@ export function updateCreatures(w: World): void {
     c.age++;
     const sp = w.creatureSpecies[c.species];
     if (sp.diet === "plants") updateBug(w, c);
-    else if (sp.diet === "creatures") updateMass(w, c);
-    else updateWorm(w, c);
+    else updateMass(w, c);
     if (c.dead) anyDead = true;
   }
   // A creature can also die while another one is being updated (eaten).

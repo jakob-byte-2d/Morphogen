@@ -29,7 +29,7 @@ import {
   type CreatureGenes,
   type PlantGenes,
 } from "../src/sim";
-import { clearCell, emptyWorld, type World } from "../src/sim/world";
+import { emptyWorld, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
 
@@ -59,7 +59,7 @@ describe("species traits", () => {
     const c = normalizeCreatureSpecies({ traits: { speed: "fast", mutation: 7 } });
     expect(c.traits).toEqual({ size: 3, speed: 3, growth: 3, mutation: 5 });
     // Species saved before traits existed still work.
-    expect(normalizeCreatureSpecies({ name: "Gammel", diet: "waste" }).traits.speed).toBe(3);
+    expect(normalizeCreatureSpecies({ name: "Gammel", diet: "plants" }).traits.speed).toBe(3);
   });
 });
 
@@ -162,22 +162,21 @@ describe("what the genes do", () => {
     expect(tired(5)).toBeGreaterThan(tired(1) * 3);
   });
 
-  it("small-bodied worms split sooner", () => {
-    const longest = (size: number) => {
-      const w = soilBed();
-      const cells = [at(40, H - 20), at(40, H - 19)];
-      for (const i of cells) clearCell(w, i);
-      const c = spawnCreature(w, 2, cells, 3000, { size, speed: 3, growth: 3, mutation: 0, tint: 0 })!;
-      c.store = 100;
+  it("small-bodied slime splits sooner", () => {
+    const largest = (size: number) => {
+      const w = emptyWorld(5);
+      for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
+      const c = spawnCreature(w, 1, [at(70, H - 2)], 30000, { size, speed: 3, growth: 5, mutation: 0, tint: 0 })!;
+      c.store = 400;
       let max = 0;
-      for (let t = 0; t < 600 && w.creatures.length === 1; t++) {
+      for (let t = 0; t < 4000 && w.creatures.length === 1; t++) {
         stepWorld(w);
         max = Math.max(max, c.cells.length);
       }
       expect(w.creatures.length).toBe(2);
       return max;
     };
-    expect(longest(1)).toBeLessThan(longest(5));
+    expect(largest(1)).toBeLessThan(largest(5));
   });
 });
 

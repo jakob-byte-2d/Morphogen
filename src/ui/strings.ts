@@ -31,7 +31,7 @@ export const t = {
     speed: "Fart",
   },
   info: {
-    text: "Et lite terrarium der hver rute er én celle. Plantene vokser mot lyset, krypene spiser dem, alt som dør blir avfall, og meitemark og sopp gjør avfallet om til næring igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
+    text: "Et lite terrarium der hver rute er én celle. Plantene vokser mot lyset, krypene spiser dem, alt som dør blir avfall, og sopp og råte gjør avfallet om til næring igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
     cycle: ["Planter", "Bladlus", "Slim", "Avfall", "Mark og sopp"],
     cycleNote: "Lys og vann driver det hele. Litt vann slipper ut, så glasset må vannes av og til.",
     version: (app: string, sim: number) => `Versjon ${app} · motor ${sim}`,
@@ -65,7 +65,6 @@ export const t = {
     bush: "Høy og greinete. Lever lenge.",
     plants: "Spiser blader, blomster og fôr. Holder seg i plantene.",
     creatures: "Kryper langs bakken og spiser kryp og fôr.",
-    waste: "Graver i jorda og gjør avfall om til næring.",
     fungus: "Sopp kommer av seg selv på fuktig avfall og gjør det om til næring.",
   } as Record<string, string>,
   help: {
@@ -98,7 +97,7 @@ export const t = {
     branches: "Greiner",
     color: "Farge",
     eats: "Spiser",
-    diets: { plants: "Planter", creatures: "Kryp", waste: "Avfall" } as Record<string, string>,
+    diets: { plants: "Planter", creatures: "Kryp" } as Record<string, string>,
     traits: { plantGrowth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", growth: "Vekst", mutation: "Mutasjon" },
     /** What the two ends of each trait mean: the trade-off in a few words. */
     ends: {

@@ -6,13 +6,11 @@ import {
   H,
   setCell,
   SOIL,
-  spawnCreature,
   stepWorldN,
   totalUnits,
   totalWater,
   W,
   WASTE,
-  WORM,
 } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
@@ -41,25 +39,20 @@ function soilFood(w: World): number {
   return n;
 }
 
-describe("worms", () => {
-  it("eat waste and give it back to the soil as food", () => {
+describe("waste", () => {
+  it("rots into the soil by itself, even in a heap", () => {
     const w = compost();
-    spawnCreature(w, 2, [at(30, H - 18), at(30, H - 17), at(30, H - 16)], 300);
-    const units = totalUnits(w);
-    const waste = count(w, WASTE);
-    stepWorldN(w, 1800);
-    expect(count(w, WASTE)).toBeLessThan(waste);
-    expect(soilFood(w)).toBeGreaterThan(0);
-    expect(totalUnits(w)).toBe(units);
-  });
-
-  it("stay in the soil", () => {
-    const w = compost();
-    spawnCreature(w, 2, [at(10, H - 15), at(10, H - 14), at(10, H - 13)], 300);
-    for (let k = 0; k < 6; k++) {
-      stepWorldN(w, 300);
-      for (let i = 0; i < W * H; i++) if (w.type[i] === WORM) expect((i / W) | 0).toBeGreaterThan(H - 22);
+    // A second layer on top: it can only rot into the waste below.
+    for (let x = 20; x < 52; x++) {
+      setCell(w, at(x, H - 22), WASTE);
+      w.food[at(x, H - 22)] = 3;
     }
+    const units = totalUnits(w);
+    const waste = count(w, WASTE) + count(w, FUNGUS);
+    stepWorldN(w, 6000);
+    expect(count(w, WASTE) + count(w, FUNGUS)).toBeLessThan(waste);
+    expect(soilFood(w)).toBeGreaterThan(30);
+    expect(totalUnits(w)).toBe(units);
   });
 });
 
@@ -87,7 +80,7 @@ describe("water", () => {
 });
 
 describe("the whole cycle", () => {
-  it("keeps plants and decomposers going for a quarter of an hour", () => {
+  it("keeps plants going and nutrients moving for a quarter of an hour", () => {
     const w = createWorld(42);
     stepWorldN(w, 1200);
     applyTool(w, "creature", 22, 40, 0);
@@ -96,6 +89,7 @@ describe("the whole cycle", () => {
     stepWorldN(w, 9000);
     expect(totalUnits(w)).toBe(units);
     expect(w.plants.length).toBeGreaterThan(2);
-    expect(w.creatures.some((c) => w.creatureSpecies[c.species].diet === "waste")).toBe(true);
+    // What died has not just piled up: much of it is back in the soil.
+    expect(count(w, WASTE) + count(w, FUNGUS)).toBeLessThan(400);
   });
 });

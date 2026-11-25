@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, createWorld, MAX_SPECIES, SCALE, SEED, stepWorldN, W, WORM } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, APHID, createWorld, MAX_SPECIES, SCALE, SEED, SLIME, stepWorldN } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -15,18 +15,23 @@ describe("species the player makes", () => {
 
   it("live the way their food decides", () => {
     const w = createWorld(32);
-    const k = addCreatureSpecies(w, { name: "Gravemus", diet: "waste", color: "#aa8866" });
-    applyTool(w, "creature", 60 * SCALE, 20 * SCALE, k);
-    const c = w.creatures.find((x) => x.species === k);
-    expect(c).toBeDefined();
-    expect(c!.cells.every((i) => w.type[i] === WORM)).toBe(true);
-    expect(((c!.cells[0] / W) | 0)).toBeGreaterThan(60 * SCALE);
+    const bug = addCreatureSpecies(w, { name: "Lus", diet: "plants", color: "#aa8866" });
+    const mass = addCreatureSpecies(w, { name: "Grøt", diet: "creatures", color: "#88aa66" });
+    applyTool(w, "creature", 10 * SCALE, 20 * SCALE, bug);
+    applyTool(w, "creature", 64 * SCALE, 20 * SCALE, mass);
+    const b = w.creatures.find((x) => x.species === bug);
+    const m = w.creatures.find((x) => x.species === mass);
+    expect(b!.cells.every((i) => w.type[i] === APHID)).toBe(true);
+    expect(m!.cells.every((i) => w.type[i] === SLIME)).toBe(true);
+    expect(m!.cells.length).toBeGreaterThan(1);
   });
 
   it("are cleaned up and limited in number", () => {
     const w = createWorld(33);
     const k = addCreatureSpecies(w, { diet: "everything", color: "javascript:" });
     expect(w.creatureSpecies[k].diet).toBe("plants");
+    // Worms are gone: an old waste eater becomes a plant eater.
+    expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "waste" })].diet).toBe("plants");
     expect(w.creatureSpecies[k].color).toMatch(/^#[0-9a-f]{6}$/);
     while (addPlantSpecies(w, {}) >= 0);
     expect(w.plantSpecies.length).toBe(MAX_SPECIES);
