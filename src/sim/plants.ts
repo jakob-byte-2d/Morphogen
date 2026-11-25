@@ -1,7 +1,8 @@
 import { CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
 import type { PlantSpecies } from "./species";
 import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
-import { clearCell, setCell, wake, WATER_UNITS, type World } from "./world";
+import { inheritPlant, packSeed, plantGenesOf, unpackSeed, type PlantGenes } from "./genes";
+import { clearCell, newOrgId, setCell, wake, WATER_UNITS, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
 export interface Tip {
@@ -18,7 +19,7 @@ export interface Plant {
   kind: "plant";
   id: number;
   species: number;
-  /** Sugar from light. Growing a cell costs GROW_COST. */
+  /** Sugar from light. Growing a cell costs about GROW_COST (see cellCost). */
   energy: number;
   water: number;
   /** Nutrient units taken up by the roots, not yet built into cells. */
@@ -34,17 +35,28 @@ export interface Plant {
   /** Most leaves and flowers the plant has had; it grows lost ones back up to these. */
   maxLeaves: number;
   maxFlowers: number;
+  genes: PlantGenes;
   dead: boolean;
 }
 
 /** Plants are updated every PLANT_EVERY steps, spread over the steps by id. */
 export const PLANT_EVERY = 4;
 export const GROW_COST = 30;
-/** A plant grows at most one cell every GROW_EVERY updates. */
-const GROW_EVERY = 4;
+/**
+ * By the growth gene: updates between growing, and energy per cell. Fast
+ * growth costs more per cell.
+ */
+const GROW_EVERY = [8, 6, 4, 3, 2];
+const CELL_COST = [24, 27, 30, 36, 42];
+/**
+ * By the seed gene: energy a seed starts with, what it costs the parent, and
+ * one seed in this many updates. Big seeds give strong seedlings, but few.
+ */
+const SEED_ENERGY = [60, 100, 150, 220, 300];
+const SEED_COST = [25, 40, 60, 90, 130];
+const SEED_EVERY = [4, 6, 10, 15, 22];
 /** Updates without water before a plant dies. Yellowing shows how close it is. */
 export const THIRST_LIMIT = 90;
-const SEED_ENERGY = 150;
 /** Slow-pass checks (one every 4 steps) a seed waits before it can sprout. */
 const SPROUT_AFTER = 25;
 /** ...and before it rots if it never gets the chance. */
@@ -63,13 +75,8 @@ function isBed(t: number): boolean {
   return t === SOIL || t === SAND || t === WASTE;
 }
 
-function newId(w: World): number {
-  for (let n = 0; n < 65535; n++) {
-    const id = w.nextOrgId;
-    w.nextOrgId = id >= 65535 ? 1 : id + 1;
-    if (!w.orgs.has(id)) return id;
-  }
-  return 0;
+function cellCost(p: Plant): number {
+  return CELL_COST[p.genes.growth - 1];
 }
 
 /** Builds one cell of the plant from a unit in its store. */
@@ -94,15 +101,16 @@ function rootInto(w: World, p: Plant, i: number): boolean {
 }
 
 function germinate(w: World, i: number): void {
-  const id = newId(w);
+  const id = newOrgId(w);
   if (id === 0) return;
   const species = w.kind[i];
   const sp = w.plantSpecies[species];
+  const genes = unpackSeed(w.org[i], plantGenesOf(sp));
   const p: Plant = {
     kind: "plant",
     id,
     species,
-    energy: SEED_ENERGY,
+    energy: SEED_ENERGY[genes.seed - 1],
     water: 0,
     store: w.food[i],
     thirst: 0,
@@ -112,6 +120,7 @@ function germinate(w: World, i: number): void {
     tips: [],
     maxLeaves: 0,
     maxFlowers: 0,
+    genes,
     dead: false,
   };
   clearCell(w, i);
@@ -196,16 +205,16 @@ function finishTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): void {
     for (const [dx, dy] of BLOSSOM) {
       const j = tip.i + dy * W + dx;
       if (x + dx < 0 || x + dx >= W || j < 0) continue;
-      if (w.type[j] === EMPTY && p.energy >= GROW_COST) {
-        if (place(w, p, j, FLOWER)) p.energy -= GROW_COST;
+      if (w.type[j] === EMPTY && p.energy >= cellCost(p)) {
+        if (place(w, p, j, FLOWER)) p.energy -= cellCost(p);
       }
     }
   } else if (w.rng.below(sp.form === "grass" ? 2 : 3) === 0) {
     // A small seed head.
     for (let k = 1; k <= SCALE; k++) {
       const j = tip.i - k * W;
-      if (j < 0 || w.type[j] !== EMPTY || p.energy < GROW_COST || !place(w, p, j, FLOWER)) break;
-      p.energy -= GROW_COST;
+      if (j < 0 || w.type[j] !== EMPTY || p.energy < cellCost(p) || !place(w, p, j, FLOWER)) break;
+      p.energy -= cellCost(p);
     }
   }
 }
@@ -354,8 +363,9 @@ function dropSeed(w: World, p: Plant, flowers: number[]): void {
   setCell(w, i, SEED);
   w.kind[i] = p.species;
   w.food[i] = 1;
+  w.org[i] = packSeed(inheritPlant(w, p.genes));
   p.store--;
-  p.energy -= GROW_COST * 2;
+  p.energy -= SEED_COST[p.genes.seed - 1];
 }
 
 function updatePlant(w: World, p: Plant): void {
@@ -438,36 +448,38 @@ function updatePlant(w: World, p: Plant): void {
 
   // Grow a few cells every few updates (SCALE of them, so plants keep their
   // pace in the finer glass): roots first while they lag behind, then the shoot.
-  if (p.age % GROW_EVERY !== 0 || p.thirst > 0) return;
+  if (p.age % GROW_EVERY[p.genes.growth - 1] !== 0 || p.thirst > 0) return;
   if (leaves > p.maxLeaves) p.maxLeaves = leaves;
   if (flowers.length > p.maxFlowers) p.maxFlowers = flowers.length;
   for (let g = 0; g < SCALE; g++) {
-    if (p.energy < GROW_COST) return;
+    const cost = cellCost(p);
+    if (p.energy < cost) return;
     // A root takes the nutrients of the cell it grows into, so a plant with
     // an empty store can still reach for new ground.
     const wantRoots = Math.max(2, (p.cells.length / 4) | 0);
     if (roots.length < wantRoots && growRoot(w, p, sp, roots)) {
-      p.energy -= GROW_COST;
+      p.energy -= cost;
       continue;
     }
     if (p.store < 1) return;
     if (n - roots.length < shootCap(sp) && growShoot(w, p, sp)) {
-      p.energy -= GROW_COST;
+      p.energy -= cost;
       continue;
     }
     if (leaves < p.maxLeaves && regrowLeaf(w, p, stems)) {
-      p.energy -= GROW_COST;
+      p.energy -= cost;
       leaves++;
       continue;
     }
     if (flowers.length < p.maxFlowers && regrowFlower(w, p, stems.length > 0 ? stems : cells)) {
-      p.energy -= GROW_COST;
+      p.energy -= cost;
       return;
     }
     break;
   }
   // Grass seeds half as often: its seeds land in the open more easily.
-  if (flowers.length > 0 && p.energy > GROW_COST * 4 && w.rng.below(sp.form === "grass" ? 20 : 10) === 0) dropSeed(w, p, flowers);
+  const every = SEED_EVERY[p.genes.seed - 1] * (sp.form === "grass" ? 2 : 1);
+  if (flowers.length > 0 && p.energy > SEED_COST[p.genes.seed - 1] + GROW_COST * 4 && w.rng.below(every) === 0) dropSeed(w, p, flowers);
 }
 
 export function updatePlants(w: World): void {
@@ -501,6 +513,7 @@ export function slowPass(w: World): void {
       else if (wet[i] >= SEED_ROTS_AFTER) {
         type[i] = WASTE;
         wet[i] = 0;
+        w.org[i] = 0;
       }
     } else if (t === FEED) {
       // Feed nobody eats goes off and turns to waste. Its age is in the moisture slot.

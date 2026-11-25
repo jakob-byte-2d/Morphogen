@@ -1,7 +1,8 @@
 import { APHID, CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, SAND, SLIME, SOIL, STEM, WASTE, WATER, WORM } from "./cells";
 import type { CreatureSpecies } from "./species";
 import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
-import { clearCell, setCell, swapCells, type World } from "./world";
+import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
+import { clearCell, newOrgId, setCell, swapCells, type World } from "./world";
 
 export interface Creature {
   kind: "creature";
@@ -15,6 +16,7 @@ export interface Creature {
   cells: number[];
   /** Which way a mass is creeping when it has nothing to go for: -1 or 1. */
   dir: number;
+  genes: CreatureGenes;
   dead: boolean;
 }
 
@@ -25,23 +27,48 @@ const MAX_CREATURES = 160;
 /** Bugs (plant eaters): one cell each. */
 const BUG = {
   start: 120,
-  /** Energy per unit eaten. */
-  perUnit: 50,
-  full: 340,
-  /** One bite in this many updates, when next to food and hungry. */
-  biteEvery: 24,
-  breedAt: 260,
   lifespan: 240,
   /** Updates between droppings. */
   dropEvery: 40,
 };
 
+/*
+ * What the genes do, as tables by trait value (1–5; 3 is the middle).
+ * Growth: fast growers eat (and grow) faster but get less out of each meal.
+ * Size: how big a creature gets before it breeds or splits.
+ */
+/** Bugs: one bite in this many updates, and energy per unit eaten. */
+const BUG_BITE_EVERY = [40, 32, 24, 18, 12];
+const BUG_PER_UNIT = [62, 56, 50, 44, 38];
+/** Masses: energy per unit eaten, and how eagerly they grow (in thirds of the usual). */
+const MASS_PER_UNIT = [84, 77, 70, 63, 56];
+const MASS_GROW_AT = [5, 4, 3, 2, 1];
+/** Worms: energy per unit eaten, and energy at which they grow a segment. */
+const WORM_PER_UNIT = [72, 66, 60, 54, 48];
+const WORM_GROW_AT = [600, 500, 400, 300, 200];
+
+/** A bug breeds at this energy and gives the young this much (more for big ones). */
+function bugBreedAt(g: CreatureGenes): number {
+  return 140 + 40 * g.size;
+}
+function bugYoung(g: CreatureGenes): number {
+  return 40 + 20 * g.size;
+}
+
+/**
+ * Speed: tries per update to move, each coming off one time in three. Speed
+ * 3 moves about as far as a creature always did; it costs energy (see upkeep).
+ */
+function moves(w: World, g: CreatureGenes): number {
+  let n = 0;
+  for (let k = 0; k < g.speed; k++) if (w.rng.below(3) === 0) n++;
+  return n;
+}
+
 /** Masses (creature eaters): a creeping clump of cells. */
 const MASS = {
   start: 320,
-  perUnit: 70,
   sense: 12 * SCALE,
-  splitAt: 22 * AREA,
   /** Tallest a mass can heap up. */
   height: 3 * SCALE,
   dropEvery: 24,
@@ -67,14 +94,6 @@ function supported(w: World, i: number, self: number): boolean {
   return false;
 }
 
-function newId(w: World): number {
-  for (let n = 0; n < 65535; n++) {
-    const id = w.nextOrgId;
-    w.nextOrgId = id >= 65535 ? 1 : id + 1;
-    if (!w.orgs.has(id)) return id;
-  }
-  return 0;
-}
 
 function cellType(sp: CreatureSpecies): number {
   return sp.diet === "plants" ? APHID : sp.diet === "creatures" ? SLIME : WORM;
@@ -89,12 +108,16 @@ function addCell(w: World, c: Creature, i: number, units: number): void {
   c.cells.push(i);
 }
 
-/** Starts a new creature in the given empty cells; the units come with it. */
-export function spawnCreature(w: World, species: number, at: number[], energy: number): Creature | null {
+/**
+ * Starts a new creature in the given empty cells; the units come with it.
+ * Without genes it gets its species' own.
+ */
+export function spawnCreature(w: World, species: number, at: number[], energy: number, genes?: CreatureGenes): Creature | null {
   if (w.creatures.length >= MAX_CREATURES) return null;
-  const id = newId(w);
+  const id = newOrgId(w);
   if (id === 0) return null;
-  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], dir: w.rng.below(2) === 0 ? -1 : 1, dead: false };
+  const g = genes ?? creatureGenesOf(w.creatureSpecies[species]);
+  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], dir: w.rng.below(2) === 0 ? -1 : 1, genes: g, dead: false };
   for (const i of at) addCell(w, c, i, 1);
   w.creatures.push(c);
   w.orgs.set(id, c);
@@ -162,33 +185,36 @@ function edibleForBug(t: number): boolean {
 /** A plant eater: one speck that crawls over plants and ground, eats and breeds. */
 function updateBug(w: World, c: Creature): void {
   const i = c.cells[0];
-  c.energy--;
+  const g = c.genes;
+  c.energy -= upkeep(1, g.speed, c.age);
   if (c.energy <= 0 || c.age * CREATURE_EVERY > BUG.lifespan * TICKS_PER_SECOND) {
     killCreature(w, c);
     return;
   }
+  const breedAt = bugBreedAt(g);
   // Eat something next to it, if hungry.
-  if (c.energy < BUG.full && w.rng.below(BUG.biteEvery) === 0) {
+  if (c.energy < breedAt + 80 && w.rng.below(BUG_BITE_EVERY[g.growth - 1]) === 0) {
     const start = w.rng.below(8);
     for (let k = 0; k < 8; k++) {
       const j = i + NEIGHBOURS[(start + k) & 7];
       if (inGlass(j, i) && edibleForBug(w.type[j])) {
-        eat(w, c, j, BUG.perUnit);
+        eat(w, c, j, BUG_PER_UNIT[g.growth - 1]);
         return;
       }
     }
   }
   if (c.age % BUG.dropEvery === 0 && c.store > 2) drop(w, c, i);
   // Breed: a new bug beside it, made from one unit of what it has eaten.
-  if (c.energy >= BUG.breedAt && c.store >= 1) {
+  if (c.energy >= breedAt && c.store >= 1) {
     for (const d of NEIGHBOURS) {
       const j = i + d;
       if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, 0)) continue;
-      const child = spawnCreature(w, c.species, [], 100);
+      const young = bugYoung(g);
+      const child = spawnCreature(w, c.species, [], young, inheritCreature(w, g));
       if (!child) break;
       addCell(w, child, j, 1);
       c.store--;
-      c.energy -= 140;
+      c.energy -= young + 40;
       break;
     }
   }
@@ -201,8 +227,7 @@ function updateBug(w: World, c: Creature): void {
     }
     return;
   }
-  // Crawl SCALE steps (each one half the time), so bugs keep their pace.
-  for (let k = 0; k < SCALE; k++) if (w.rng.below(2) === 0) crawlBug(w, c);
+  for (let k = moves(w, g); k > 0; k--) crawlBug(w, c);
 }
 
 /** Crawl to a neighbouring cell with something to hold on to, preferring food. */
@@ -285,7 +310,8 @@ function slump(w: World, c: Creature): boolean {
 function updateMass(w: World, c: Creature): void {
   if (slump(w, c)) return;
   const n = c.cells.length;
-  c.energy -= (c.age & 1) + ((n / (8 * AREA)) | 0);
+  const g = c.genes;
+  c.energy -= upkeep((c.age & 1) + ((n / (8 * AREA)) | 0), g.speed, c.age);
 
   // Where are we, and is there anything to go for?
   let sx = 0;
@@ -324,7 +350,7 @@ function updateMass(w: World, c: Creature): void {
       if (!inGlass(j, i)) continue;
       const t = w.type[j];
       if (t === FEED || (CREATURE_PART[t] && w.kind[j] !== c.species && w.org[j] !== c.id)) {
-        eat(w, c, j, MASS.perUnit);
+        eat(w, c, j, MASS_PER_UNIT[g.growth - 1]);
         if (++bites >= SCALE) break;
       }
     }
@@ -364,7 +390,8 @@ function updateMass(w: World, c: Creature): void {
   }
 
   // Grow if well fed, otherwise creep: the hindmost cell flows to the front.
-  if (c.store >= 1 && c.energy > 160 + (((n * 10) / AREA) | 0)) {
+  const growAt = (((160 + (((n * 10) / AREA) | 0)) * MASS_GROW_AT[g.growth - 1]) / 3) | 0;
+  if (c.store >= 1 && c.energy > growAt) {
     for (let g = 0; g < SCALE && c.store >= 1; g++) {
       let to = best;
       if (g > 0) {
@@ -378,12 +405,12 @@ function updateMass(w: World, c: Creature): void {
       c.energy -= MASS.cellCost;
     }
   } else if (n === 1) {
-    if (w.rng.below(3) === 0) moveCell(w, c, 0, best);
+    if (w.rng.below(9) < g.speed) moveCell(w, c, 0, best);
   } else {
     // A bigger mass moves more cells at a time, so it is not slower. It
     // hurries towards prey and dawdles when it has nothing to go for.
-    const moves = tx >= 0 ? 1 + (n >> 2) : w.rng.below(3) === 0 ? 1 : 0;
-    for (let m = 0; m < moves; m++) {
+    const steps = tx >= 0 ? (((1 + (n >> 2)) * g.speed) / 3) | 0 : w.rng.below(9) < g.speed ? 1 : 0;
+    for (let m = 0; m < steps; m++) {
       const options = m === 0 ? front : frontier(w, c);
       if (options.length === 0) break;
       let to = options[0];
@@ -396,10 +423,10 @@ function updateMass(w: World, c: Creature): void {
   }
 
   // Grown big: split in two.
-  if (c.cells.length >= MASS.splitAt) {
+  if (c.cells.length >= (7 + 5 * g.size) * AREA) {
     const sorted = [...c.cells].sort((a, b) => (a % W) - (b % W) || a - b);
     const half = sorted.slice(0, sorted.length >> 1);
-    const other = spawnCreature(w, c.species, [], c.energy >> 1);
+    const other = spawnCreature(w, c.species, [], c.energy >> 1, inheritCreature(w, g));
     if (other) {
       c.energy -= other.energy;
       other.dir = -c.dir;
@@ -414,12 +441,9 @@ function updateMass(w: World, c: Creature): void {
 
 /** Worms (waste eaters): a short line of cells burrowing through the soil. */
 const WORMS = {
-  perUnit: 60,
   sense: 8 * SCALE,
   /** Updates between giving a unit back to the soil. */
   castEvery: 4,
-  growAt: 400,
-  splitAt: 8 * SCALE,
   /** Energy to grow (and given back by losing) one segment. */
   segmentCost: (120 / SCALE) | 0,
 };
@@ -457,8 +481,10 @@ const WORM_DEPTH_MAX = 9 * SCALE;
 
 function updateWorm(w: World, c: Creature): void {
   const n = c.cells.length;
-  // Living costs a little, more for a long worm.
-  if ((c.age & 3) === 0) c.energy -= 1 + ((n / (4 * SCALE)) | 0);
+  const g = c.genes;
+  const splitAt = (2 + 2 * g.size) * SCALE;
+  // Living costs a little, more for a long worm (and a fast one).
+  if ((c.age & 3) === 0) c.energy -= upkeep(1 + ((n / (4 * SCALE)) | 0), g.speed, c.age >> 2);
   if (c.energy <= 0) {
     if (n === 1) {
       killCreature(w, c);
@@ -477,7 +503,7 @@ function updateWorm(w: World, c: Creature): void {
     const j = head + d;
     if (!inGlass(j, head)) continue;
     if (wormFood(w.type[j])) {
-      eat(w, c, j, WORMS.perUnit);
+      eat(w, c, j, WORM_PER_UNIT[g.growth - 1]);
       break;
     }
   }
@@ -499,7 +525,7 @@ function updateWorm(w: World, c: Creature): void {
   }
 
   // Grow a segment, or split in two when long.
-  if (c.energy > WORMS.growAt && c.store >= 1 && n < WORMS.splitAt) {
+  if (c.energy > WORM_GROW_AT[g.growth - 1] && c.store >= 1 && n < splitAt) {
     const tail = c.cells[n - 1];
     for (const d of [W, -1, 1, -W]) {
       const j = tail + d;
@@ -512,9 +538,9 @@ function updateWorm(w: World, c: Creature): void {
       c.energy -= WORMS.segmentCost;
       break;
     }
-  } else if (n >= WORMS.splitAt) {
+  } else if (n >= splitAt) {
     const back = c.cells.splice(n >> 1);
-    const other = spawnCreature(w, c.species, [], c.energy >> 1);
+    const other = spawnCreature(w, c.species, [], c.energy >> 1, inheritCreature(w, g));
     if (other) {
       c.energy -= other.energy;
       other.store = c.store >> 1;
@@ -524,8 +550,7 @@ function updateWorm(w: World, c: Creature): void {
     } else c.cells.push(...back);
   }
 
-  // Burrow SCALE steps (each one half the time), so worms keep their pace.
-  for (let k = 0; k < SCALE; k++) if (w.rng.below(2) === 0) burrow(w, c);
+  for (let k = moves(w, g); k > 0; k--) burrow(w, c);
 }
 
 /** Head for the nearest waste the worm can sense, else wander on. */

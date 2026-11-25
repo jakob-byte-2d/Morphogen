@@ -104,6 +104,24 @@ export class Creator {
     actions.append(cancel, make);
   }
 
+  /** A trait from low to high, with what each end means underneath. */
+  private trait(body: HTMLElement, id: keyof typeof t.creator.traits, value: number, min: number, onChange: (v: number) => void): void {
+    const box = el("div", "trait");
+    const range = el("input", "creator-range");
+    range.type = "range";
+    range.min = String(min);
+    range.max = "5";
+    range.step = "1";
+    range.value = String(value);
+    range.setAttribute("aria-label", t.creator.traits[id]);
+    range.addEventListener("input", () => onChange(Number(range.value)));
+    const ends = el("div", "trait-ends");
+    const [low, high] = t.creator.ends[id];
+    ends.append(el("span", "", low), el("span", "", high));
+    box.append(range, ends);
+    this.row(body, t.creator.traits[id], box);
+  }
+
   private nameField(body: HTMLElement, value: string, onChange: (v: string) => void): void {
     const input = el("input", "creator-name");
     input.type = "text";
@@ -125,6 +143,7 @@ export class Creator {
       rootDepth: 10,
       lifespan: LIFESPAN.flower,
       colors: { leaf: LEAF_COLORS[0], stem: this.dark(LEAF_COLORS[0]), flower: FLOWER_COLORS[0], seed: "#a08c48" },
+      traits: { growth: 3, seed: 3, mutation: 1 },
     };
     const draw = () => preview.replaceChildren(iconCanvas(plantIcon(sp.form, sp.colors, this.light, this.dark)));
     draw();
@@ -168,12 +187,20 @@ export class Creator {
     });
     this.row(body, t.creator.height, height);
     this.row(body, t.creator.branches, this.choices([0, 1, 2, 3].map((n) => [n, String(n)] as [number, string]), sp.branches, (n) => (sp.branches = n), t.creator.branches));
+    this.trait(body, "plantGrowth", sp.traits.growth, 1, (v) => (sp.traits.growth = v));
+    this.trait(body, "seed", sp.traits.seed, 1, (v) => (sp.traits.seed = v));
+    this.trait(body, "mutation", sp.traits.mutation, 0, (v) => (sp.traits.mutation = v));
     this.actions(actions, () => onMake(sp));
   }
 
   openCreature(number: number, onMake: (sp: CreatureSpecies) => void): void {
     const { body, preview, actions } = this.frame(t.creator.newCreature);
-    const sp: CreatureSpecies = { name: t.creator.creatureName(number), diet: "plants", color: CREATURE_COLORS[3] };
+    const sp: CreatureSpecies = {
+      name: t.creator.creatureName(number),
+      diet: "plants",
+      color: CREATURE_COLORS[3],
+      traits: { size: 3, speed: 3, growth: 3, mutation: 1 },
+    };
     const draw = () => preview.replaceChildren(iconCanvas(creatureIcon(sp.diet, sp.color, this.light, this.dark)));
     draw();
     this.nameField(body, sp.name, (v) => (sp.name = v));
@@ -194,6 +221,10 @@ export class Creator {
         draw();
       }, t.creator.eats),
     );
+    this.trait(body, "size", sp.traits.size, 1, (v) => (sp.traits.size = v));
+    this.trait(body, "speed", sp.traits.speed, 1, (v) => (sp.traits.speed = v));
+    this.trait(body, "growth", sp.traits.growth, 1, (v) => (sp.traits.growth = v));
+    this.trait(body, "mutation", sp.traits.mutation, 0, (v) => (sp.traits.mutation = v));
     this.actions(actions, () => onMake(sp));
   }
 }

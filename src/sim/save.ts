@@ -1,8 +1,9 @@
 import type { Creature } from "./creatures";
 import { SIZE } from "./dims";
 import type { Plant, Tip } from "./plants";
+import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
-import { CHUNKS_X, CHUNKS_Y, computeLight, emptyWorld, SIM_VERSION, type World } from "./world";
+import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -44,7 +45,7 @@ export interface SavedGlass {
   humidity: number;
   lostWater: number;
   nextOrgId: number;
-  cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org", string>;
+  cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org" | "light", string>;
   /** Which parts of the glass are at rest; needed to carry on exactly. */
   chunks: string;
   plantSpecies: unknown[];
@@ -69,6 +70,8 @@ export function saveWorld(w: World): SavedGlass {
       food: toBase64(w.food),
       kind: toBase64(w.kind),
       org: toBase64(new Uint8Array(w.org.buffer, w.org.byteOffset, w.org.byteLength)),
+      // Light is worked out only every few steps, so it is part of the state.
+      light: toBase64(w.light),
     },
     chunks: toBase64(w.wakeNext),
     plantSpecies: w.plantSpecies,
@@ -107,6 +110,7 @@ export function loadWorld(data: unknown): World | null {
     food: fromBase64(c.food, SIZE),
     kind: fromBase64(c.kind, SIZE),
     org: fromBase64(c.org, SIZE * 2),
+    light: fromBase64(c.light, SIZE),
   };
   if (Object.values(arrays).some((a) => a === null)) return null;
   w.type.set(arrays.type!);
@@ -115,17 +119,18 @@ export function loadWorld(data: unknown): World | null {
   w.food.set(arrays.food!);
   w.kind.set(arrays.kind!);
   new Uint8Array(w.org.buffer).set(arrays.org!);
+  w.light.set(arrays.light!);
   w.tick = int(d.tick, 0, 2 ** 31);
   w.rng.setState(d.rng.map((v) => int(v, -(2 ** 31), 2 ** 32) | 0) as [number, number, number, number]);
   w.humidity = int(d.humidity, 0, 2 ** 31);
   w.lostWater = int(d.lostWater, 0, 2 ** 31);
-  w.nextOrgId = int(d.nextOrgId, 1, 65535);
+  w.nextOrgId = int(d.nextOrgId, 1, MAX_ORG_ID);
 
   for (const raw of Array.isArray(d.plants) ? d.plants : []) {
     const r = (raw ?? {}) as Record<string, unknown>;
     const p: Plant = {
       kind: "plant",
-      id: int(r.id, 1, 65535),
+      id: int(r.id, 1, MAX_ORG_ID),
       species: int(r.species, 0, plantSpecies.length - 1),
       energy: int(r.energy, -100000, 100000),
       water: int(r.water, 0, 100000),
@@ -144,8 +149,10 @@ export function loadWorld(data: unknown): World | null {
       })),
       maxLeaves: int(r.maxLeaves, 0, SIZE),
       maxFlowers: int(r.maxFlowers, 0, SIZE),
+      genes: plantGenesOf(plantSpecies[0]),
       dead: false,
     };
+    p.genes = cleanPlantGenes(r.genes, plantGenesOf(plantSpecies[p.species]));
     if (w.orgs.has(p.id)) continue;
     w.plants.push(p);
     w.orgs.set(p.id, p);
@@ -154,15 +161,17 @@ export function loadWorld(data: unknown): World | null {
     const r = (raw ?? {}) as Record<string, unknown>;
     const c: Creature = {
       kind: "creature",
-      id: int(r.id, 1, 65535),
+      id: int(r.id, 1, MAX_ORG_ID),
       species: int(r.species, 0, creatureSpecies.length - 1),
       energy: int(r.energy, -100000, 100000),
       store: int(r.store, 0, 100000),
       age: int(r.age, 0, 2 ** 31),
       cells: cellList(r.cells),
       dir: int(r.dir, -1, 1) || 1,
+      genes: creatureGenesOf(creatureSpecies[0]),
       dead: false,
     };
+    c.genes = cleanCreatureGenes(r.genes, creatureGenesOf(creatureSpecies[c.species]));
     if (w.orgs.has(c.id)) continue;
     w.creatures.push(c);
     w.orgs.set(c.id, c);
@@ -170,7 +179,5 @@ export function loadWorld(data: unknown): World | null {
   const chunks = fromBase64(d.chunks as string, CHUNKS_X * CHUNKS_Y);
   if (chunks) w.wakeNext.set(chunks);
   else w.wakeNext.fill(1);
-  // Light is worked out again from the cells.
-  computeLight(w);
   return w;
 }

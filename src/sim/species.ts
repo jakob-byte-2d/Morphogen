@@ -16,7 +16,13 @@ export interface PlantSpecies {
   lifespan: number;
   /** Base colours; the renderer varies them cell by cell. */
   colors: { leaf: string; stem: string; flower: string; seed: string };
+  /** The genes its first plants get (see genes.ts): growth and seed 1–5, mutation 0–5. */
+  traits: { growth: number; seed: number; mutation: number };
 }
+
+/** The middle of every trait, and a little mutation. */
+const PLANT_TRAITS = { growth: 3, seed: 3, mutation: 1 };
+const CREATURE_TRAITS = { size: 3, speed: 3, growth: 3, mutation: 1 };
 
 export const PLANT_SPECIES: PlantSpecies[] = [
   {
@@ -28,6 +34,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     rootDepth: 6,
     lifespan: 420,
     colors: { leaf: "#4f8a3a", stem: "#3f6e32", flower: "#c9b46a", seed: "#a08c48" },
+    traits: { ...PLANT_TRAITS },
   },
   {
     name: "Blomst",
@@ -38,6 +45,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     rootDepth: 10,
     lifespan: 540,
     colors: { leaf: "#4a7c3a", stem: "#3a6a32", flower: "#e7a0b0", seed: "#b8894a" },
+    traits: { ...PLANT_TRAITS },
   },
   {
     name: "Busk",
@@ -48,6 +56,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     rootDepth: 14,
     lifespan: 1500,
     colors: { leaf: "#4f7c3e", stem: "#4a3428", flower: "#c97a8a", seed: "#8a5a3a" },
+    traits: { ...PLANT_TRAITS },
   },
 ];
 
@@ -68,6 +77,7 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
   const d = PLANT_SPECIES[1];
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const c = (o.colors && typeof o.colors === "object" ? o.colors : {}) as Record<string, unknown>;
+  const tr = (o.traits && typeof o.traits === "object" ? o.traits : {}) as Record<string, unknown>;
   return {
     name: typeof o.name === "string" && o.name.trim() ? o.name.trim().slice(0, 24) : d.name,
     form: FORMS.includes(o.form as PlantForm) ? (o.form as PlantForm) : d.form,
@@ -81,6 +91,11 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
       stem: color(c.stem, d.colors.stem),
       flower: color(c.flower, d.colors.flower),
       seed: color(c.seed, d.colors.seed),
+    },
+    traits: {
+      growth: int(tr.growth, PLANT_TRAITS.growth, 1, 5),
+      seed: int(tr.seed, PLANT_TRAITS.seed, 1, 5),
+      mutation: int(tr.mutation, PLANT_TRAITS.mutation, 0, 5),
     },
   };
 }
@@ -96,12 +111,14 @@ export interface CreatureSpecies {
   name: string;
   diet: Diet;
   color: string;
+  /** The genes its first creatures get (see genes.ts): size, speed and growth 1–5, mutation 0–5. */
+  traits: { size: number; speed: number; growth: number; mutation: number };
 }
 
 export const CREATURE_SPECIES: CreatureSpecies[] = [
-  { name: "Bladlus", diet: "plants", color: "#b8d86a" },
-  { name: "Slim", diet: "creatures", color: "#d8b040" },
-  { name: "Meitemark", diet: "waste", color: "#d6a8a4" },
+  { name: "Bladlus", diet: "plants", color: "#b8d86a", traits: { ...CREATURE_TRAITS } },
+  { name: "Slim", diet: "creatures", color: "#d8b040", traits: { ...CREATURE_TRAITS } },
+  { name: "Meitemark", diet: "waste", color: "#d6a8a4", traits: { ...CREATURE_TRAITS } },
 ];
 
 const DIETS: Diet[] = ["plants", "creatures", "waste"];
@@ -109,9 +126,16 @@ const DIETS: Diet[] = ["plants", "creatures", "waste"];
 export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const d = CREATURE_SPECIES[0];
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const tr = (o.traits && typeof o.traits === "object" ? o.traits : {}) as Record<string, unknown>;
   return {
     name: typeof o.name === "string" && o.name.trim() ? o.name.trim().slice(0, 24) : d.name,
     diet: DIETS.includes(o.diet as Diet) ? (o.diet as Diet) : d.diet,
     color: color(o.color, d.color),
+    traits: {
+      size: int(tr.size, CREATURE_TRAITS.size, 1, 5),
+      speed: int(tr.speed, CREATURE_TRAITS.speed, 1, 5),
+      growth: int(tr.growth, CREATURE_TRAITS.growth, 1, 5),
+      mutation: int(tr.mutation, CREATURE_TRAITS.mutation, 0, 5),
+    },
   };
 }

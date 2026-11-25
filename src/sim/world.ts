@@ -1,5 +1,6 @@
 import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SEED, SOIL, WATER } from "./cells";
 import { updateCreatures, type Creature } from "./creatures";
+import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
 import { CREATURE_SPECIES, PLANT_SPECIES, type CreatureSpecies, type PlantSpecies } from "./species";
@@ -12,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 6;
+export const SIM_VERSION = 7;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -53,7 +54,10 @@ export interface World {
   readonly food: Uint8Array;
   /** Species of a seed, plant cell or creature cell. */
   readonly kind: Uint8Array;
-  /** Organism a living cell belongs to (0 = none). */
+  /**
+   * Organism a living cell belongs to (0 = none). A seed has no organism yet;
+   * its slot holds the seed's genes instead (see packSeed in genes.ts).
+   */
   readonly org: Uint16Array;
   /** Light reaching each cell, 0–255. Recomputed every four steps. */
   readonly light: Uint8Array;
@@ -103,13 +107,23 @@ export function emptyWorld(
     kind: new Uint8Array(SIZE),
     humidity: 0,
     lostWater: 0,
-    plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors } })),
+    plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors }, traits: { ...p.traits } })),
     plants: [],
-    creatureSpecies: creatureSpecies.map((c) => ({ ...c })),
+    creatureSpecies: creatureSpecies.map((c) => ({ ...c, traits: { ...c.traits } })),
     creatures: [],
     orgs: new Map(),
     nextOrgId: 1,
   };
+}
+
+/** A free organism id (0 if every id is taken). Ids stay below the seed-genes bit. */
+export function newOrgId(w: World): number {
+  for (let n = 0; n < MAX_ORG_ID; n++) {
+    const id = w.nextOrgId;
+    w.nextOrgId = id >= MAX_ORG_ID ? 1 : id + 1;
+    if (!w.orgs.has(id)) return id;
+  }
+  return 0;
 }
 
 /** Wakes the chunk holding cell i and its neighbours for the next step. */

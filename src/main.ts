@@ -30,7 +30,7 @@ import { Camera } from "./view/camera";
 import { darken, lighten } from "./view/palette";
 import { Renderer } from "./view/renderer";
 
-const APP_VERSION = "0.7";
+const APP_VERSION = "0.8";
 
 const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get("seed"));

@@ -21,6 +21,30 @@ export interface MenuHost {
 
 type Page = "settings" | "info" | "stats" | "species" | "help";
 
+const PLANT_TRAITS = ["growth", "seed", "mutation"] as const;
+const CREATURE_TRAITS = ["size", "speed", "growth", "mutation"] as const;
+
+/** One decimal, Norwegian style. */
+function dec(n: number): string {
+  return n.toFixed(1).replace(".", ",");
+}
+
+/** "Fart 3 · Størrelse 3 · …" for a species' starting traits. */
+function traitLine(names: readonly string[], values: Record<string, number>, plant: boolean): string {
+  return names.map((k) => `${t.traitName(k, plant)} ${values[k]}`).join(" · ");
+}
+
+/** Average genes of the living individuals of a species, or null if none live. */
+function averages(list: { genes: object }[], names: readonly string[]): { n: number; text: string } | null {
+  if (list.length === 0) return null;
+  const parts = names.map((k) => {
+    let sum = 0;
+    for (const x of list) sum += (x.genes as Record<string, number>)[k];
+    return `${t.traitName(k, false).toLowerCase()} ${dec(sum / list.length)}`;
+  });
+  return { n: list.length, text: parts.join(" · ") };
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -226,16 +250,24 @@ export class Menu {
     const w = this.host.world();
     const h = this.host.history();
     body.append(el("p", "", t.stats.age(t.stats.duration(w.tick / TICKS_PER_SECOND))));
-    const series = (label: string, values: number[], now: number | string) => {
+    const series = (label: string, values: number[], now: number | string, genes?: string) => {
       const row = el("div", "stat");
       row.append(el("span", "stat-label", label), sparkline(values), el("span", "stat-value", String(now)));
       body.append(row);
+      // How the species is doing in its genes right now.
+      if (genes) body.append(el("p", "stat-genes", genes));
     };
     const s = h.samples;
     body.append(el("h3", "", t.stats.plants));
-    w.plantSpecies.forEach((sp, k) => series(sp.name, s.map((x) => x.plants[k] ?? 0), w.plants.filter((p) => p.species === k).length));
+    w.plantSpecies.forEach((sp, k) => {
+      const list = w.plants.filter((p) => p.species === k);
+      series(sp.name, s.map((x) => x.plants[k] ?? 0), list.length, averages(list, PLANT_TRAITS)?.text);
+    });
     body.append(el("h3", "", t.stats.creatures));
-    w.creatureSpecies.forEach((sp, k) => series(sp.name, s.map((x) => x.creatures[k] ?? 0), w.creatures.filter((c) => c.species === k).length));
+    w.creatureSpecies.forEach((sp, k) => {
+      const list = w.creatures.filter((c) => c.species === k);
+      series(sp.name, s.map((x) => x.creatures[k] ?? 0), list.length, averages(list, CREATURE_TRAITS)?.text);
+    });
     body.append(el("h3", "", t.stats.glass));
     const now = sample(w);
     series(t.stats.water, s.map((x) => x.water), Math.round(now.water / 32));
@@ -256,8 +288,16 @@ export class Menu {
       r.append(icon, words);
       body.append(r);
     };
-    for (const sp of w.plantSpecies) row(iconCanvas(plantIcon(sp.form, sp.colors, this.host.light, this.host.dark)), sp.name, t.about[sp.form]);
-    for (const sp of w.creatureSpecies) row(iconCanvas(creatureIcon(sp.diet, sp.color, this.host.light, this.host.dark)), sp.name, t.about[sp.diet]);
+    const lines = (about: string, start: string, now: { n: number; text: string } | null) =>
+      [about, start, now ? t.speciesNow(now.n, now.text) : ""].filter(Boolean).join("\n");
+    w.plantSpecies.forEach((sp, k) => {
+      const now = averages(w.plants.filter((p) => p.species === k), PLANT_TRAITS);
+      row(iconCanvas(plantIcon(sp.form, sp.colors, this.host.light, this.host.dark)), sp.name, lines(t.about[sp.form], traitLine(PLANT_TRAITS, sp.traits, true), now));
+    });
+    w.creatureSpecies.forEach((sp, k) => {
+      const now = averages(w.creatures.filter((c) => c.species === k), CREATURE_TRAITS);
+      row(iconCanvas(creatureIcon(sp.diet, sp.color, this.host.light, this.host.dark)), sp.name, lines(t.about[sp.diet], traitLine(CREATURE_TRAITS, sp.traits, false), now));
+    });
     body.append(el("p", "note", t.about.fungus));
   }
 
