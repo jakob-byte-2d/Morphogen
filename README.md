@@ -23,7 +23,9 @@ Legg til `?seed=123` i adressen for å spille av akkurat samme skål igjen.
 ```
 src/
   engine/       Simuleringen. Ren TypeScript uten DOM – kjører likt overalt.
-    world.ts    Verden, miljø og ett tidssteg (stepWorld)
+    model.ts    Datatyper: miljø, celler, mat, bindinger
+    world.ts    Standardmiljø og ett tidssteg (stepWorld)
+    bonds.ts    Bindinger mellom celler, deling av næring, organismer
     rng.ts      Deterministisk tilfeldighetsgenerator
     fmath.ts    Deterministisk sin/cos
     grid.ts     Rutenett for raske nabooppslag

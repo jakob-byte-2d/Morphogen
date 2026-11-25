@@ -26,15 +26,18 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 
 - [x] Faste tidssteg, celler som runde baller, kollisjon med rutenett
 - [x] Mat som driver rundt, celler som spiser, vokser og deler seg, celler som dør
-- [ ] Bindinger mellom celler (de holder sammen etter deling)
+- [x] Bindinger mellom celler: døtrene holder sammen etter deling, arver morens bindinger og ryker hvis de strekkes for langt
+- [x] Celler i samme organisme deler næring
+- [x] Knoppskyting: organismer på opptil 8 celler slipper fri nye celler som starter egne organismer (midlertidig regel, `budEvery`, til genomet kommer)
 - [ ] Lys som energikilde
 - [ ] Ytelsestest: 1000 celler på en middels Android-telefon
-- **Ferdig når:** én celle spiser og deler seg ✅ – og bindinger fungerer
+- **Ferdig når:** én celle spiser og deler seg ✅ – og bindinger fungerer ✅
 
 ## Fase 2 – Genom og celletyper
 
 - [ ] Genomet som JSON med versjon (utkast i `src/genome/types.ts`)
 - [ ] Oppskrifter (moduser): celletype, delingsmasse, delingsvinkel, barnas oppskrifter, binding
+- [ ] Erstatt de midlertidige miljøreglene `daughtersStick` og `budEvery` med valg i genomet (bind døtrene sammen? skal hver datter beholde bindingene?)
 - [ ] Tre celletyper: spiser, lyssamler, svømmer (egne navn bestemmes)
 - **Ferdig når:** en organisme med flere celler klarer å overleve
 

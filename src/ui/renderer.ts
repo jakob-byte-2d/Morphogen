@@ -11,6 +11,7 @@ const COLORS = {
   cellFillRipe: "rgba(170, 230, 150, 0.7)",
   cellStroke: "#a6ead0",
   nucleus: "rgba(20, 60, 50, 0.75)",
+  bond: "rgba(225, 250, 238, 0.6)",
 };
 
 /** Draws the world onto a canvas. Reads the world, never changes it. */
@@ -79,6 +80,23 @@ export function render(canvas: HTMLCanvasElement, world: World): void {
   }
   ctx.lineWidth = 1.5 / scale;
   ctx.strokeStyle = COLORS.cellStroke;
+  ctx.stroke();
+
+  // Bonds between cells in the same organism.
+  const index = world.scratch.indexById;
+  ctx.beginPath();
+  for (const bond of world.bonds) {
+    const ia = index.get(bond.a);
+    const ib = index.get(bond.b);
+    if (ia === undefined || ib === undefined) continue;
+    const a = world.cells[ia];
+    const b = world.cells[ib];
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.lineWidth = 2.5 / scale;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = COLORS.bond;
   ctx.stroke();
 
   ctx.beginPath();
