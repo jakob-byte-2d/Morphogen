@@ -1,6 +1,6 @@
 # Morphogen – regler for kodeassistenter
 
-Spill der spilleren designer organismer med et genom. Simuleringen må være **bit-for-bit deterministisk**, fordi flerspillerkamper kjøres på spillernes egne enheter og sammenlignes. Se ROADMAP.md for planen.
+Virtuelt terrarium sett fra siden (ren 2D), der spilleren designer cellebaserte organismer med et genom og steller et lukket kretsløp. Simuleringen må være **bit-for-bit deterministisk**, fordi glass lagres, spilles av og deles, og kamper senere kjøres på spillernes egne enheter. Se ROADMAP.md for planen og de tekniske hovedgrepene.
 
 ## Kommandoer
 

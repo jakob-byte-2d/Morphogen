@@ -1,6 +1,8 @@
 # Morphogen
 
-Design organismer med et genom, se dem vokse i en petriskål og la dem kjempe mot andres genomer.
+Et virtuelt terrarium: et glass med vann sett fra siden, der enkle cellebaserte organismer lever i et lukket kretsløp. Du designer artene med et genom og steller glasset så livet holder seg i balanse.
+
+Akkurat nå er spillet fortsatt en petriskål der du kan teste organismer; glasset kommer i fase 4.
 
 Planen ligger i [ROADMAP.md](ROADMAP.md).
 
