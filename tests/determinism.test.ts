@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENGINE_VERSION, createWorld, hashWorld, stepWorldN } from "../src/engine";
+import { ENGINE_VERSION, countOrganisms, createWorld, hashWorld, stepWorldN } from "../src/engine";
 
 /**
  * The most important test in the project: the same seed must always give
@@ -9,7 +9,7 @@ import { ENGINE_VERSION, createWorld, hashWorld, stepWorldN } from "../src/engin
  *   1. bump ENGINE_VERSION in src/engine/world.ts
  *   2. update GOLDEN below to the new hash the test prints
  */
-const GOLDEN = { engineVersion: 1, seed: 42, ticks: 10000, hash: "6c3acc1e" };
+const GOLDEN = { engineVersion: 2, seed: 42, ticks: 10000, hash: "e3362411" };
 
 describe("determinism", () => {
   it("same seed gives an identical world after 10 000 ticks", () => {
@@ -45,13 +45,24 @@ describe("determinism", () => {
 });
 
 describe("simulation sanity", () => {
-  it("a colony grows and survives without NaN values", () => {
+  it("organisms grow, reproduce and stay valid", () => {
     const w = createWorld(42);
-    stepWorldN(w, 6000);
-    expect(w.cells.length).toBeGreaterThan(50);
+    stepWorldN(w, 21000);
+    expect(w.cells.length).toBeGreaterThan(100);
+    expect(countOrganisms(w)).toBeGreaterThan(10);
     for (const c of w.cells) {
       expect(Number.isFinite(c.x) && Number.isFinite(c.y) && Number.isFinite(c.mass)).toBe(true);
       expect(Math.hypot(c.x, c.y)).toBeLessThanOrEqual(w.env.dishRadius);
+    }
+    // Every bond joins two different, living cells, and no pair is bonded twice.
+    const ids = new Set(w.cells.map((c) => c.id));
+    const pairs = new Set<string>();
+    for (const b of w.bonds) {
+      expect(ids.has(b.a) && ids.has(b.b)).toBe(true);
+      expect(b.a).not.toBe(b.b);
+      const key = b.a < b.b ? `${b.a}-${b.b}` : `${b.b}-${b.a}`;
+      expect(pairs.has(key)).toBe(false);
+      pairs.add(key);
     }
   });
 });

@@ -18,6 +18,7 @@ All kode i `src/engine/` må følge dette:
 - Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg på `DT`.
 - Gå gjennom lister i fast rekkefølge. Fjern elementer ved å bygge ny liste i samme rekkefølge.
 - Ingen DOM eller nettleser-API-er i motoren.
+- Bindinger peker på celle-id, ikke indeks, fordi cellelisten bygges på nytt ved deling og død. Bruk `world.scratch.indexById` (bygges av `indexCells`) for oppslag.
 
 Endrer du simuleringsreglene med vilje: øk `ENGINE_VERSION` i `src/engine/world.ts` og oppdater gullhashen i `tests/determinism.test.ts`. Endres gullhashen uten at du mente å endre reglene, er det en feil.
 

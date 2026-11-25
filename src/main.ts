@@ -1,4 +1,4 @@
-import { DT, createWorld, stepWorld, type World } from "./engine";
+import { DT, countOrganisms, createWorld, stepWorld, type World } from "./engine";
 import { render } from "./ui/renderer";
 import { strings } from "./ui/strings";
 import "./ui/style.css";
@@ -79,8 +79,8 @@ function frame(now: number): void {
   render(canvas, world);
   stats.textContent = strings.stats({
     seconds: Math.floor(world.tick * DT),
+    organisms: countOrganisms(world),
     cells: world.cells.length,
-    food: world.food.length,
     seed: world.seed,
   });
   requestAnimationFrame(frame);

@@ -34,6 +34,13 @@ export function hashWorld(w: World): string {
     mixNumber(c.mass);
     mixNumber(c.angle);
     mixNumber(c.age);
+    mixNumber(c.generation);
+  }
+
+  mixNumber(w.bonds.length);
+  for (const b of w.bonds) {
+    mixNumber(b.a);
+    mixNumber(b.b);
   }
 
   mixNumber(w.food.length);

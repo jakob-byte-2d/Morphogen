@@ -4,6 +4,6 @@ export const strings = {
   pause: "❚❚ Pause",
   newDish: "Ny skål",
   speed: (n: number) => `${n}× fart`,
-  stats: (s: { seconds: number; cells: number; food: number; seed: number }) =>
-    `Tid ${s.seconds} s · Celler ${s.cells} · Mat ${s.food} · Seed ${s.seed}`,
+  stats: (s: { seconds: number; organisms: number; cells: number; seed: number }) =>
+    `${s.seconds} s · ${s.organisms} organismer · ${s.cells} celler · seed ${s.seed}`,
 };

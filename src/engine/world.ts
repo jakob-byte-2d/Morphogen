@@ -1,42 +1,20 @@
-import { SpatialGrid } from "./grid";
+import { applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
 import { HALF_PI, TWO_PI, cos, sin, sqrt } from "./fmath";
+import { SpatialGrid } from "./grid";
+import { radiusOf, type Cell, type Environment, type Food, type World } from "./model";
 import { Rng } from "./rng";
+
+export * from "./model";
 
 /**
  * Bump this whenever the simulation rules change on purpose. Matches and
  * replays store the engine version, so results from different rule sets are
  * never mixed. Remember to update the golden hash in tests/determinism.test.ts.
  */
-export const ENGINE_VERSION = 1;
+export const ENGINE_VERSION = 2;
 
 /** Fixed simulation time step in seconds. Never vary this at runtime. */
 export const DT = 1 / 30;
-
-export interface Environment {
-  /** Radius of the petri dish. */
-  dishRadius: number;
-  /** New food particles per second. */
-  foodPerSecond: number;
-  maxFood: number;
-  /** Mass a cell gains from one food particle. */
-  foodMass: number;
-  /** Random push food gets every tick (makes it drift like plankton). */
-  foodKick: number;
-  /** Food velocity multiplier per tick. */
-  foodDamping: number;
-  /** Mass every cell burns per second. */
-  metabolism: number;
-  /** A cell divides when it reaches this mass. */
-  splitMass: number;
-  /** A cell dies below this mass. */
-  minMass: number;
-  /** Speed the two daughter cells get when a cell divides. */
-  splitSpeed: number;
-  /** How hard overlapping cells push each other apart. */
-  stiffness: number;
-  /** Velocity multiplier per tick (1 = no friction). */
-  drag: number;
-}
 
 export const DEFAULT_ENVIRONMENT: Environment = {
   dishRadius: 300,
@@ -51,50 +29,14 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   splitSpeed: 30,
   stiffness: 18,
   drag: 0.85,
+  daughtersStick: true,
+  budEvery: 4,
+  bondStiffness: 18,
+  bondRestFactor: 0.9,
+  bondBreakStretch: 1.6,
+  maxBondsPerCell: 6,
+  nutrientShare: 0.5,
 };
-
-/** Cell types. Only one so far; more arrive in phase 2. */
-export type CellType = "eater";
-export const CELL_TYPES: readonly CellType[] = ["eater"];
-
-export interface Cell {
-  id: number;
-  type: CellType;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  mass: number;
-  /** Direction the cell will divide along, in radians. */
-  angle: number;
-  /** Age in ticks. */
-  age: number;
-}
-
-export interface Food {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
-
-export interface World {
-  readonly env: Environment;
-  readonly seed: number;
-  tick: number;
-  readonly rng: Rng;
-  cells: Cell[];
-  food: Food[];
-  nextId: number;
-  /** Fractional food carried over between ticks. */
-  foodAccumulator: number;
-  /** Reusable lookup structures. Not part of the simulation state. */
-  readonly scratch: { cellGrid: SpatialGrid; foodGrid: SpatialGrid };
-}
-
-export function radiusOf(mass: number): number {
-  return sqrt(mass);
-}
 
 function randomPointInDish(rng: Rng, radius: number): Food {
   const r = radius * sqrt(rng.next());
@@ -112,11 +54,15 @@ export function createWorld(seed: number, env: Environment = DEFAULT_ENVIRONMENT
     rng,
     cells: [],
     food: [],
+    bonds: [],
     nextId: 1,
     foodAccumulator: 0,
     scratch: {
       cellGrid: new SpatialGrid(env.dishRadius, maxRadius * 2),
       foodGrid: new SpatialGrid(env.dishRadius, maxRadius * 2),
+      indexById: new Map(),
+      divisions: new Map(),
+      bondDegree: new Map(),
     },
   };
 
@@ -135,6 +81,7 @@ export function createWorld(seed: number, env: Environment = DEFAULT_ENVIRONMENT
     mass: env.splitMass * 0.6,
     angle: rng.range(0, TWO_PI),
     age: 0,
+    generation: 0,
   });
 
   return world;
@@ -193,11 +140,13 @@ export function stepWorld(w: World): void {
   }
   if (eaten.some((e) => e === 1)) w.food = w.food.filter((_, i) => eaten[i] === 0);
 
-  // 4. Metabolism.
+  // 4. Metabolism, then bonded cells share food.
   for (const c of w.cells) {
     c.mass -= env.metabolism * DT;
     c.age++;
   }
+  indexCells(w);
+  shareNutrients(w, DT);
 
   // 5. Overlapping cells push each other apart (each pair once, i < k).
   cellGrid.clear();
@@ -233,7 +182,10 @@ export function stepWorld(w: World): void {
     });
   }
 
-  // 6. Move, apply friction and keep cells inside the dish.
+  // 6. Stretched bonds pull cells together; overstretched bonds break.
+  applyBondForces(w);
+
+  // 7. Move, apply friction and keep cells inside the dish.
   for (const c of w.cells) {
     c.vx *= env.drag;
     c.vy *= env.drag;
@@ -251,10 +203,16 @@ export function stepWorld(w: World): void {
     }
   }
 
-  // 7. Division and death. Order is preserved: daughters replace the parent.
+  // 8. Division and death. Order is preserved: daughters replace the parent.
+  const divisions = w.scratch.divisions;
+  divisions.clear();
+  let anyDeaths = false;
   const next: Cell[] = [];
   for (const c of w.cells) {
-    if (c.mass < env.minMass) continue;
+    if (c.mass < env.minMass) {
+      anyDeaths = true;
+      continue;
+    }
     if (c.mass < env.splitMass) {
       next.push(c);
       continue;
@@ -263,24 +221,53 @@ export function stepWorld(w: World): void {
     const ox = cos(c.angle);
     const oy = sin(c.angle);
     const offset = radiusOf(half) * 0.5;
-    // Daughters divide at right angles to the parent, so colonies grow in 2D.
-    for (const side of [1, -1]) {
-      next.push({
-        id: w.nextId++,
-        type: c.type,
-        x: c.x + side * ox * offset,
-        y: c.y + side * oy * offset,
-        vx: c.vx + side * ox * env.splitSpeed,
-        vy: c.vy + side * oy * env.splitSpeed,
-        mass: half,
-        angle: c.angle + side * HALF_PI,
-        age: 0,
-      });
-    }
+    const buds = env.budEvery > 0 && c.generation >= env.budEvery - 1;
+    const first = daughter(w, c, half, ox, oy, offset, 1, buds ? c.generation : c.generation + 1);
+    const second = daughter(w, c, half, ox, oy, offset, -1, buds ? 0 : c.generation + 1);
+    next.push(first, second);
+    divisions.set(c.id, {
+      parentId: c.id,
+      first: first.id,
+      second: second.id,
+      x: c.x,
+      y: c.y,
+      dirX: ox,
+      dirY: oy,
+      secondBuds: buds,
+    });
   }
   w.cells = next;
 
+  // 9. Hand bonds over to daughters and drop bonds to dead cells.
+  indexCells(w);
+  rebuildBonds(w, anyDeaths);
+
   w.tick++;
+}
+
+/** Daughters divide at right angles to the parent, so colonies grow in 2D. */
+function daughter(
+  w: World,
+  parent: Cell,
+  mass: number,
+  ox: number,
+  oy: number,
+  offset: number,
+  side: 1 | -1,
+  generation: number,
+): Cell {
+  return {
+    id: w.nextId++,
+    type: parent.type,
+    x: parent.x + side * ox * offset,
+    y: parent.y + side * oy * offset,
+    vx: parent.vx + side * ox * w.env.splitSpeed,
+    vy: parent.vy + side * oy * w.env.splitSpeed,
+    mass,
+    angle: parent.angle + side * HALF_PI,
+    age: 0,
+    generation,
+  };
 }
 
 export function stepWorldN(w: World, n: number): void {
