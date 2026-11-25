@@ -55,6 +55,11 @@ export class Rng {
     return Math.floor(this.next() * n);
   }
 
+  /** Integer in [0, n), using integer arithmetic only. */
+  below(n: number): number {
+    return this.nextU32() % n;
+  }
+
   getState(): RngState {
     return [this.a, this.b, this.c, this.d];
   }
