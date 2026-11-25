@@ -134,3 +134,42 @@ body {
   width: 100%;
   opacity: 0.85;
 }
+
+.picker {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(30, 24, 34, 0.9);
+  border: 2px solid var(--edge);
+  border-radius: 16px;
+}
+
+.picker[hidden] {
+  display: none;
+}
+
+.pick {
+  width: 68px;
+  padding: 6px 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font: 13px/1.1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.pick[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.pick canvas {
+  width: 44px;
+  height: 40px;
+  image-rendering: pixelated;
+}

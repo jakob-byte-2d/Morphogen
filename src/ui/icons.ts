@@ -33,6 +33,28 @@ export const ICONS: Record<string, Icon> = {
   },
 };
 
+/** Plant icons by form. Letters are colour roles filled in from the species. */
+const PLANT_ICONS: Record<string, string[]> = {
+  grass: ["    l      ", " l  l   l  ", " l  Ll  l  ", " ll L l ll ", "  l L l l  ", "  lLL Ll l ", " LlL LLlLl ", "LLLLLLLLLLL", "ddddddddddd"],
+  flower: ["    PpP    ", "   PpcpP   ", "    PpP    ", "     S     ", "   llS     ", "     S     ", "     Sll   ", "     S     ", "ddddddddddd"],
+  bush: ["   lLl     ", "  lLLLll   ", " lLLlLLLl  ", " LLLLLlLLl ", "  lLLSLLl  ", "   LS SL   ", "     S     ", "     S     ", "ddddddddddd"],
+};
+
+export function plantIcon(form: string, colors: { leaf: string; stem: string; flower: string }, light: (c: string) => string, dark: (c: string) => string): Icon {
+  return {
+    c: {
+      L: colors.leaf,
+      l: light(colors.leaf),
+      S: colors.stem,
+      p: colors.flower,
+      P: dark(colors.flower),
+      c: "#ffd84a",
+      d: "#5a4236",
+    },
+    r: PLANT_ICONS[form] ?? PLANT_ICONS.flower,
+  };
+}
+
 /** Makes a canvas showing an icon; scale it up with CSS. */
 export function iconCanvas(icon: Icon): HTMLCanvasElement {
   const c = document.createElement("canvas");

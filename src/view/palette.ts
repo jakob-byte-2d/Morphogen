@@ -1,4 +1,4 @@
-import { SAND, SOIL, STONE, WATER, MAX_TYPES } from "../sim/cells";
+import { MAX_TYPES, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "../sim/cells";
 
 /** Colours per cell type. Each cell picks one by its shade, then varies it a little. */
 export const COLORS: Partial<Record<number, string[]>> = {
@@ -6,7 +6,12 @@ export const COLORS: Partial<Record<number, string[]>> = {
   [SAND]: ["#7d695c", "#8a7466", "#6f5d52", "#958070"],
   [SOIL]: ["#2e2630", "#352a33", "#3d3036", "#2a2229", "#33282f"],
   [WATER]: ["#3f6f8a", "#4f84a0", "#46789a"],
+  [ROOT]: ["#8a7458", "#7a6650", "#968062", "#6e5c48"],
+  [WASTE]: ["#3a2e26", "#463628", "#2e241e", "#4a3a2c", "#52402e"],
 };
+
+/** What a thirsty plant fades towards. */
+export const WILTED = "#a8924a";
 
 export const DRY_SOIL = ["#55484a", "#625455", "#4d4043"];
 export const SOIL_SPECKS = ["#5a5058", "#4a3a48", "#6b6270", "#4f4450"];
@@ -59,3 +64,32 @@ export const DRY_TABLE = shadeTable(DRY_SOIL);
 export const SPECK_TABLE = shadeTable(SOIL_SPECKS);
 export const MOSS_TABLE = shadeTable(MOSS);
 export const BARE_TABLE = shadeTable(BARE_TOP);
+
+function clamp(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+function toHex(c: [number, number, number]): string {
+  return "#" + c.map((v) => clamp(v).toString(16).padStart(2, "0")).join("");
+}
+
+/** A colour, a lighter and a darker version, and one shifted a little in hue. */
+export function variants(hex: string): string[] {
+  const [r, g, b] = hexToRgb(hex);
+  return [
+    hex,
+    toHex([r * 1.18, g * 1.18, b * 1.18]),
+    toHex([r * 0.82, g * 0.82, b * 0.82]),
+    toHex([r * 1.05 + 8, g * 0.97, b * 0.92]),
+  ];
+}
+
+export function lighten(hex: string, k: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return toHex([r + (255 - r) * k, g + (255 - g) * k, b + (255 - b) * k]);
+}
+
+export function darken(hex: string, k: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return toHex([r * (1 - k), g * (1 - k), b * (1 - k)]);
+}

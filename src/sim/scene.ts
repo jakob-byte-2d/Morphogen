@@ -1,4 +1,4 @@
-import { SAND, SOIL, STONE, WATER } from "./cells";
+import { EMPTY, SAND, SEED, SOIL, STONE, WATER } from "./cells";
 import { computeLight, emptyWorld, H, setCell, W, type World } from "./world";
 
 /** Integer interpolation between random heights every `step` columns. */
@@ -62,6 +62,23 @@ export function createWorld(seed: number): World {
       let byWater = false;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (w.type[i + dy * W + dx] === WATER) byWater = true;
       if (byWater) setCell(w, i, STONE);
+    }
+  }
+  // A few seeds on the ground, so the glass comes to life by itself.
+  for (const [x, species] of [
+    [16, 0],
+    [22, 1],
+    [52, 2],
+    [62, 0],
+  ]) {
+    for (let y = 1; y < H; y++) {
+      const i = y * W + x;
+      if (w.type[i] === EMPTY) continue;
+      const j = i - W;
+      setCell(w, j, SEED);
+      w.kind[j] = species;
+      w.food[j] = 1;
+      break;
     }
   }
   computeLight(w);
