@@ -1,5 +1,6 @@
 import type { SpatialGrid } from "./grid";
 import { sqrt } from "./fmath";
+import type { Genome } from "./genome";
 import type { Rng } from "./rng";
 
 export interface Environment {
@@ -8,33 +9,32 @@ export interface Environment {
   /** New food particles per second. */
   foodPerSecond: number;
   maxFood: number;
-  /** Mass a cell gains from one food particle. */
+  /** Mass an eater gains from one food particle. */
   foodMass: number;
   /** Random push food gets every tick (makes it drift like plankton). */
   foodKick: number;
   /** Food velocity multiplier per tick. */
   foodDamping: number;
+  /** Light strength, 0 (dark) to 1 (full sun). */
+  light: number;
+  /** Mass a light collector gains per second in full light, before shading. */
+  photoRate: number;
+  /** Each touching neighbour shades a light collector by this much (1 / (1 + n * shade)). */
+  shadePerContact: number;
   /** Mass every cell burns per second. */
   metabolism: number;
-  /** A cell divides when it reaches this mass. */
-  splitMass: number;
   /** A cell dies below this mass. */
   minMass: number;
+  /** No cell grows heavier than this; extra food is wasted. */
+  maxCellMass: number;
+  /** Cells stop dividing when the dish holds this many. Keeps phones fast. */
+  maxCells: number;
   /** Speed the two daughter cells get when a cell divides. */
   splitSpeed: number;
   /** How hard overlapping cells push each other apart. */
   stiffness: number;
   /** Velocity multiplier per tick (1 = no friction). */
   drag: number;
-  /** Whether the two daughters of a division stay bonded. Moves to the genome in phase 2. */
-  daughtersStick: boolean;
-  /**
-   * Stand-in for the genome until phase 2: cells of generation budEvery - 1
-   * divide into one daughter that stays in the organism and one that breaks
-   * free and starts a new organism. Organisms then reach 2^(budEvery-1) cells.
-   * 0 = never bud.
-   */
-  budEvery: number;
   /** How hard a stretched bond pulls its two cells together. */
   bondStiffness: number;
   /** Bond rest length as a fraction of the two radii. Below 1, bonded cells overlap slightly. */
@@ -47,24 +47,30 @@ export interface Environment {
   nutrientShare: number;
 }
 
-/** Cell types. Only one so far; more arrive in phase 2. */
-export type CellType = "eater";
-export const CELL_TYPES: readonly CellType[] = ["eater"];
+/**
+ * Cell types. The order is part of the save format and the hash: only ever
+ * add new types at the end.
+ */
+export const CELL_TYPES = ["eater", "photo"] as const;
+export type CellType = (typeof CELL_TYPES)[number];
 
 export interface Cell {
   id: number;
+  /** Which genome (species) the cell belongs to: index into world.genomes. */
+  species: number;
+  /** Which mode (recipe) of its genome the cell follows. */
+  mode: number;
+  /** Copied from the mode when the cell is born. */
   type: CellType;
   x: number;
   y: number;
   vx: number;
   vy: number;
   mass: number;
-  /** Direction the cell will divide along, in radians. */
+  /** Orientation in radians. The mode's split angle is relative to this. */
   angle: number;
   /** Age in ticks. */
   age: number;
-  /** Divisions since the organism was founded (0 for a founder cell). */
-  generation: number;
 }
 
 export interface Food {
@@ -83,9 +89,9 @@ export interface Bond {
 /** Record of one division this tick, used to hand bonds over to the daughters. */
 export interface Division {
   parentId: number;
-  /** Daughter on the +angle side. */
+  /** Daughter on the + side of the division axis. */
   first: number;
-  /** Daughter on the -angle side. */
+  /** Daughter on the - side of the division axis. */
   second: number;
   /** Parent position just before it divided. */
   x: number;
@@ -93,8 +99,11 @@ export interface Division {
   /** Unit vector of the division axis, pointing towards the first daughter. */
   dirX: number;
   dirY: number;
-  /** The second daughter breaks free: it keeps no bonds and starts a new organism. */
-  secondBuds: boolean;
+  /** Whether the two daughters bond to each other. */
+  makeBond: boolean;
+  /** Whether each daughter keeps the parent's bonds. */
+  keepFirst: boolean;
+  keepSecond: boolean;
 }
 
 export interface Scratch {
@@ -106,11 +115,15 @@ export interface Scratch {
   divisions: Map<number, Division>;
   /** Cell id -> number of bonds, while bonds are rebuilt. */
   bondDegree: Map<number, number>;
+  /** Touching neighbours per cell index, counted during collisions. */
+  contacts: Uint16Array;
 }
 
 export interface World {
   readonly env: Environment;
   readonly seed: number;
+  /** One genome per species. Normalised, never changed after creation. */
+  readonly genomes: readonly Genome[];
   tick: number;
   readonly rng: Rng;
   cells: Cell[];

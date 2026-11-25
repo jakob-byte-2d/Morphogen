@@ -22,24 +22,30 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 - [x] GitHub Actions: tester og bygger ved hver push
 - [x] Automatisk publisering til GitHub Pages (krever at repoet er offentlig eller GitHub Pro)
 
-## Fase 1 – Simuleringen
+## Fase 1 – Simuleringen ✅
 
 - [x] Faste tidssteg, celler som runde baller, kollisjon med rutenett
 - [x] Mat som driver rundt, celler som spiser, vokser og deler seg, celler som dør
 - [x] Bindinger mellom celler: døtrene holder sammen etter deling, arver morens bindinger og ryker hvis de strekkes for langt
 - [x] Celler i samme organisme deler næring
-- [x] Knoppskyting: organismer på opptil 8 celler slipper fri nye celler som starter egne organismer (midlertidig regel, `budEvery`, til genomet kommer)
-- [ ] Lys som energikilde
-- [ ] Ytelsestest: 1000 celler på en middels Android-telefon
+- [x] Knoppskyting: organismer slipper fri celler som starter nye organismer (nå styrt av genomet)
+- [x] Lys som energikilde: lyssamlere vokser av lys, og naboer som berører dem skygger
+- [x] Tak på antall celler (`maxCells`, 1000) og på cellemasse (`maxCellMass`)
+- [x] Ytelsestest på `bench.html`: måler fart med 250–2000 celler og sjekker fingeravtrykket mot fasit
+  - PC med CPU strupet 4× (omtrent en middels telefon): 1000 celler ≈ 2,4 ms per steg ≈ 9× fart
+  - [ ] Kjør testen på en ekte Android-telefon
 - **Ferdig når:** én celle spiser og deler seg ✅ – og bindinger fungerer ✅
 
 ## Fase 2 – Genom og celletyper
 
-- [ ] Genomet som JSON med versjon (utkast i `src/genome/types.ts`)
-- [ ] Oppskrifter (moduser): celletype, delingsmasse, delingsvinkel, barnas oppskrifter, binding
-- [ ] Erstatt de midlertidige miljøreglene `daughtersStick` og `budEvery` med valg i genomet (bind døtrene sammen? skal hver datter beholde bindingene?)
-- [ ] Tre celletyper: spiser, lyssamler, svømmer (egne navn bestemmes)
-- **Ferdig når:** en organisme med flere celler klarer å overleve
+- [x] Genomet som JSON med versjon (`src/engine/genome.ts`). `normalizeGenome()` gjør ethvert genom fra andre spillere gyldig
+- [x] Oppskrifter (moduser): celletype, deler seg eller ikke, delingsmasse, delingsvinkel, barnas oppskrifter og vridning, binding mellom døtrene, om hver datter beholder bindingene
+- [x] De midlertidige reglene `daughtersStick` og `budEvery` er erstattet av valg i genomet
+- [x] Flere arter i samme skål, hver med sitt genom, startet speilvendt (grunnlaget for flerspiller)
+- [x] Celletyper: spiser og lyssamler
+- [ ] Svømmer. Krever at cellene snur seg med organismen, ellers svømmer alle rett fram til de treffer kanten
+- [x] Ferdiglagde organismer å velge mellom: Spiserklump, Alge og Blanding (`src/genome/presets.ts`)
+- **Ferdig når:** en organisme med flere celler klarer å overleve ✅
 
 ## Fase 3 – Spillbart på mobil
 
@@ -78,5 +84,5 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 ## Åpne spørsmål
 
 - Språk: norsk først, engelsk senere? (all tekst ligger i `src/ui/strings.ts`)
-- Navn på celletypene
+- Navn på celletypene (nå: spiser og lyssamler)
 - Skal repoet være offentlig (gratis GitHub Pages) eller privat?

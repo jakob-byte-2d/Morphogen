@@ -4,3 +4,5 @@ export * from "./world";
 export { countOrganisms } from "./bonds";
 export { hashWorld } from "./hash";
 export { Rng, type RngState } from "./rng";
+export * from "./genome";
+export { GOLDEN } from "./golden";

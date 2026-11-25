@@ -1,5 +1,6 @@
 import { applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
-import { HALF_PI, TWO_PI, cos, sin, sqrt } from "./fmath";
+import { TWO_PI, cos, sin, sqrt } from "./fmath";
+import { DEFAULT_GENOME, normalizeGenome, type Genome } from "./genome";
 import { SpatialGrid } from "./grid";
 import { radiusOf, type Cell, type Environment, type Food, type World } from "./model";
 import { Rng } from "./rng";
@@ -9,9 +10,9 @@ export * from "./model";
 /**
  * Bump this whenever the simulation rules change on purpose. Matches and
  * replays store the engine version, so results from different rule sets are
- * never mixed. Remember to update the golden hash in tests/determinism.test.ts.
+ * never mixed. Remember to update the golden hash in src/engine/golden.ts.
  */
-export const ENGINE_VERSION = 2;
+export const ENGINE_VERSION = 3;
 
 /** Fixed simulation time step in seconds. Never vary this at runtime. */
 export const DT = 1 / 30;
@@ -23,14 +24,16 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   foodMass: 12,
   foodKick: 0.5,
   foodDamping: 0.9,
+  light: 1,
+  photoRate: 4.5,
+  shadePerContact: 0.5,
   metabolism: 1.5,
-  splitMass: 200,
   minMass: 40,
+  maxCellMass: 400,
+  maxCells: 1000,
   splitSpeed: 30,
   stiffness: 18,
   drag: 0.85,
-  daughtersStick: true,
-  budEvery: 4,
   bondStiffness: 18,
   bondRestFactor: 0.9,
   bondBreakStretch: 1.6,
@@ -38,18 +41,28 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   nutrientShare: 0.5,
 };
 
+export interface WorldOptions {
+  env?: Environment;
+  /** One genome per species. Defaults to a single species with DEFAULT_GENOME. */
+  genomes?: readonly unknown[];
+}
+
 function randomPointInDish(rng: Rng, radius: number): Food {
   const r = radius * sqrt(rng.next());
   const a = rng.range(0, TWO_PI);
   return { x: r * cos(a), y: r * sin(a), vx: 0, vy: 0 };
 }
 
-export function createWorld(seed: number, env: Environment = DEFAULT_ENVIRONMENT): World {
+export function createWorld(seed: number, options: WorldOptions = {}): World {
+  const env = options.env ?? DEFAULT_ENVIRONMENT;
+  const genomes: Genome[] = (options.genomes ?? [DEFAULT_GENOME]).map(normalizeGenome);
+  if (genomes.length === 0) genomes.push(normalizeGenome(DEFAULT_GENOME));
   const rng = new Rng(seed);
-  const maxRadius = radiusOf(env.splitMass);
+  const maxRadius = radiusOf(env.maxCellMass);
   const world: World = {
     env,
     seed,
+    genomes,
     tick: 0,
     rng,
     cells: [],
@@ -63,6 +76,7 @@ export function createWorld(seed: number, env: Environment = DEFAULT_ENVIRONMENT
       indexById: new Map(),
       divisions: new Map(),
       bondDegree: new Map(),
+      contacts: new Uint16Array(64),
     },
   };
 
@@ -71,18 +85,28 @@ export function createWorld(seed: number, env: Environment = DEFAULT_ENVIRONMENT
     world.food.push(randomPointInDish(rng, env.dishRadius - 2));
   }
 
-  world.cells.push({
-    id: world.nextId++,
-    type: "eater",
-    x: 0,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    mass: env.splitMass * 0.6,
-    angle: rng.range(0, TWO_PI),
-    age: 0,
-    generation: 0,
-  });
+  // One founder per species. Several species start evenly around the dish,
+  // turned the same way relative to the centre, so no one gets a better start.
+  const baseAngle = rng.range(0, TWO_PI);
+  for (let s = 0; s < genomes.length; s++) {
+    const g = genomes[s];
+    const around = (s * TWO_PI) / genomes.length;
+    const r = genomes.length === 1 ? 0 : env.dishRadius / 2;
+    world.cells.push({
+      id: world.nextId++,
+      species: s,
+      mode: g.startMode,
+      type: g.modes[g.startMode].cellType,
+      x: r * cos(around),
+      y: r * sin(around),
+      vx: 0,
+      vy: 0,
+      mass: 120,
+      angle: baseAngle + around,
+      age: 0,
+    });
+  }
+  indexCells(world);
 
   return world;
 }
@@ -122,11 +146,13 @@ export function stepWorld(w: World): void {
     }
   }
 
-  // 3. Cells eat food they touch. Earlier cells in the list win ties.
+  // 3. Eaters eat food they touch. Earlier cells in the list win ties.
   foodGrid.clear();
   for (let i = 0; i < w.food.length; i++) foodGrid.insert(i, w.food[i].x, w.food[i].y);
   const eaten = new Uint8Array(w.food.length);
+  let anyEaten = false;
   for (const c of w.cells) {
+    if (c.type !== "eater") continue;
     const r = radiusOf(c.mass);
     foodGrid.query(c.x, c.y, r, (i) => {
       if (eaten[i]) return;
@@ -134,24 +160,23 @@ export function stepWorld(w: World): void {
       const dy = w.food[i].y - c.y;
       if (dx * dx + dy * dy <= r * r) {
         eaten[i] = 1;
-        c.mass += env.foodMass;
+        anyEaten = true;
+        c.mass = Math.min(c.mass + env.foodMass, env.maxCellMass);
       }
     });
   }
-  if (eaten.some((e) => e === 1)) w.food = w.food.filter((_, i) => eaten[i] === 0);
+  if (anyEaten) w.food = w.food.filter((_, i) => eaten[i] === 0);
 
-  // 4. Metabolism, then bonded cells share food.
-  for (const c of w.cells) {
-    c.mass -= env.metabolism * DT;
-    c.age++;
+  // 4. Overlapping cells push each other apart (each pair once, i < k),
+  //    and we count how many neighbours touch each cell.
+  if (w.scratch.contacts.length < w.cells.length) {
+    w.scratch.contacts = new Uint16Array(w.cells.length * 2);
   }
-  indexCells(w);
-  shareNutrients(w, DT);
-
-  // 5. Overlapping cells push each other apart (each pair once, i < k).
+  const contacts = w.scratch.contacts;
+  contacts.fill(0, 0, w.cells.length);
   cellGrid.clear();
   for (let i = 0; i < w.cells.length; i++) cellGrid.insert(i, w.cells[i].x, w.cells[i].y);
-  const maxRadius = radiusOf(env.splitMass);
+  const maxRadius = radiusOf(env.maxCellMass);
   for (let i = 0; i < w.cells.length; i++) {
     const a = w.cells[i];
     const ra = radiusOf(a.mass);
@@ -164,6 +189,8 @@ export function stepWorld(w: World): void {
       const minDist = ra + rb;
       const d2 = dx * dx + dy * dy;
       if (d2 >= minDist * minDist) return;
+      contacts[i]++;
+      contacts[k]++;
       const dist = sqrt(d2);
       const push = (minDist - dist) * env.stiffness;
       let nx = 1;
@@ -182,7 +209,19 @@ export function stepWorld(w: World): void {
     });
   }
 
-  // 6. Stretched bonds pull cells together; overstretched bonds break.
+  // 5. Light collectors gain mass; neighbours shade them. Everyone burns food.
+  const photoGain = env.light * env.photoRate * DT;
+  for (let i = 0; i < w.cells.length; i++) {
+    const c = w.cells[i];
+    if (c.type === "photo") c.mass += photoGain / (1 + contacts[i] * env.shadePerContact);
+    c.mass -= env.metabolism * DT;
+    if (c.mass > env.maxCellMass) c.mass = env.maxCellMass;
+    c.age++;
+  }
+
+  // 6. Bonded cells share food. Stretched bonds pull; overstretched bonds break.
+  indexCells(w);
+  shareNutrients(w, DT);
   applyBondForces(w);
 
   // 7. Move, apply friction and keep cells inside the dish.
@@ -203,27 +242,32 @@ export function stepWorld(w: World): void {
     }
   }
 
-  // 8. Division and death. Order is preserved: daughters replace the parent.
+  // 8. Division and death, following each cell's mode. Order is preserved:
+  //    daughters replace the parent in the list.
   const divisions = w.scratch.divisions;
   divisions.clear();
   let anyDeaths = false;
+  let population = w.cells.length;
   const next: Cell[] = [];
   for (const c of w.cells) {
     if (c.mass < env.minMass) {
       anyDeaths = true;
+      population--;
       continue;
     }
-    if (c.mass < env.splitMass) {
+    const m = w.genomes[c.species].modes[c.mode];
+    if (!m.canSplit || c.mass < m.splitMass || population >= env.maxCells) {
       next.push(c);
       continue;
     }
+    population++;
+    const axis = c.angle + m.splitAngle;
+    const ox = cos(axis);
+    const oy = sin(axis);
     const half = c.mass / 2;
-    const ox = cos(c.angle);
-    const oy = sin(c.angle);
     const offset = radiusOf(half) * 0.5;
-    const buds = env.budEvery > 0 && c.generation >= env.budEvery - 1;
-    const first = daughter(w, c, half, ox, oy, offset, 1, buds ? c.generation : c.generation + 1);
-    const second = daughter(w, c, half, ox, oy, offset, -1, buds ? 0 : c.generation + 1);
+    const first = daughter(w, c, half, ox, oy, offset, 1, m.childModes[0], m.childTurns[0]);
+    const second = daughter(w, c, half, ox, oy, offset, -1, m.childModes[1], m.childTurns[1]);
     next.push(first, second);
     divisions.set(c.id, {
       parentId: c.id,
@@ -233,7 +277,9 @@ export function stepWorld(w: World): void {
       y: c.y,
       dirX: ox,
       dirY: oy,
-      secondBuds: buds,
+      makeBond: m.makeBond,
+      keepFirst: m.childKeepsBonds[0],
+      keepSecond: m.childKeepsBonds[1],
     });
   }
   w.cells = next;
@@ -245,7 +291,6 @@ export function stepWorld(w: World): void {
   w.tick++;
 }
 
-/** Daughters divide at right angles to the parent, so colonies grow in 2D. */
 function daughter(
   w: World,
   parent: Cell,
@@ -254,19 +299,21 @@ function daughter(
   oy: number,
   offset: number,
   side: 1 | -1,
-  generation: number,
+  mode: number,
+  turn: number,
 ): Cell {
   return {
     id: w.nextId++,
-    type: parent.type,
+    species: parent.species,
+    mode,
+    type: w.genomes[parent.species].modes[mode].cellType,
     x: parent.x + side * ox * offset,
     y: parent.y + side * oy * offset,
     vx: parent.vx + side * ox * w.env.splitSpeed,
     vy: parent.vy + side * oy * w.env.splitSpeed,
     mass,
-    angle: parent.angle + side * HALF_PI,
+    angle: parent.angle + turn,
     age: 0,
-    generation,
   };
 }
 

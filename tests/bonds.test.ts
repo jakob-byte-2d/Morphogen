@@ -12,14 +12,15 @@ import { indexCells, shareNutrients } from "../src/engine/bonds";
 
 /** An empty dish without food, so only the cells we place matter. */
 function emptyWorld(overrides: Partial<Environment> = {}): World {
-  const w = createWorld(1, { ...DEFAULT_ENVIRONMENT, foodPerSecond: 0, maxFood: 0, ...overrides });
+  const w = createWorld(1, { env: { ...DEFAULT_ENVIRONMENT, foodPerSecond: 0, maxFood: 0, ...overrides } });
   w.cells = [];
   w.bonds = [];
   return w;
 }
 
-function cell(id: number, x: number, y: number, mass: number, generation = 0): Cell {
-  return { id, type: "eater", x, y, vx: 0, vy: 0, mass, angle: 0, age: 0, generation };
+/** A cell of the default genome (eaters). Mode 0 divides into a bonded pair. */
+function cell(id: number, x: number, y: number, mass: number, mode = 0): Cell {
+  return { id, species: 0, mode, type: "eater", x, y, vx: 0, vy: 0, mass, angle: 0, age: 0 };
 }
 
 function place(w: World, cells: Cell[], bonds: [number, number][] = []): void {
@@ -44,14 +45,24 @@ describe("bonds", () => {
   });
 
   it("a budding division releases the second daughter as a new organism", () => {
-    const w = emptyWorld({ budEvery: 2 });
-    place(w, [cell(1, 0, 0, 250, 1)]);
+    const w = emptyWorld();
+    // Mode 3 of the default genome: one daughter stays (mode 3), one buds (mode 0).
+    place(w, [cell(1, 0, 0, 250, 3)]);
     stepWorld(w);
     const [first, second] = w.cells;
-    expect(first.generation).toBe(1);
-    expect(second.generation).toBe(0);
+    expect(first.mode).toBe(3);
+    expect(second.mode).toBe(0);
     expect(w.bonds).toEqual([]);
     expect(countOrganisms(w)).toBe(2);
+  });
+
+  it("a budding daughter drops the parent's bonds, the staying one keeps them", () => {
+    const w = emptyWorld();
+    place(w, [cell(1, 0, 0, 250, 3), cell(2, 0, 25, 100, 3)], [[1, 2]]);
+    stepWorld(w);
+    const [stays, buds] = w.cells.filter((c) => c.id !== 2).map((c) => c.id);
+    expect(bonded(w, stays, 2)).toBe(true);
+    expect(bonded(w, buds, 2)).toBe(false);
   });
 
   it("a bond to a neighbour goes to the daughter on the neighbour's side", () => {
