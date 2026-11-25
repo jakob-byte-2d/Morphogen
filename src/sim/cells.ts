@@ -58,3 +58,18 @@ PLANT_PART[ROOT] = 1;
 PLANT_PART[STEM] = 1;
 PLANT_PART[LEAF] = 1;
 PLANT_PART[FLOWER] = 1;
+
+// Feed and creatures.
+export const FEED = 11;
+export const APHID = 12;
+export const SLIME = 13;
+
+POWDER[FEED] = 1;
+ABSORB[FEED] = 160;
+ABSORB[APHID] = 60;
+ABSORB[SLIME] = 120;
+
+/** Cells that belong to a creature. */
+export const CREATURE_PART = new Uint8Array(MAX_TYPES);
+CREATURE_PART[APHID] = 1;
+CREATURE_PART[SLIME] = 1;

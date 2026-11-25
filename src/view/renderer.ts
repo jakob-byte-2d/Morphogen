@@ -1,4 +1,4 @@
-import { EMPTY, FLOWER, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { APHID, EMPTY, FLOWER, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
@@ -204,7 +204,7 @@ export class Renderer {
           if (t !== SEED) {
             // Thirsty plants fade towards straw yellow.
             const p = w.orgs.get(w.org[i]);
-            if (p && p.thirst > 0) {
+            if (p && p.kind === "plant" && p.thirst > 0) {
               const f = Math.min(0.85, p.thirst / THIRST_LIMIT);
               r += (this.wilted[0] - r) * f;
               g += (this.wilted[1] - g) * f;
@@ -217,6 +217,20 @@ export class Renderer {
             if (above === EMPTY) open++;
             if (open >= 2) a = 170 + (s & 63);
           }
+        } else if (t === APHID || t === SLIME) {
+          const tab = this.creatureTable(w, w.kind[i]);
+          r = tab[s * 3];
+          g = tab[s * 3 + 1];
+          b = tab[s * 3 + 2];
+          if (t === SLIME) {
+            // A soft, glistening mass: lighter on top, see-through at the edges.
+            if (above !== SLIME) {
+              r += (255 - r) * 0.25;
+              g += (255 - g) * 0.25;
+              b += (255 - b) * 0.2;
+              a = 175 + (s & 63);
+            }
+          } else a = 235;
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;
@@ -272,6 +286,16 @@ export class Renderer {
       const c = w.plantSpecies[kind]?.colors ?? w.plantSpecies[0].colors;
       const base = type === SEED ? c.seed : type === STEM ? c.stem : type === LEAF ? c.leaf : c.flower;
       tab = shadeTable(variants(base));
+      this.speciesTables.set(key, tab);
+    }
+    return tab;
+  }
+
+  private creatureTable(w: World, kind: number): Uint8ClampedArray {
+    const key = 100000 + kind;
+    let tab = this.speciesTables.get(key);
+    if (!tab) {
+      tab = shadeTable(variants(w.creatureSpecies[kind]?.color ?? "#b8d86a"));
       this.speciesTables.set(key, tab);
     }
     return tab;

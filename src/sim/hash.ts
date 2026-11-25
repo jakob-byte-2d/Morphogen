@@ -23,5 +23,9 @@ export function hashWorld(w: World): string {
     for (const i of p.cells) mix(i);
     for (const t of p.tips) for (const v of [t.i, t.dx + 2, t.len, t.max, t.main ? 1 : 0, t.done ? 1 : 0]) mix(v);
   }
+  for (const c of w.creatures) {
+    for (const v of [c.id, c.species, c.energy, c.store, c.age, c.dir + 2, c.cells.length]) mix(v);
+    for (const i of c.cells) mix(i);
+  }
   return (h >>> 0).toString(16).padStart(8, "0");
 }

@@ -49,7 +49,7 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×), informasj
 - [x] **0. Rydde.** Gammel versjon på egen gren, nytt skjelett, ny plan.
 - [x] **1. Glasset.** Luft, stein, jord, sand og vann. Lys ovenfra og skygger, uskarp bakgrunn, støv. Zoom og flytting. 💧, 🟫 og spade. Fartsmotor og `?dev`.
 - [x] **2. Planter.** Gress, blomst og busk som vokser mot lyset, med røtter. Frøvelger. Planter som gulner når de tørster og blir til avfall når de dør.
-- [ ] **3. Kryp og fôr.** Bladlus, slim og 🥣.
+- [x] **3. Kryp og fôr.** Bladlus, slim og 🥣.
 - [ ] **4. Nedbrytere.** Meitemark og sopp. Vann som fordamper. Kretsløpet er lukket.
 - [ ] **5. Tid.** Automatisk lagring, spoling når du kommer tilbake, app på hjemskjermen. Første gang er glasset allerede i gang.
 - [ ] **6. Menyen.** Alt i menyen og full utviklermodus.

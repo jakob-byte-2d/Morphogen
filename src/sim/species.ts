@@ -84,3 +84,32 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
     },
   };
 }
+
+/**
+ * What a creature eats decides how it lives: plant eaters crawl about as
+ * little specks, creature eaters creep along the ground as a soft mass.
+ */
+export type Diet = "plants" | "creatures";
+
+export interface CreatureSpecies {
+  name: string;
+  diet: Diet;
+  color: string;
+}
+
+export const CREATURE_SPECIES: CreatureSpecies[] = [
+  { name: "Bladlus", diet: "plants", color: "#b8d86a" },
+  { name: "Slim", diet: "creatures", color: "#d8b040" },
+];
+
+const DIETS: Diet[] = ["plants", "creatures"];
+
+export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
+  const d = CREATURE_SPECIES[0];
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    name: typeof o.name === "string" && o.name.trim() ? o.name.trim().slice(0, 24) : d.name,
+    diet: DIETS.includes(o.diet as Diet) ? (o.diet as Diet) : d.diet,
+    color: color(o.color, d.color),
+  };
+}

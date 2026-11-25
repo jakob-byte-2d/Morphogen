@@ -1,6 +1,7 @@
-import { EMPTY, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE } from "./cells";
+import { EMPTY, FEED, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE } from "./cells";
 import type { PlantSpecies } from "./species";
-import { clearCell, H, setCell, TICKS_PER_SECOND, W, wake, type World } from "./world";
+import { H, TICKS_PER_SECOND, W } from "./dims";
+import { clearCell, setCell, wake, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
 export interface Tip {
@@ -14,6 +15,7 @@ export interface Tip {
 }
 
 export interface Plant {
+  kind: "plant";
   id: number;
   species: number;
   /** Sugar from light. Growing a cell costs GROW_COST. */
@@ -45,6 +47,8 @@ const SPROUT_AFTER = 25;
 /** ...and before it rots if it never gets the chance. */
 const SEED_ROTS_AFTER = 250;
 const MAX_PLANTS = 80;
+/** Slow-pass checks before uneaten feed rots (about a minute). */
+const FEED_ROTS_AFTER = 150;
 const MAX_STORE = 20;
 
 function isGround(t: number): boolean {
@@ -92,6 +96,7 @@ function germinate(w: World, i: number): void {
   const species = w.kind[i];
   const sp = w.plantSpecies[species];
   const p: Plant = {
+    kind: "plant",
     id,
     species,
     energy: SEED_ENERGY,
@@ -399,6 +404,13 @@ export function slowPass(w: World): void {
       const good = isBed(type[below]) && wet[below] > 40 && type[i - W] === EMPTY;
       if (good && wet[i] >= SPROUT_AFTER && w.plants.length < MAX_PLANTS) germinate(w, i);
       else if (wet[i] >= SEED_ROTS_AFTER) {
+        type[i] = WASTE;
+        wet[i] = 0;
+      }
+    } else if (t === FEED) {
+      // Feed nobody eats goes off and turns to waste. Its age is in the moisture slot.
+      if (wet[i] < 255) wet[i]++;
+      if (wet[i] >= FEED_ROTS_AFTER) {
         type[i] = WASTE;
         wet[i] = 0;
       }
