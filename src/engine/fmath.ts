@@ -46,3 +46,52 @@ export const sqrt = Math.sqrt;
 export function clamp(x: number, min: number, max: number): number {
   return x < min ? min : x > max ? max : x;
 }
+
+/** Wraps an angle into [-PI, PI]. */
+export function wrapAngle(a: number): number {
+  return a - Math.round(a / TWO_PI) * TWO_PI;
+}
+
+const QUARTER_PI = 0.7853981633974483;
+const TAN_EIGHTH_PI = 0.41421356237309503;
+
+// Taylor series for atan on [-tan(PI/8), tan(PI/8)]: x - x^3/3 + x^5/5 - ...
+// 15 terms give a max error around 4e-14.
+const ATAN_COEFFS: readonly number[] = Array.from({ length: 15 }, (_, k) =>
+  (k % 2 === 0 ? 1 : -1) / (2 * k + 1),
+);
+
+export function atan(x: number): number {
+  let sign = 1;
+  if (x < 0) {
+    sign = -1;
+    x = -x;
+  }
+  // atan(x) = PI/2 - atan(1/x) for x > 1.
+  let offset = 0;
+  if (x > 1) {
+    x = 1 / x;
+    offset = HALF_PI;
+    sign = -sign;
+  }
+  // atan(x) = PI/4 + atan((x - 1) / (x + 1)) moves x into the fast-converging range.
+  let shift = 0;
+  if (x > TAN_EIGHTH_PI) {
+    x = (x - 1) / (x + 1);
+    shift = QUARTER_PI;
+  }
+  const x2 = x * x;
+  let sum = 0;
+  for (let k = ATAN_COEFFS.length - 1; k >= 0; k--) sum = ATAN_COEFFS[k] + x2 * sum;
+  const inner = shift + x * sum;
+  return offset === 0 ? sign * inner : sign === 1 ? inner - offset : offset - inner;
+}
+
+/** Angle of the vector (x, y), like Math.atan2 but identical on every device. */
+export function atan2(y: number, x: number): number {
+  if (x > 0) return atan(y / x);
+  if (x < 0) return y >= 0 ? atan(y / x) + PI : atan(y / x) - PI;
+  if (y > 0) return HALF_PI;
+  if (y < 0) return -HALF_PI;
+  return 0;
+}

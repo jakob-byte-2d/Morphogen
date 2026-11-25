@@ -42,9 +42,11 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 - [x] Oppskrifter (moduser): celletype, deler seg eller ikke, delingsmasse, delingsvinkel, barnas oppskrifter og vridning, binding mellom døtrene, om hver datter beholder bindingene
 - [x] De midlertidige reglene `daughtersStick` og `budEvery` er erstattet av valg i genomet
 - [x] Flere arter i samme skål, hver med sitt genom, startet speilvendt (grunnlaget for flerspiller)
-- [x] Celletyper: spiser og lyssamler
-- [ ] Svømmer. Krever at cellene snur seg med organismen, ellers svømmer alle rett fram til de treffer kanten
-- [x] Ferdiglagde organismer å velge mellom: Spiserklump, Alge og Blanding (`src/genome/presets.ts`)
+- [x] Celletyper: spiser, lyssamler og svømmer
+- [x] Cellene snur seg med organismen: hver binding husker hvor på cellen den sitter, så delingsvinkler og svømmere peker riktig vei når organismen roterer
+- [x] Ensomme svømmere spretter av veggen
+- [ ] Svømmende organismer samler seg ofte ved kanten. Vurder å la hele organismen snu ved veggen
+- [x] Ferdiglagde organismer å velge mellom: Spiserklump, Alge, Blanding og Svømmer (`src/genome/presets.ts`)
 - **Ferdig når:** en organisme med flere celler klarer å overleve ✅
 
 ## Fase 3 – Spillbart på mobil
@@ -84,5 +86,5 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 ## Åpne spørsmål
 
 - Språk: norsk først, engelsk senere? (all tekst ligger i `src/ui/strings.ts`)
-- Navn på celletypene (nå: spiser og lyssamler)
+- Navn på celletypene (nå: spiser, lyssamler og svømmer)
 - Skal repoet være offentlig (gratis GitHub Pages) eller privat?

@@ -1,5 +1,5 @@
-import { applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
-import { TWO_PI, cos, sin, sqrt } from "./fmath";
+import { alignOrientations, applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
+import { TWO_PI, atan2, cos, sin, sqrt } from "./fmath";
 import { DEFAULT_GENOME, normalizeGenome, type Genome } from "./genome";
 import { SpatialGrid } from "./grid";
 import { radiusOf, type Cell, type Environment, type Food, type World } from "./model";
@@ -12,7 +12,7 @@ export * from "./model";
  * replays store the engine version, so results from different rule sets are
  * never mixed. Remember to update the golden hash in src/engine/golden.ts.
  */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4;
 
 /** Fixed simulation time step in seconds. Never vary this at runtime. */
 export const DT = 1 / 30;
@@ -39,6 +39,9 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   bondBreakStretch: 1.6,
   maxBondsPerCell: 6,
   nutrientShare: 0.5,
+  alignRate: 0.3,
+  swimForce: 150,
+  swimCost: 1,
 };
 
 export interface WorldOptions {
@@ -77,6 +80,8 @@ export function createWorld(seed: number, options: WorldOptions = {}): World {
       divisions: new Map(),
       bondDegree: new Map(),
       contacts: new Uint16Array(64),
+      turnX: new Float64Array(64),
+      turnY: new Float64Array(64),
     },
   };
 
@@ -209,20 +214,29 @@ export function stepWorld(w: World): void {
     });
   }
 
-  // 5. Light collectors gain mass; neighbours shade them. Everyone burns food.
+  // 5. Light collectors gain mass; neighbours shade them. Swimmers push
+  //    themselves forward at a cost. Everyone burns food.
   const photoGain = env.light * env.photoRate * DT;
   for (let i = 0; i < w.cells.length; i++) {
     const c = w.cells[i];
-    if (c.type === "photo") c.mass += photoGain / (1 + contacts[i] * env.shadePerContact);
+    if (c.type === "photo") {
+      c.mass += photoGain / (1 + contacts[i] * env.shadePerContact);
+    } else if (c.type === "swim") {
+      c.vx += cos(c.angle) * env.swimForce * DT;
+      c.vy += sin(c.angle) * env.swimForce * DT;
+      c.mass -= env.swimCost * DT;
+    }
     c.mass -= env.metabolism * DT;
     if (c.mass > env.maxCellMass) c.mass = env.maxCellMass;
     c.age++;
   }
 
-  // 6. Bonded cells share food. Stretched bonds pull; overstretched bonds break.
+  // 6. Bonded cells share food. Stretched bonds pull; overstretched bonds
+  //    break. Bonded cells turn along with their organism.
   indexCells(w);
   shareNutrients(w, DT);
   applyBondForces(w);
+  alignOrientations(w);
 
   // 7. Move, apply friction and keep cells inside the dish.
   for (const c of w.cells) {
@@ -234,10 +248,19 @@ export function stepWorld(w: World): void {
     if (clampToDish(c, limit)) {
       // Remove the outward part of the velocity.
       const d = sqrt(c.x * c.x + c.y * c.y);
-      const vn = (c.vx * c.x + c.vy * c.y) / d;
+      const nx = c.x / d;
+      const ny = c.y / d;
+      const vn = c.vx * nx + c.vy * ny;
       if (vn > 0) {
-        c.vx -= (vn * c.x) / d;
-        c.vy -= (vn * c.y) / d;
+        c.vx -= vn * nx;
+        c.vy -= vn * ny;
+      }
+      // A swimmer heading into the wall turns away, like a ball bouncing off it.
+      if (c.type === "swim") {
+        const fx = cos(c.angle);
+        const fy = sin(c.angle);
+        const fn = fx * nx + fy * ny;
+        if (fn > 0) c.angle = atan2(fy - 2 * fn * ny, fx - 2 * fn * nx);
       }
     }
   }

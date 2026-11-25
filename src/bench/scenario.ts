@@ -2,6 +2,7 @@ import {
   DEFAULT_ENVIRONMENT,
   Rng,
   createWorld,
+  makeBond,
   mode,
   type Bond,
   type Cell,
@@ -54,7 +55,7 @@ export function crowdedWorld(count: number): World {
       angle: a,
       age: 0,
     });
-    if (i % 4 !== 0) bonds.push({ a: id - 1, b: id });
+    if (i % 4 !== 0) bonds.push(makeBond(cells[i - 1], cells[i]));
   }
   w.cells = cells;
   w.bonds = bonds;

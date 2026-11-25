@@ -10,12 +10,14 @@ const COLORS = {
   cellStroke: "#a6ead0",
   nucleus: "rgba(20, 60, 50, 0.75)",
   bond: "rgba(225, 250, 238, 0.6)",
+  tail: "rgba(170, 205, 245, 0.8)",
 };
 
 /** Body colour per cell type: [growing, nearly ready to divide]. */
 const CELL_FILL: Record<CellType, [string, string]> = {
   eater: ["rgba(110, 205, 170, 0.55)", "rgba(150, 225, 190, 0.75)"],
   photo: ["rgba(120, 190, 60, 0.6)", "rgba(185, 225, 80, 0.8)"],
+  swim: ["rgba(90, 150, 220, 0.6)", "rgba(140, 185, 240, 0.8)"],
 };
 
 /** Draws the world onto a canvas. Reads the world, never changes it. */
@@ -89,6 +91,24 @@ export function render(canvas: HTMLCanvasElement, world: World): void {
   }
   ctx.lineWidth = 1.5 / scale;
   ctx.strokeStyle = COLORS.cellStroke;
+  ctx.stroke();
+
+  // Swimmers get a tail (flagellum) behind them, showing which way they push.
+  ctx.beginPath();
+  for (const c of world.cells) {
+    if (c.type !== "swim") continue;
+    const r = radiusOf(c.mass);
+    const bx = -Math.cos(c.angle);
+    const by = -Math.sin(c.angle);
+    // Wiggle the tail a little with the cell's age, so it looks alive.
+    const wiggle = Math.sin(c.age * 0.6) * 0.35;
+    const sx = Math.cos(c.angle + Math.PI / 2) * wiggle * r;
+    const sy = Math.sin(c.angle + Math.PI / 2) * wiggle * r;
+    ctx.moveTo(c.x + bx * r, c.y + by * r);
+    ctx.quadraticCurveTo(c.x + bx * r * 1.5 + sx, c.y + by * r * 1.5 + sy, c.x + bx * r * 2, c.y + by * r * 2);
+  }
+  ctx.lineWidth = 2 / scale;
+  ctx.strokeStyle = COLORS.tail;
   ctx.stroke();
 
   // Bonds between cells in the same organism.

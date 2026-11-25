@@ -1,5 +1,5 @@
-import { sqrt } from "./fmath";
-import { radiusOf, type Bond, type World } from "./model";
+import { PI, atan2, cos, sin, sqrt, wrapAngle } from "./fmath";
+import { radiusOf, type Bond, type Cell, type World } from "./model";
 
 /**
  * Bonds (adhesion) between cells: they keep organisms together and let
@@ -9,6 +9,57 @@ import { radiusOf, type Bond, type World } from "./model";
 
 /** A cell keeps a bond on both daughters if the bonded neighbour lies this close to the division plane (|cos| below this). */
 const SHARE_BOTH_THRESHOLD = 0.4;
+
+/** Creates a bond between two cells, attached where they touch right now. */
+export function makeBond(a: Cell, b: Cell): Bond {
+  const dir = atan2(b.y - a.y, b.x - a.x);
+  return {
+    a: a.id,
+    b: b.id,
+    angA: wrapAngle(dir - a.angle),
+    angB: wrapAngle(dir + PI - b.angle),
+  };
+}
+
+/**
+ * Turns bonded cells so they keep facing the same way relative to their
+ * neighbours. When an organism rotates, its cells rotate with it, so split
+ * angles and swimmers stay pointed the right way. Requires indexCells().
+ */
+export function alignOrientations(w: World): void {
+  const rate = w.env.alignRate;
+  if (rate <= 0 || w.bonds.length === 0) return;
+  const n = w.cells.length;
+  if (w.scratch.turnX.length < n) {
+    w.scratch.turnX = new Float64Array(n * 2);
+    w.scratch.turnY = new Float64Array(n * 2);
+  }
+  const { turnX, turnY, indexById: index } = w.scratch;
+  turnX.fill(0, 0, n);
+  turnY.fill(0, 0, n);
+
+  for (const bond of w.bonds) {
+    const ia = index.get(bond.a)!;
+    const ib = index.get(bond.b)!;
+    const a = w.cells[ia];
+    const b = w.cells[ib];
+    const dir = atan2(b.y - a.y, b.x - a.x);
+    // The orientation each end should have to keep its attachment point facing the other.
+    const wantA = dir - bond.angA;
+    const wantB = dir + PI - bond.angB;
+    turnX[ia] += cos(wantA);
+    turnY[ia] += sin(wantA);
+    turnX[ib] += cos(wantB);
+    turnY[ib] += sin(wantB);
+  }
+
+  for (let i = 0; i < n; i++) {
+    if (turnX[i] === 0 && turnY[i] === 0) continue;
+    const c = w.cells[i];
+    const target = atan2(turnY[i], turnX[i]);
+    c.angle = wrapAngle(c.angle + wrapAngle(target - c.angle) * rate);
+  }
+}
 
 /** Rebuilds world.scratch.indexById from the current cell list. */
 export function indexCells(w: World): void {
@@ -80,8 +131,9 @@ export function applyBondForces(w: World): void {
  * list, with scratch.divisions filled. A bond to a parent goes to the daughter
  * on the neighbour's side; if the neighbour lies near the division plane,
  * both daughters keep it, which makes organisms stiff instead of floppy.
- * A daughter whose mode says not to keep bonds gets none. Bonds to dead
- * cells disappear. Daughters bond to each other if the mode says so.
+ * A daughter whose mode says not to keep bonds gets none, and its sister
+ * takes them all instead. Bonds to dead cells disappear. Daughters bond to
+ * each other if the mode says so.
  */
 export function rebuildBonds(w: World, anyDeaths: boolean): void {
   const { env } = w;
@@ -93,13 +145,17 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
   const degree = w.scratch.bondDegree;
   degree.clear();
   const out: Bond[] = [];
-  const add = (a: number, b: number): void => {
+  const add = (a: number, b: number, old?: Bond): void => {
     const da = degree.get(a) ?? 0;
     const db = degree.get(b) ?? 0;
     if (da >= env.maxBondsPerCell || db >= env.maxBondsPerCell) return;
     degree.set(a, da + 1);
     degree.set(b, db + 1);
-    out.push({ a, b });
+    if (old && old.a === a && old.b === b) {
+      out.push(old); // Same two cells: keep the attachment points.
+    } else {
+      out.push(makeBond(w.cells[index.get(a)!], w.cells[index.get(b)!]));
+    }
   };
 
   // Position of a cell as it was just before any division this tick.
@@ -118,9 +174,14 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
     const dy = ny - div.y;
     const d = sqrt(dx * dx + dy * dy);
     const along = d > 0 ? (dx * div.dirX + dy * div.dirY) / d : 0;
+    // If only one daughter keeps bonds, it takes all of them, so a cell that
+    // buds stays attached to its organism. If both keep bonds, each takes the
+    // neighbours on its own side, and both take those beside the division plane.
     const result: number[] = [];
-    if (div.keepFirst && along >= -SHARE_BOTH_THRESHOLD) result.push(div.first);
-    if (div.keepSecond && along <= SHARE_BOTH_THRESHOLD) result.push(div.second);
+    const firstSide = along >= -SHARE_BOTH_THRESHOLD;
+    const secondSide = along <= SHARE_BOTH_THRESHOLD;
+    if (div.keepFirst && (firstSide || !div.keepSecond)) result.push(div.first);
+    if (div.keepSecond && (secondSide || !div.keepFirst)) result.push(div.second);
     return result;
   };
 
@@ -129,7 +190,7 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
     const pb = positionOf(bond.b);
     if (!pa || !pb) continue; // One side died.
     for (const a of heirs(bond.a, pb.x, pb.y)) {
-      for (const b of heirs(bond.b, pa.x, pa.y)) add(a, b);
+      for (const b of heirs(bond.b, pa.x, pa.y)) add(a, b, bond);
     }
   }
 

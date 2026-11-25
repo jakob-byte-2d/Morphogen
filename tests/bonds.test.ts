@@ -3,6 +3,7 @@ import {
   DEFAULT_ENVIRONMENT,
   countOrganisms,
   createWorld,
+  makeBond,
   stepWorld,
   type Cell,
   type Environment,
@@ -25,7 +26,8 @@ function cell(id: number, x: number, y: number, mass: number, mode = 0): Cell {
 
 function place(w: World, cells: Cell[], bonds: [number, number][] = []): void {
   w.cells = cells;
-  w.bonds = bonds.map(([a, b]) => ({ a, b }));
+  const byId = new Map(cells.map((c) => [c.id, c]));
+  w.bonds = bonds.map(([a, b]) => makeBond(byId.get(a)!, byId.get(b)!));
   w.nextId = Math.max(...cells.map((c) => c.id)) + 1;
   indexCells(w);
 }
@@ -138,5 +140,35 @@ describe("bonds", () => {
       degree.set(b.b, (degree.get(b.b) ?? 0) + 1);
     }
     expect(Math.max(0, ...degree.values())).toBeLessThanOrEqual(w.env.maxBondsPerCell);
+  });
+});
+
+describe("budding keeps the organism together", () => {
+  it("when one daughter buds, its sister takes over all of the parent's bonds", () => {
+    const w = emptyWorld();
+    // Mode 3 of the default genome buds its second daughter (the - side).
+    // The neighbour sits on that side, yet the bond must survive on the first daughter.
+    place(w, [cell(1, 0, 0, 250, 3), cell(2, -25, 0, 100, 3)], [[1, 2]]);
+    stepWorld(w);
+    const [stays, buds] = w.cells.filter((c) => c.id !== 2).map((c) => c.id);
+    expect(bonded(w, stays, 2)).toBe(true);
+    expect(bonded(w, buds, 2)).toBe(false);
+  });
+
+  it("with plenty of food, a Spiserklump organism grows to 8 cells and keeps them while it buds", () => {
+    const w = createWorld(1, {
+      env: { ...DEFAULT_ENVIRONMENT, dishRadius: 110, foodPerSecond: 90, maxFood: 600, metabolism: 0.5, maxCells: 120 },
+    });
+    for (let i = 0; i < 1800; i++) stepWorld(w);
+    const sizes = new Map<number, number>();
+    const parent = new Map<number, number>();
+    const find = (id: number): number => {
+      while (parent.get(id) !== id) id = parent.get(id)!;
+      return id;
+    };
+    for (const c of w.cells) parent.set(c.id, c.id);
+    for (const b of w.bonds) parent.set(find(b.a), find(b.b));
+    for (const c of w.cells) sizes.set(find(c.id), (sizes.get(find(c.id)) ?? 0) + 1);
+    expect(Math.max(...sizes.values())).toBe(8);
   });
 });
