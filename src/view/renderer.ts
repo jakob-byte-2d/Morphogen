@@ -1,6 +1,6 @@
 import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER, WORM } from "../sim/cells";
 import { THIRST_LIMIT } from "../sim/plants";
-import { H, SIZE, W, type World } from "../sim/world";
+import { H, SCALE, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
 import {
   BACKDROP_BASE,
@@ -90,8 +90,8 @@ export class Renderer {
       this.motes.push({
         x: Math.random() * W,
         y: Math.random() * H * 0.7,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.25,
+        vx: (Math.random() - 0.5) * 0.4 * SCALE,
+        vy: (Math.random() - 0.5) * 0.25 * SCALE,
         a: 0.12 + Math.random() * 0.3,
         c: hexToRgb(DUST[k % DUST.length]),
       });
@@ -184,7 +184,7 @@ export class Renderer {
     ctx.fillStyle = g;
     ctx.fillRect(x0, y0, W * s, H * 0.35 * s);
     ctx.fillStyle = `rgba(250, 240, 245, ${(0.8 * a).toFixed(3)})`;
-    const r = Math.max(1, s * 0.45);
+    const r = Math.max(1, s * 0.3 * SCALE);
     for (const [dx, dy] of this.droplets) {
       // Fewer droplets further down, where the glass is warmer.
       if (dy > a * 1.6) continue;
@@ -432,9 +432,11 @@ export class Renderer {
         }
         const ray = x - ((y / 3) | 0) + off;
         const l = light[i] / 255;
-        const shimmer = 0.85 + 0.15 * Math.sin(time * 0.3 + ray * 0.7);
+        // Shafts keep their width in the glass however fine the cells are.
+        const band = (ray / SCALE) | 0;
+        const shimmer = 0.85 + 0.15 * Math.sin(time * 0.3 + band * 0.7);
         const shade = 0.6 * (1 - l);
-        const shine = 0.32 * l * this.shafts[ray] * shimmer * fade;
+        const shine = 0.32 * l * this.shafts[band] * shimmer * fade;
         if (shade > shine) {
           d[o] = 24;
           d[o + 1] = 12;

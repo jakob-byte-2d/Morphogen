@@ -70,3 +70,24 @@ describe("water on plants", () => {
     expect(resting).toBe(0);
   });
 });
+
+describe("seeds on plants", () => {
+  it("slip down between the leaves to the ground", () => {
+    const w = soilBed(130);
+    setCell(w, at(36, H - 21), SEED);
+    w.kind[at(36, H - 21)] = 2;
+    w.food[at(36, H - 21)] = 1;
+    stepWorldN(w, 1500);
+    const p = w.plants[0];
+    const top = Math.min(...p.cells.filter((i) => w.type[i] === LEAF));
+    // Drop a seed straight onto the top leaf.
+    setCell(w, top - W, SEED);
+    w.kind[top - W] = 0;
+    w.food[top - W] = 1;
+    stepWorldN(w, 40);
+    const seeds = [...w.type.keys()].filter((i) => w.type[i] === SEED);
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const i of seeds) expect(w.type[i + W]).toBe(SOIL);
+  });
+});
+

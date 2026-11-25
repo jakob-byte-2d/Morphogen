@@ -17,7 +17,11 @@ export const POWDER = new Uint8Array(MAX_TYPES);
 export const POROUS = new Uint8Array(MAX_TYPES);
 /** Moisture a porous type holds against gravity; more seeps down. */
 export const FIELD_CAPACITY = new Uint8Array(MAX_TYPES);
-/** How much of the light reaching a cell it stops, out of 256. */
+/**
+ * How much of the light reaching a cell it stops, out of 256. Set for
+ * SCALE 2: masses that are thicker in cells than before (leaves, water,
+ * waste) let more through per cell, so they shade as much as they did.
+ */
 export const ABSORB = new Uint16Array(MAX_TYPES);
 
 POWDER[SAND] = 1;
@@ -29,7 +33,7 @@ FIELD_CAPACITY[SOIL] = 140;
 ABSORB[STONE] = 256;
 ABSORB[SAND] = 256;
 ABSORB[SOIL] = 256;
-ABSORB[WATER] = 14;
+ABSORB[WATER] = 7;
 
 // Plants and what is left of them.
 export const SEED = 5;
@@ -48,9 +52,9 @@ FIELD_CAPACITY[WASTE] = 100;
 ABSORB[SEED] = 60;
 ABSORB[ROOT] = 256;
 ABSORB[STEM] = 70;
-ABSORB[LEAF] = 105;
-ABSORB[FLOWER] = 80;
-ABSORB[WASTE] = 220;
+ABSORB[LEAF] = 59;
+ABSORB[FLOWER] = 44;
+ABSORB[WASTE] = 160;
 
 /** Living plant cells. */
 export const PLANT_PART = new Uint8Array(MAX_TYPES);
@@ -65,9 +69,9 @@ export const APHID = 12;
 export const SLIME = 13;
 
 POWDER[FEED] = 1;
-ABSORB[FEED] = 160;
+ABSORB[FEED] = 99;
 ABSORB[APHID] = 60;
-ABSORB[SLIME] = 120;
+ABSORB[SLIME] = 69;
 
 /** Cells that belong to a creature. */
 export const CREATURE_PART = new Uint8Array(MAX_TYPES);
@@ -81,5 +85,5 @@ export const FUNGUS = 15;
 POROUS[FUNGUS] = 1;
 FIELD_CAPACITY[FUNGUS] = 100;
 ABSORB[WORM] = 256;
-ABSORB[FUNGUS] = 140;
+ABSORB[FUNGUS] = 84;
 CREATURE_PART[WORM] = 1;

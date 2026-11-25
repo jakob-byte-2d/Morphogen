@@ -1,6 +1,6 @@
-import { EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
+import { CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
 import type { PlantSpecies } from "./species";
-import { H, TICKS_PER_SECOND, W } from "./dims";
+import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { clearCell, setCell, wake, WATER_UNITS, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
@@ -52,7 +52,7 @@ const SEED_ROTS_AFTER = 250;
 const MAX_PLANTS = 80;
 /** Slow-pass checks before uneaten feed rots (about a minute). */
 const FEED_ROTS_AFTER = 150;
-const MAX_STORE = 20;
+const MAX_STORE = 20 * SCALE;
 
 function isGround(t: number): boolean {
   return t === SOIL || t === SAND;
@@ -117,7 +117,7 @@ function germinate(w: World, i: number): void {
   clearCell(w, i);
   place(w, p, i, sp.form === "grass" ? LEAF : STEM);
   rootInto(w, p, i + W);
-  p.tips.push({ i, dx: 0, len: 1, max: sp.height, main: true, done: false });
+  p.tips.push({ i, dx: 0, len: 1, max: sp.height * SCALE, main: true, done: false });
   w.plants.push(p);
   w.orgs.set(id, p);
 }
@@ -150,10 +150,12 @@ function killPlant(w: World, p: Plant): void {
   }
 }
 
+/** Most cells a plant's shoot grows to. */
 function shootCap(sp: PlantSpecies): number {
-  if (sp.form === "grass") return 4 + (2 + sp.branches * 2) * sp.height;
-  if (sp.form === "flower") return sp.height * (2 + sp.leaves) + 8;
-  return sp.height * (3 + sp.leaves * 2);
+  const h = sp.height * SCALE;
+  if (sp.form === "grass") return 4 + (2 + sp.branches * 2) * h;
+  if (sp.form === "flower") return h * (2 + sp.leaves * SCALE) + 8 * AREA;
+  return h * (3 + sp.leaves * 2 * SCALE);
 }
 
 function growRoot(w: World, p: Plant, sp: PlantSpecies, roots: number[]): boolean {
@@ -162,18 +164,26 @@ function growRoot(w: World, p: Plant, sp: PlantSpecies, roots: number[]): boolea
     const r = roots[w.rng.below(roots.length)];
     const x = r % W;
     const y = (r / W) | 0;
-    if (y + 1 - baseY > sp.rootDepth || y >= H - 1) continue;
+    if (y + 1 - baseY > sp.rootDepth * SCALE || y >= H - 1) continue;
     const side = w.rng.below(2) === 0 ? -1 : 1;
     const options = [r + W, r + W + side, r + W - side, r + side, r - side];
     for (let k = 0; k < options.length; k++) {
       const j = options[k];
       const jx = j % W;
       if (Math.abs(jx - x) > 1 || j >= W * H) continue;
-      if (isBed(w.type[j])) return rootInto(w, p, j);
+      if (isBed(w.type[j]) && (w.food[j] > 0 || p.store > 0)) return rootInto(w, p, j);
     }
   }
   return false;
 }
+
+/** Cells of a flower head, relative to the tip it sits on: a disc above it. */
+const BLOSSOM: [number, number][] = [];
+for (let dy = -2 * SCALE; dy <= 0; dy++)
+  for (let dx = -SCALE; dx <= SCALE; dx++) {
+    const ry = dy + SCALE;
+    if (dx * dx + ry * ry <= SCALE * SCALE + 1 && !(dx === 0 && dy === 0)) BLOSSOM.push([dx, dy]);
+  }
 
 /** A tip that reached its full length ends in a flower or seed head. */
 function finishTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): void {
@@ -182,17 +192,33 @@ function finishTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): void {
   const y = (tip.i / W) | 0;
   if (y < 2) return;
   if (sp.form === "flower" && tip.main) {
-    const spots = [tip.i - W, tip.i - 1, tip.i + 1, tip.i - W - 1, tip.i - W + 1, tip.i - 2 * W];
-    for (const j of spots) {
-      const jx = j % W;
-      if (Math.abs(jx - x) <= 1 && w.type[j] === EMPTY && p.energy >= GROW_COST) {
+    // A round flower head sitting on the tip.
+    for (const [dx, dy] of BLOSSOM) {
+      const j = tip.i + dy * W + dx;
+      if (x + dx < 0 || x + dx >= W || j < 0) continue;
+      if (w.type[j] === EMPTY && p.energy >= GROW_COST) {
         if (place(w, p, j, FLOWER)) p.energy -= GROW_COST;
       }
     }
-  } else if (w.type[tip.i - W] === EMPTY && w.rng.below(sp.form === "grass" ? 2 : 3) === 0) {
-    if (place(w, p, tip.i - W, FLOWER)) p.energy -= GROW_COST;
+  } else if (w.rng.below(sp.form === "grass" ? 2 : 3) === 0) {
+    // A small seed head.
+    for (let k = 1; k <= SCALE; k++) {
+      const j = tip.i - k * W;
+      if (j < 0 || w.type[j] !== EMPTY || p.energy < GROW_COST || !place(w, p, j, FLOWER)) break;
+      p.energy -= GROW_COST;
+    }
   }
 }
+
+/** A leaf on a flower stem, pointing out and up to the side s = 1. */
+const LEAF_SHAPE: [number, number][] = (
+  [[1, 0], [2, 0], [2, -1], [3, -1], [4, -2], [3, -2]] as [number, number][]
+).slice(0, 2 * SCALE + 2);
+
+/** Where a bush puts leaves around a new piece of stem. */
+const BUSH_LEAVES: [number, number][] = [];
+for (let dy = -1; dy <= 1; dy++)
+  for (let dx = -SCALE; dx <= SCALE; dx++) if (dx !== 0 || dy !== 0) BUSH_LEAVES.push([dx, dy]);
 
 function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   if (tip.len >= tip.max) {
@@ -227,27 +253,33 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   tip.i = j;
   tip.len++;
   // Leaves: on alternate sides of a flower stem, in clumps along a bush.
-  if (sp.form === "flower" && tip.main && sp.leaves > 0 && tip.len % (5 - sp.leaves) === 0) {
-    const s = ((tip.len / (5 - sp.leaves)) | 0) % 2 === 0 ? 1 : -1;
-    for (const k of [j + s, j + 2 * s - W]) {
-      if (Math.abs((k % W) - nx) <= 2 && w.type[k] === EMPTY) place(w, p, k, LEAF);
+  const every = (5 - sp.leaves) * SCALE;
+  if (sp.form === "flower" && tip.main && sp.leaves > 0 && tip.len % every === 0) {
+    const s = ((tip.len / every) | 0) % 2 === 0 ? 1 : -1;
+    for (const [dx, dy] of LEAF_SHAPE) {
+      const k = j + dx * s + dy * W;
+      if (Math.abs((k % W) - nx) <= 2 * SCALE && k > W && w.type[k] === EMPTY) place(w, p, k, LEAF);
     }
-  } else if (sp.form === "bush" && tip.len > 2) {
-    const around = [j - 1, j + 1, j - W - tip.dx, j + W - 1, j + W + 1];
-    for (let k = 0; k < sp.leaves; k++) {
-      const c = around[w.rng.below(around.length)];
-      if (Math.abs((c % W) - nx) <= 1 && c > W && w.type[c] === EMPTY) place(w, p, c, LEAF);
+  } else if (sp.form === "bush" && tip.len > 2 * SCALE) {
+    for (let k = 0; k < sp.leaves * SCALE; k++) {
+      const [dx, dy] = BUSH_LEAVES[w.rng.below(BUSH_LEAVES.length)];
+      const c = j + dy * W + (dy === -1 ? dx - tip.dx : dx);
+      if (Math.abs((c % W) - nx) <= SCALE + 1 && c > W && w.type[c] === EMPTY) place(w, p, c, LEAF);
     }
   }
   // Branching.
-  if (sp.form !== "grass" && sp.branches > 0 && tip.len >= 4 && w.rng.below(12) < sp.branches * (sp.form === "bush" ? 2 : 1)) {
+  if (sp.form !== "grass" && sp.branches > 0 && tip.len >= 4 * SCALE && w.rng.below(12 * SCALE) < sp.branches * (sp.form === "bush" ? 2 : 1)) {
     const remaining = tip.max - tip.len;
-    if (remaining > 3) {
-      p.tips.push({ i: j, dx: w.rng.below(2) === 0 ? -1 : 1, len: 0, max: Math.max(3, ((remaining * 7) / 10) | 0), main: false, done: false });
+    if (remaining > 3 * SCALE) {
+      p.tips.push({ i: j, dx: w.rng.below(2) === 0 ? -1 : 1, len: 0, max: Math.max(3 * SCALE, ((remaining * 7) / 10) | 0), main: false, done: false });
     }
   }
   return true;
 }
+
+/** Where grass puts new blades: beside its base, nearest first. */
+const BLADE_OFFSETS: number[] = [];
+for (let k = 1; k <= 4 * SCALE; k++) BLADE_OFFSETS.push(-k, k);
 
 /** Grass sends up new blades from beside its base. */
 function newBlade(w: World, p: Plant, sp: PlantSpecies): boolean {
@@ -255,15 +287,14 @@ function newBlade(w: World, p: Plant, sp: PlantSpecies): boolean {
   if (p.tips.length >= maxBlades) return false;
   const bx = p.base % W;
   const by = (p.base / W) | 0;
-  const offsets = [-1, 1, -2, 2, -3, 3, -4, 4];
-  for (const off of offsets) {
+  for (const off of BLADE_OFFSETS) {
     const x = bx + off;
     if (x < 0 || x >= W || by >= H - 1) continue;
     const i = by * W + x;
     const below = w.type[i + W];
     if (w.type[i] !== EMPTY || !(isBed(below) || below === ROOT)) continue;
     if (!place(w, p, i, LEAF)) return false;
-    const max = Math.max(3, sp.height - Math.abs(off) - w.rng.below(3));
+    const max = Math.max(3 * SCALE, sp.height * SCALE - Math.abs(off) - w.rng.below(3 * SCALE));
     p.tips.push({ i, dx: off < 0 ? -1 : 1, len: 1, max, main: false, done: false });
     return true;
   }
@@ -274,7 +305,7 @@ function growShoot(w: World, p: Plant, sp: PlantSpecies): boolean {
   // Tips that were eaten are gone; if nothing is left, start again at the base.
   p.tips = p.tips.filter((tip) => w.org[tip.i] === p.id && PLANT_PART[w.type[tip.i]] === 1);
   if (p.tips.every((tip) => tip.done) && w.type[p.base] === EMPTY && place(w, p, p.base, sp.form === "grass" ? LEAF : STEM)) {
-    p.tips.push({ i: p.base, dx: 0, len: 1, max: sp.height, main: true, done: false });
+    p.tips.push({ i: p.base, dx: 0, len: 1, max: sp.height * SCALE, main: true, done: false });
     return true;
   }
   if (sp.form === "grass" && w.rng.below(3) === 0 && newBlade(w, p, sp)) return true;
@@ -315,7 +346,7 @@ function regrowLeaf(w: World, p: Plant, stems: number[]): boolean {
 /** A flower lets a seed fall beside it. */
 function dropSeed(w: World, p: Plant, flowers: number[]): void {
   const f = flowers[w.rng.below(flowers.length)];
-  const x = (f % W) + w.rng.below(5) - 2;
+  const x = (f % W) + w.rng.below(4 * SCALE + 1) - 2 * SCALE;
   const y = (f / W) | 0;
   if (x < 0 || x >= W) return;
   const i = y * W + x;
@@ -367,7 +398,7 @@ function updatePlant(w: World, p: Plant): void {
 
   // Roots take nutrients from the ground around them.
   let taken = 0;
-  for (let k = 0; k < roots.length && taken < 3 && p.store < MAX_STORE; k++) {
+  for (let k = 0; k < roots.length && taken < 3 * SCALE && p.store < MAX_STORE; k++) {
     const r = roots[k];
     const dir = (p.age + k) & 3;
     const j = dir === 0 ? r + W : dir === 1 ? r - 1 : dir === 2 ? r + 1 : r - W;
@@ -405,29 +436,38 @@ function updatePlant(w: World, p: Plant): void {
     return;
   }
 
-  // Grow one cell every few updates: roots first while they lag behind,
-  // then the shoot.
-  if (p.age % GROW_EVERY !== 0 || p.thirst > 0 || p.energy < GROW_COST || p.store < 1) return;
-  const wantRoots = Math.max(2, (n / 4) | 0);
-  if (roots.length < wantRoots && growRoot(w, p, sp, roots)) {
-    p.energy -= GROW_COST;
-    return;
-  }
+  // Grow a few cells every few updates (SCALE of them, so plants keep their
+  // pace in the finer glass): roots first while they lag behind, then the shoot.
+  if (p.age % GROW_EVERY !== 0 || p.thirst > 0) return;
   if (leaves > p.maxLeaves) p.maxLeaves = leaves;
-  if (n - roots.length < shootCap(sp) && growShoot(w, p, sp)) {
-    p.energy -= GROW_COST;
-    return;
-  }
-  if (leaves < p.maxLeaves && regrowLeaf(w, p, stems)) {
-    p.energy -= GROW_COST;
-    return;
-  }
   if (flowers.length > p.maxFlowers) p.maxFlowers = flowers.length;
-  if (flowers.length < p.maxFlowers && regrowFlower(w, p, stems.length > 0 ? stems : cells)) {
-    p.energy -= GROW_COST;
-    return;
+  for (let g = 0; g < SCALE; g++) {
+    if (p.energy < GROW_COST) return;
+    // A root takes the nutrients of the cell it grows into, so a plant with
+    // an empty store can still reach for new ground.
+    const wantRoots = Math.max(2, (p.cells.length / 4) | 0);
+    if (roots.length < wantRoots && growRoot(w, p, sp, roots)) {
+      p.energy -= GROW_COST;
+      continue;
+    }
+    if (p.store < 1) return;
+    if (n - roots.length < shootCap(sp) && growShoot(w, p, sp)) {
+      p.energy -= GROW_COST;
+      continue;
+    }
+    if (leaves < p.maxLeaves && regrowLeaf(w, p, stems)) {
+      p.energy -= GROW_COST;
+      leaves++;
+      continue;
+    }
+    if (flowers.length < p.maxFlowers && regrowFlower(w, p, stems.length > 0 ? stems : cells)) {
+      p.energy -= GROW_COST;
+      return;
+    }
+    break;
   }
-  if (flowers.length > 0 && p.energy > GROW_COST * 4 && w.rng.below(10) === 0) dropSeed(w, p, flowers);
+  // Grass seeds half as often: its seeds land in the open more easily.
+  if (flowers.length > 0 && p.energy > GROW_COST * 4 && w.rng.below(sp.form === "grass" ? 20 : 10) === 0) dropSeed(w, p, flowers);
 }
 
 export function updatePlants(w: World): void {
@@ -451,9 +491,11 @@ export function slowPass(w: World): void {
   for (let i = W; i < W * (H - 1); i++) {
     const t = type[i];
     if (t === SEED) {
-      // A seed counts its age in its moisture slot.
-      if (wet[i] < 255) wet[i]++;
       const below = i + W;
+      // A seed counts its age in its moisture slot. Lying on a creature (a
+      // worm near the surface, say) it just waits for it to move on.
+      if (CREATURE_PART[type[below]]) continue;
+      if (wet[i] < 255) wet[i]++;
       const good = isBed(type[below]) && wet[below] > 40 && type[i - W] === EMPTY;
       if (good && wet[i] >= SPROUT_AFTER && w.plants.length < MAX_PLANTS) germinate(w, i);
       else if (wet[i] >= SEED_ROTS_AFTER) {

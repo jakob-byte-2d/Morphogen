@@ -1,7 +1,7 @@
 import { H, W } from "../sim/world";
 
 export const MIN_ZOOM = 1;
-export const MAX_ZOOM = 8;
+export const MAX_ZOOM = 16;
 
 /**
  * What part of the glass is on screen. The glass element always has the

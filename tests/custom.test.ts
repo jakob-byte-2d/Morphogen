@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, createWorld, MAX_SPECIES, SEED, stepWorldN, W, WORM } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, createWorld, MAX_SPECIES, SCALE, SEED, stepWorldN, W, WORM } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -16,11 +16,11 @@ describe("species the player makes", () => {
   it("live the way their food decides", () => {
     const w = createWorld(32);
     const k = addCreatureSpecies(w, { name: "Gravemus", diet: "waste", color: "#aa8866" });
-    applyTool(w, "creature", 60, 20, k);
+    applyTool(w, "creature", 60 * SCALE, 20 * SCALE, k);
     const c = w.creatures.find((x) => x.species === k);
     expect(c).toBeDefined();
     expect(c!.cells.every((i) => w.type[i] === WORM)).toBe(true);
-    expect(((c!.cells[0] / W) | 0)).toBeGreaterThan(60);
+    expect(((c!.cells[0] / W) | 0)).toBeGreaterThan(60 * SCALE);
   });
 
   it("are cleaned up and limited in number", () => {

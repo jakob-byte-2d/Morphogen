@@ -5,6 +5,7 @@ import {
   EMPTY,
   GOLDEN,
   H,
+  SCALE,
   hashWorld,
   SAND,
   setCell,
@@ -108,9 +109,9 @@ describe("tools", () => {
 
   it("digs everything away with the spade", () => {
     const w = createWorld(8);
-    const i = at(36, 100);
+    const i = at(36 * SCALE, 100 * SCALE);
     expect(w.type[i]).not.toBe(EMPTY);
-    applyTool(w, "spade", 36, 100);
+    applyTool(w, "spade", 36 * SCALE, 100 * SCALE);
     expect(w.type[i]).toBe(EMPTY);
   });
 });
