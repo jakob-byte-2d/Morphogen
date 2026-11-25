@@ -145,11 +145,11 @@ describe("determinism", () => {
 });
 
 describe("start scene", () => {
-  it("has soil, sand, stone and a pond that stays", () => {
+  it("has soil, sand and a pond that stays, and no stones", () => {
     const w = createWorld(42);
     expect(count(w, SOIL)).toBeGreaterThan(1500);
     expect(count(w, SAND)).toBeGreaterThan(200);
-    expect(count(w, STONE)).toBeGreaterThan(100);
+    expect(count(w, STONE)).toBe(0);
     const water = count(w, WATER);
     expect(water).toBeGreaterThan(20);
     stepWorldN(w, 3000);

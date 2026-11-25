@@ -3,6 +3,7 @@ import { SIZE } from "./dims";
 import type { Plant, Tip } from "./plants";
 import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
+import { SAND, STONE } from "./cells";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 /** Oldest engine version whose saved glasses can still be loaded. */
@@ -124,6 +125,8 @@ export function loadWorld(data: unknown): World | null {
   w.kind.set(arrays.kind!);
   new Uint8Array(w.org.buffer).set(arrays.org!);
   w.light.set(arrays.light!);
+  // Glasses from before version 9 had pebbles; there are no stones any more.
+  if (d.v < 9) for (let i = 0; i < SIZE; i++) if (w.type[i] === STONE) w.type[i] = SAND;
   w.tick = int(d.tick, 0, 2 ** 31);
   w.rng.setState(d.rng.map((v) => int(v, -(2 ** 31), 2 ** 32) | 0) as [number, number, number, number]);
   w.humidity = int(d.humidity, 0, 2 ** 31);

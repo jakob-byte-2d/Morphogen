@@ -1,7 +1,7 @@
 import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER, WORM } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
-import { H, SCALE, SIZE, W, type World } from "../sim/world";
+import { H, SATURATED, SCALE, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
 import {
   BACKDROP_BASE,
@@ -35,6 +35,9 @@ interface Mote {
   a: number;
   c: [number, number, number];
 }
+
+/** How ground below the groundwater table is darkened, per channel. */
+const SOAKED = [0.9, 0.93, 1.04];
 
 /** Colour shift per step of a gene tint: warmer one way, cooler the other. */
 const TINT = 6;
@@ -277,6 +280,12 @@ export class Renderer {
             g = DRY_TABLE[s * 3 + 1] * (1 - m) + tab[s * 3 + 1] * m;
             b = DRY_TABLE[s * 3 + 2] * (1 - m) + tab[s * 3 + 2] * m;
           }
+          if (wet[i] >= SATURATED) {
+            // Soaked through: the groundwater shows as darker, cooler ground.
+            r *= SOAKED[0];
+            g *= SOAKED[1];
+            b *= SOAKED[2];
+          }
         } else if (t === SEED || t === STEM || t === LEAF || t === FLOWER) {
           const tab = this.speciesTable(w, w.kind[i], t);
           r = tab[s * 3];
@@ -347,7 +356,11 @@ export class Renderer {
           g = tab[s * 3 + 1];
           b = tab[s * 3 + 2];
           if (t === WATER) a = 215;
-          else if (t === SAND && POROUS[t] && wet[i] > 120) {
+          else if (t === SAND && wet[i] >= SATURATED) {
+            r *= SOAKED[0];
+            g *= SOAKED[1];
+            b *= SOAKED[2];
+          } else if (t === SAND && POROUS[t] && wet[i] > 120) {
             r *= 0.85;
             g *= 0.85;
             b *= 0.85;
