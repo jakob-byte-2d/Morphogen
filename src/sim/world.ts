@@ -1,5 +1,7 @@
 import { ABSORB, EMPTY, FIELD_CAPACITY, POROUS, POWDER, SOIL, WATER } from "./cells";
+import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
+import { PLANT_SPECIES, type PlantSpecies } from "./species";
 
 /** The glass is W cells wide and H cells tall. y = 0 is the top. */
 export const W = 72;
@@ -13,7 +15,7 @@ export const TICKS_PER_SECOND = 10;
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 1;
+export const SIM_VERSION = 2;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -41,8 +43,14 @@ export interface World {
   readonly shade: Uint8Array;
   /** Moisture in soil and sand, 0–255. */
   readonly wet: Uint8Array;
-  /** Nutrients, 0–255. */
+  /**
+   * Nutrients, in units. In soil they are free for roots to take; in a plant
+   * cell, seed or waste they are what the cell is made of. Units are never
+   * created or destroyed by the rules, only moved (see totalUnits).
+   */
   readonly food: Uint8Array;
+  /** Species of a seed, plant cell or creature cell. */
+  readonly kind: Uint8Array;
   /** Organism a living cell belongs to (0 = none). */
   readonly org: Uint16Array;
   /** Light reaching each cell, 0–255. Recomputed every step. */
@@ -52,9 +60,21 @@ export interface World {
   /** Chunks to check this step, and chunks woken for the next step. */
   awake: Uint8Array;
   wakeNext: Uint8Array;
+  /**
+   * Water in the air, in moisture units. Plants breathe it out; it condenses
+   * under the lid and drips back down.
+   */
+  humidity: number;
+  /** Plant species in this glass. Cells refer to them by index (kind). */
+  readonly plantSpecies: PlantSpecies[];
+  /** Living plants, oldest first. */
+  plants: Plant[];
+  /** Every living organism by id. */
+  readonly orgs: Map<number, Plant>;
+  nextOrgId: number;
 }
 
-export function emptyWorld(seed: number): World {
+export function emptyWorld(seed: number, plantSpecies: PlantSpecies[] = PLANT_SPECIES): World {
   return {
     seed,
     tick: 0,
@@ -68,6 +88,12 @@ export function emptyWorld(seed: number): World {
     stamp: new Uint32Array(SIZE),
     awake: new Uint8Array(CHUNKS_X * CHUNKS_Y).fill(1),
     wakeNext: new Uint8Array(CHUNKS_X * CHUNKS_Y).fill(1),
+    kind: new Uint8Array(SIZE),
+    humidity: 0,
+    plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors } })),
+    plants: [],
+    orgs: new Map(),
+    nextOrgId: 1,
   };
 }
 
@@ -90,19 +116,23 @@ export function setCell(w: World, i: number, type: number): void {
   w.wet[i] = 0;
   w.food[i] = 0;
   w.org[i] = 0;
+  w.kind[i] = 0;
 }
 
 export function clearCell(w: World, i: number): void {
   wake(w, i);
+  // Moisture in a cell that disappears goes into the air.
+  if (POROUS[w.type[i]]) w.humidity += w.wet[i];
   w.type[i] = EMPTY;
   w.wet[i] = 0;
   w.food[i] = 0;
   w.org[i] = 0;
+  w.kind[i] = 0;
 }
 
 /** Swaps two cells with everything they carry, and marks both as moved. */
 function move(w: World, i: number, j: number, mark: number): void {
-  const { type, shade, wet, food, org } = w;
+  const { type, shade, wet, food, org, kind } = w;
   let t = type[i];
   type[i] = type[j];
   type[j] = t;
@@ -118,6 +148,9 @@ function move(w: World, i: number, j: number, mark: number): void {
   t = org[i];
   org[i] = org[j];
   org[j] = t;
+  t = kind[i];
+  kind[i] = kind[j];
+  kind[j] = t;
   w.stamp[i] = mark;
   w.stamp[j] = mark;
   wake(w, i);
@@ -194,7 +227,8 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
  */
 function spreadMoisture(w: World): void {
   const { type, wet } = w;
-  const side = (w.tick & 1) === 0 ? 1 : -1;
+  // Runs every other step; alternate the side it shares with each time.
+  const side = (w.tick & 2) === 0 ? 1 : -1;
   for (let y = H - 1; y >= 0; y--) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
@@ -208,8 +242,9 @@ function spreadMoisture(w: World): void {
             const f = Math.min(room, (excess + 3) >> 2);
             wet[i] -= f;
             wet[b] += f;
-          } else if (wet[b] > wet[i] + 40) {
-            const f = (wet[b] - wet[i]) >> 4;
+          } else if (wet[b] > wet[i] + 16) {
+            // Capillary rise: dry soil draws water up from below.
+            const f = (wet[b] - wet[i]) >> 3;
             wet[b] -= f;
             wet[i] += f;
           }
@@ -249,6 +284,19 @@ export function computeLight(w: World): void {
   }
 }
 
+/** Water in the air gathers under the lid and falls as a drop now and then. */
+function condense(w: World): void {
+  if (w.humidity < WATER_UNITS * 4) return;
+  // The more water in the air, the more often it drips.
+  const drops = Math.min(3, (w.humidity / 800) | 0) + (w.rng.below(4) === 0 ? 1 : 0);
+  for (let k = 0; k < drops; k++) {
+    const x = 1 + w.rng.below(W - 2);
+    if (w.type[x] !== EMPTY) continue;
+    setCell(w, x, WATER);
+    w.humidity -= WATER_UNITS;
+  }
+}
+
 /** Advances the glass by one step. */
 export function stepWorld(w: World): void {
   const mark = w.tick + 1;
@@ -277,7 +325,29 @@ export function stepWorld(w: World): void {
   }
   if ((w.tick & 1) === 0) spreadMoisture(w);
   computeLight(w);
+  updatePlants(w);
+  if ((w.tick & 3) === 2) slowPass(w);
+  condense(w);
   w.tick++;
+}
+
+/** All water in the glass, in moisture units: in cells, in plants and in the air. */
+export function totalWater(w: World): number {
+  let n = w.humidity;
+  for (let i = 0; i < SIZE; i++) {
+    if (w.type[i] === WATER) n += WATER_UNITS;
+    else if (POROUS[w.type[i]]) n += w.wet[i];
+  }
+  for (const p of w.plants) n += p.water;
+  return n;
+}
+
+/** All nutrient units in the glass: in cells and held by organisms. */
+export function totalUnits(w: World): number {
+  let n = 0;
+  for (let i = 0; i < SIZE; i++) n += w.food[i];
+  for (const p of w.plants) n += p.store;
+  return n;
 }
 
 export function stepWorldN(w: World, n: number): void {

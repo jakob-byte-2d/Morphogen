@@ -25,6 +25,7 @@ All kode i `src/sim/` må følge dette:
 - Gå gjennom rutenettet og listene i fast rekkefølge. En rute som er flyttet i et steg, merkes så den ikke flyttes to ganger.
 - Ingen DOM eller nettleser-API-er i motoren.
 - Nye rutetyper legges til sist i `src/sim/cells.ts`, aldri i midten: lagrede glass bruker tallene.
+- **Næring og vann er bevart.** Næring (`food`) og vann flyttes bare, de lages aldri og forsvinner aldri i reglene: `totalUnits` og `totalWater` skal være konstante når spilleren ikke gjør noe. Bare verktøyene (og senere fordampning) legger til eller fjerner. Pass på `Uint8Array`: et felt som går under 0 eller over 255 bryter regnskapet.
 - Endrer du reglene med vilje: øk `SIM_VERSION` og oppdater gullhashen. Endres gullhashen uten at du mente å endre reglene, er det en feil.
 
 ## Kode

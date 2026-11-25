@@ -1,10 +1,13 @@
 import { applyTool, createWorld, H, stepWorld, TICKS_PER_SECOND, type Tool, W } from "./sim";
 import { DevPanel, type DevState } from "./ui/dev";
+import { plantIcon } from "./ui/icons";
+import { Picker } from "./ui/picker";
 import { attachInput } from "./ui/input";
 import { t } from "./ui/strings";
 import { Toolbar } from "./ui/toolbar";
 import "./ui/style.css";
 import { Camera } from "./view/camera";
+import { darken, lighten } from "./view/palette";
 import { Renderer } from "./view/renderer";
 
 const params = new URLSearchParams(location.search);
@@ -26,11 +29,24 @@ const camera = new Camera();
 const renderer = new Renderer(glass, camera);
 glass.append(ring);
 
-/** Tools on the bar. Seeds, creatures and feed join in later steps. */
-const TOOLS: Tool[] = ["water", "soil", "spade"];
+/** Tools on the bar. Creatures and feed join in later steps. */
+const TOOLS: Tool[] = ["water", "soil", "seed", "spade"];
 let tool: Tool = "water";
-const toolbar = new Toolbar(TOOLS, tool, (id) => (tool = id as Tool));
-app.append(toolbar.el);
+let plantSpecies = 1;
+
+const seedPicker = new Picker(t.seeds, (k) => (plantSpecies = k));
+seedPicker.setItems(
+  world.plantSpecies.map((sp) => ({ label: sp.name, icon: plantIcon(sp.form, sp.colors, (c) => lighten(c, 0.25), (c) => darken(c, 0.2)) })),
+  plantSpecies,
+);
+
+const toolbar = new Toolbar(TOOLS, tool, (id, again) => {
+  tool = id as Tool;
+  // Choosing seeds opens the seed row; tapping seeds again closes it.
+  if (id === "seed" && !(again && seedPicker.open)) seedPicker.openAt(toolbar.centerOf("seed"), toolbar.el.offsetHeight + 4);
+  else seedPicker.close();
+});
+app.append(toolbar.el, seedPicker.el);
 
 const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false };
 let devPanel: DevPanel | null = null;
@@ -71,9 +87,10 @@ attachInput(
   camera,
   {
     start(x, y) {
+      seedPicker.close();
       stroke = { x, y };
       toolTimer = 0;
-      applyTool(world, tool, x, y);
+      applyTool(world, tool, x, y, plantSpecies);
     },
     move(x, y) {
       if (stroke) {
@@ -110,7 +127,7 @@ function frame(now: number): void {
     toolTimer += dt;
     while (toolTimer >= 0.1) {
       toolTimer -= 0.1;
-      applyTool(world, tool, stroke.x, stroke.y);
+      applyTool(world, tool, stroke.x, stroke.y, plantSpecies);
     }
   }
 

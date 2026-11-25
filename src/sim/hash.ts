@@ -15,6 +15,13 @@ export function hashWorld(w: World): string {
   };
   mix(w.tick);
   for (const v of w.rng.getState()) mix(v);
-  for (const arr of [w.type, w.shade, w.wet, w.food, w.org]) for (let i = 0; i < arr.length; i++) mix(arr[i]);
+  for (const arr of [w.type, w.shade, w.wet, w.food, w.org, w.kind]) for (let i = 0; i < arr.length; i++) mix(arr[i]);
+  mix(w.nextOrgId);
+  mix(w.humidity);
+  for (const p of w.plants) {
+    for (const v of [p.id, p.species, p.energy, p.water, p.store, p.thirst, p.age, p.base, p.cells.length]) mix(v);
+    for (const i of p.cells) mix(i);
+    for (const t of p.tips) for (const v of [t.i, t.dx + 2, t.len, t.max, t.main ? 1 : 0, t.done ? 1 : 0]) mix(v);
+  }
   return (h >>> 0).toString(16).padStart(8, "0");
 }

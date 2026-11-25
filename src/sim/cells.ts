@@ -30,3 +30,31 @@ ABSORB[STONE] = 256;
 ABSORB[SAND] = 256;
 ABSORB[SOIL] = 256;
 ABSORB[WATER] = 14;
+
+// Plants and what is left of them.
+export const SEED = 5;
+export const ROOT = 6;
+export const STEM = 7;
+export const LEAF = 8;
+export const FLOWER = 9;
+export const WASTE = 10;
+
+POWDER[SEED] = 1;
+POWDER[WASTE] = 1;
+POROUS[ROOT] = 1;
+FIELD_CAPACITY[ROOT] = 140;
+POROUS[WASTE] = 1;
+FIELD_CAPACITY[WASTE] = 100;
+ABSORB[SEED] = 60;
+ABSORB[ROOT] = 256;
+ABSORB[STEM] = 70;
+ABSORB[LEAF] = 105;
+ABSORB[FLOWER] = 80;
+ABSORB[WASTE] = 220;
+
+/** Living plant cells. */
+export const PLANT_PART = new Uint8Array(MAX_TYPES);
+PLANT_PART[ROOT] = 1;
+PLANT_PART[STEM] = 1;
+PLANT_PART[LEAF] = 1;
+PLANT_PART[FLOWER] = 1;

@@ -1,4 +1,5 @@
-import { EMPTY, POROUS, SAND, SOIL, STONE, WATER } from "../sim/cells";
+import { EMPTY, FLOWER, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { THIRST_LIMIT } from "../sim/plants";
 import { H, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
 import {
@@ -9,9 +10,12 @@ import {
   DUST,
   hexToRgb,
   MOSS_TABLE,
+  shadeTable,
   SPECK_TABLE,
   TABLES,
+  variants,
   WATER_TOP,
+  WILTED,
 } from "./palette";
 
 /** Stable per-position noise for the renderer, 0–255. */
@@ -52,6 +56,10 @@ export class Renderer {
   private shafts = new Float32Array(W + H);
   private top = new Uint8Array(SIZE);
   private waterTop = hexToRgb(WATER_TOP);
+  private wilted = hexToRgb(WILTED);
+  /** Colour tables per species and plant part, made when first needed. */
+  private speciesTables = new Map<number, Uint8ClampedArray>();
+  private sparkles: { i: number; life: number }[] = [];
 
   constructor(
     readonly el: HTMLElement,
@@ -188,6 +196,27 @@ export class Renderer {
             g = DRY_TABLE[s * 3 + 1] * (1 - m) + tab[s * 3 + 1] * m;
             b = DRY_TABLE[s * 3 + 2] * (1 - m) + tab[s * 3 + 2] * m;
           }
+        } else if (t === SEED || t === STEM || t === LEAF || t === FLOWER) {
+          const tab = this.speciesTable(w, w.kind[i], t);
+          r = tab[s * 3];
+          g = tab[s * 3 + 1];
+          b = tab[s * 3 + 2];
+          if (t !== SEED) {
+            // Thirsty plants fade towards straw yellow.
+            const p = w.orgs.get(w.org[i]);
+            if (p && p.thirst > 0) {
+              const f = Math.min(0.85, p.thirst / THIRST_LIMIT);
+              r += (this.wilted[0] - r) * f;
+              g += (this.wilted[1] - g) * f;
+              b += (this.wilted[2] - b) * f;
+            }
+            // Soft edges: cells with open air on several sides are see-through.
+            let open = 0;
+            if (x > 0 && type[i - 1] === EMPTY) open++;
+            if (x < W - 1 && type[i + 1] === EMPTY) open++;
+            if (above === EMPTY) open++;
+            if (open >= 2) a = 170 + (s & 63);
+          }
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;
@@ -214,6 +243,7 @@ export class Renderer {
         d[o + 3] = a;
       }
     }
+    this.drawSparkles(w, d, dt);
     // Dust drifting in the air.
     for (const m of this.motes) {
       m.x += m.vx * dt;
@@ -233,6 +263,41 @@ export class Renderer {
       d[o + 3] = 255 * m.a * lit;
     }
     this.cellCanvas.getContext("2d")!.putImageData(this.cellImage, 0, 0);
+  }
+
+  private speciesTable(w: World, kind: number, type: number): Uint8ClampedArray {
+    const key = kind * 32 + type;
+    let tab = this.speciesTables.get(key);
+    if (!tab) {
+      const c = w.plantSpecies[kind]?.colors ?? w.plantSpecies[0].colors;
+      const base = type === SEED ? c.seed : type === STEM ? c.stem : type === LEAF ? c.leaf : c.flower;
+      tab = shadeTable(variants(base));
+      this.speciesTables.set(key, tab);
+    }
+    return tab;
+  }
+
+  /** Healthy plants glitter now and then. */
+  private drawSparkles(w: World, d: Uint8ClampedArray, dt: number): void {
+    if (w.plants.length > 0 && Math.random() < dt * 2.5) {
+      const p = w.plants[Math.floor(Math.random() * w.plants.length)];
+      const c = p.cells[Math.floor(Math.random() * p.cells.length)];
+      if (p.thirst === 0 && p.water > 30 && c !== undefined && PLANT_PART[w.type[c]] && w.type[c] !== ROOT) {
+        const spot = [c - W, c - 1, c + 1][Math.floor(Math.random() * 3)];
+        if (spot >= 0 && w.type[spot] === EMPTY) this.sparkles.push({ i: spot, life: 0.6 });
+      }
+    }
+    for (const sp of this.sparkles) {
+      sp.life -= dt;
+      if (sp.life <= 0 || w.type[sp.i] !== EMPTY) continue;
+      const o = sp.i * 4;
+      const a = Math.sin((sp.life / 0.6) * Math.PI);
+      d[o] = 255;
+      d[o + 1] = 246;
+      d[o + 2] = 214;
+      d[o + 3] = 230 * a;
+    }
+    this.sparkles = this.sparkles.filter((sp) => sp.life > 0);
   }
 
   private surfaceColor(d: Uint8ClampedArray, o: number, w: World, ground: number, h: number, alpha: number): void {

@@ -9,7 +9,8 @@ export class Toolbar {
   constructor(
     tools: string[],
     public selected: string,
-    private onSelect: (tool: string) => void,
+    /** Called with again = true when the selected tool is tapped once more. */
+    private onSelect: (tool: string, again: boolean) => void,
   ) {
     this.el.className = "toolbar";
     this.el.setAttribute("aria-label", t.tools);
@@ -20,6 +21,7 @@ export class Toolbar {
       b.setAttribute("aria-label", t.tool[id] ?? id);
       b.append(iconCanvas(ICONS[id]));
       b.addEventListener("click", () => this.select(id));
+      b.dataset.tool = id;
       this.buttons.set(id, b);
       this.el.append(b);
     }
@@ -27,8 +29,17 @@ export class Toolbar {
   }
 
   select(id: string, notify = true): void {
+    const again = id === this.selected;
     this.selected = id;
     for (const [k, b] of this.buttons) b.setAttribute("aria-pressed", String(k === id));
-    if (notify) this.onSelect(id);
+    if (notify) this.onSelect(id, again);
+  }
+
+  /** Horizontal centre of a tool's button, in page pixels. */
+  centerOf(id: string): number {
+    const b = this.buttons.get(id);
+    if (!b) return innerWidth / 2;
+    const r = b.getBoundingClientRect();
+    return r.left + r.width / 2;
   }
 }
