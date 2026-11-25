@@ -12,7 +12,7 @@ export { H, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 4;
+export const SIM_VERSION = 5;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -29,6 +29,11 @@ const WAKE_ALL_EVERY = 16;
 /** Moisture one water cell carries into the soil. */
 export const WATER_UNITS = 32;
 export const MAX_WET = 255;
+
+/** Moisture one dew event puts back into the ground. */
+const DEW = 8;
+/** Plants drink dew and drops until they hold this much water. */
+const PLANT_DRINKS_TO = 200;
 
 export interface World {
   readonly seed: number;
@@ -58,8 +63,8 @@ export interface World {
   awake: Uint8Array;
   wakeNext: Uint8Array;
   /**
-   * Water in the air, in moisture units. Plants breathe it out; it condenses
-   * under the lid and drips back down.
+   * Water in the air, in moisture units. Plants breathe it out; it settles
+   * again as dew.
    */
   humidity: number;
   /** Water that has escaped from the glass for good (it is not quite airtight). */
@@ -209,22 +214,27 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       clearCell(w, i);
       return;
     }
-    // A drop on a plant: the plant drinks it, or it trickles down through the leaves.
+    // A drop on a plant: the plant drinks it, or it runs down through the
+    // plant to the ground. It never rests on the leaves.
     if (PLANT_PART[tb] && tb !== ROOT) {
       const p = w.orgs.get(w.org[b]);
-      if (p && p.kind === "plant" && p.water < 200) {
+      if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
         p.water += WATER_UNITS;
         clearCell(w, i);
         return;
       }
-      for (let k = 2; k <= 6; k++) {
-        const j = i + k * W;
-        if (j >= SIZE) break;
+      let j = b + W;
+      while (j < SIZE && PLANT_PART[type[j]] && type[j] !== ROOT) j += W;
+      if (j < SIZE) {
         if (type[j] === EMPTY) {
           move(w, i, j, mark);
           return;
         }
-        if (!PLANT_PART[type[j]]) break;
+        if (POROUS[type[j]] && wet[j] <= MAX_WET - WATER_UNITS) {
+          wet[j] += WATER_UNITS;
+          clearCell(w, i);
+          return;
+        }
       }
     }
     const dl = x > 0 && type[b - 1] === EMPTY;
@@ -317,21 +327,55 @@ export function computeLight(w: World): void {
   }
 }
 
-/** Water in the air gathers under the lid and falls as a drop now and then. */
+/**
+ * Water in the air settles again as dew. It does not fall as drops: it goes
+ * straight into whatever is on top in a random column. Plants drink it, soil
+ * and sand soak it up, and only where the ground is soaked does it gather
+ * into a puddle on the surface.
+ */
 function condense(w: World): void {
   // A little water escapes all the time, so the glass needs watering now and then.
   if (w.humidity > 0 && (w.rng.nextU32() & 1) === 0) {
     w.humidity--;
     w.lostWater++;
   }
-  if (w.humidity < WATER_UNITS * 4) return;
-  // The more water in the air, the more often it drips.
-  const drops = Math.min(3, (w.humidity / 800) | 0) + (w.rng.below(4) === 0 ? 1 : 0);
-  for (let k = 0; k < drops; k++) {
-    const x = 1 + w.rng.below(W - 2);
-    if (w.type[x] !== EMPTY) continue;
-    setCell(w, x, WATER);
-    w.humidity -= WATER_UNITS;
+  if (w.humidity < DEW * 4) return;
+  // The more water in the air, the more dew.
+  const events = Math.min(12, w.humidity >> 8) + (w.rng.below(4) === 0 ? 1 : 0);
+  const { type, wet } = w;
+  for (let k = 0; k < events && w.humidity >= DEW; k++) {
+    const x = w.rng.below(W);
+    let i = x;
+    while (i < SIZE && type[i] === EMPTY) i += W;
+    if (i >= SIZE) continue;
+    // Dew on a plant: it drinks it if it is thirsty, otherwise it runs down to the ground.
+    if (PLANT_PART[type[i]] && type[i] !== ROOT) {
+      const p = w.orgs.get(w.org[i]);
+      if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
+        p.water += DEW;
+        w.humidity -= DEW;
+        continue;
+      }
+      while (i < SIZE && (type[i] === EMPTY || (PLANT_PART[type[i]] && type[i] !== ROOT))) i += W;
+      if (i >= SIZE) continue;
+    }
+    if (type[i] === WATER) {
+      // Dew on open water adds to it, a drop's worth at a time.
+      if (w.rng.below(4) === 0 && w.humidity >= WATER_UNITS && i >= W && type[i - W] === EMPTY) {
+        setCell(w, i - W, WATER);
+        w.humidity -= WATER_UNITS;
+      }
+      continue;
+    }
+    if (!POROUS[type[i]]) continue;
+    if (wet[i] <= MAX_WET - DEW) {
+      wet[i] += DEW;
+      w.humidity -= DEW;
+    } else if (w.humidity >= WATER_UNITS && i >= W && type[i - W] === EMPTY) {
+      // Soaked ground: the dew gathers into a puddle.
+      setCell(w, i - W, WATER);
+      w.humidity -= WATER_UNITS;
+    }
   }
 }
 
