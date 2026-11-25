@@ -3,9 +3,9 @@ import {
   addPlantSpecies,
   applyTool,
   createWorld,
+  START_TICKS,
   H,
   stepWorld,
-  stepWorldN,
   TICKS_PER_SECOND,
   type Tool,
   totalUnits,
@@ -45,21 +45,22 @@ const ticksFor = (ms: number) =>
 
 // The glass from last time, if there is one (?seed=… or ?fresh starts a new one).
 let world: World;
-let catchUp = { left: 0, total: 0 };
+let catchUp = { left: 0, total: 0, starting: false };
 const saved = params.has("seed") || params.has("fresh") ? null : restoreGlass();
 const history = saved ? loadHistory() : (forgetHistory(), loadHistory());
 if (saved) {
   world = saved.world;
   const n = ticksFor(Date.now() - saved.savedAt);
-  catchUp = { left: n, total: n };
+  catchUp = { left: n, total: n, starting: false };
 } else {
   world = createWorld(seed);
   // Species the player has made before come along into a new glass.
   const lib = loadLibrary();
   for (const sp of lib.plants) addPlantSpecies(world, sp);
   for (const sp of lib.creatures) addCreatureSpecies(world, sp);
-  // A new glass is already a couple of minutes old: seeds have sprouted.
-  stepWorldN(world, 2 * 60 * TICKS_PER_SECOND);
+  // A new glass is run on until its plants have grown and its animals are
+  // in, before it is ready to be looked after.
+  catchUp = { left: START_TICKS, total: START_TICKS, starting: true };
 }
 let nextSample = Math.ceil((world.tick + 1) / SAMPLE_EVERY) * SAMPLE_EVERY;
 
@@ -290,7 +291,8 @@ function frame(now: number): void {
       step();
       catchUp.left--;
     } while (catchUp.left > 0 && performance.now() - t0 < CATCH_UP_MS);
-    catchUpLabel.textContent = t.catchUp(Math.round(100 * (1 - catchUp.left / catchUp.total)));
+    const done = Math.round(100 * (1 - catchUp.left / catchUp.total));
+    catchUpLabel.textContent = catchUp.starting ? t.starting(done) : t.catchUp(done);
     catchUpLabel.classList.toggle("on", catchUp.left > 0);
     if (catchUp.left === 0) keep();
   } else if (dev.stepOnce) {
@@ -346,7 +348,7 @@ document.addEventListener("visibilitychange", () => {
     keep();
   } else if (hiddenAt > 0) {
     const n = ticksFor(Date.now() - hiddenAt);
-    catchUp = { left: catchUp.left + n, total: catchUp.left + n };
+    catchUp = { left: catchUp.left + n, total: catchUp.left + n, starting: catchUp.starting };
     last = performance.now();
   }
 });

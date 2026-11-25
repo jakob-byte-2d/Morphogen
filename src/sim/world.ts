@@ -1,5 +1,5 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SEED, SOIL, STONE, WATER } from "./cells";
-import { updateCreatures, type Creature } from "./creatures";
+import { ABSORB, EMPTY, FIELD_CAPACITY, LEAF, PLANT_PART, POROUS, POWDER, ROOT, SAND, SOIL, STONE, WATER } from "./cells";
+import { releaseCreature, updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 10;
+export const SIM_VERSION = 11;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -47,6 +47,13 @@ const SOAKS_UP_TO = SATURATED - 2 * WATER_UNITS;
 const DEW = 8 * SCALE;
 /** Plants drink dew and drops until they hold this much water. */
 const PLANT_DRINKS_TO = 200 * SCALE;
+
+/** A creature of `species` let in at column x when the glass reaches `tick`. */
+export interface Arrival {
+  tick: number;
+  species: number;
+  x: number;
+}
 
 export interface World {
   readonly seed: number;
@@ -96,6 +103,13 @@ export interface World {
   /** Every living organism by id. */
   readonly orgs: Map<number, Plant | Creature>;
   nextOrgId: number;
+  /**
+   * Creatures still to come, soonest first: a new glass is planted first,
+   * and its animals are let in once the plants have grown a little.
+   */
+  arrivals: Arrival[];
+  /** Leaves in the glass, counted along with the light (every four steps). */
+  leaves: number;
 }
 
 export function emptyWorld(
@@ -125,6 +139,8 @@ export function emptyWorld(
     creatures: [],
     orgs: new Map(),
     nextOrgId: 1,
+    arrivals: [],
+    leaves: 0,
   };
 }
 
@@ -226,6 +242,40 @@ function isFree(t: number): boolean {
   return t === EMPTY || t === WATER;
 }
 
+/** Is t part of a plant above ground (roots are part of the ground)? */
+function shoot(t: number): boolean {
+  return PLANT_PART[t] === 1 && t !== ROOT;
+}
+
+/**
+ * Plants are not something to rest on. A cell lying on a plant falls on
+ * through it if there is room under it, or else slides off to the nearest
+ * open cell beside it. Returns false if there is nowhere to go.
+ */
+function offPlant(w: World, x: number, i: number, mark: number): boolean {
+  const { type } = w;
+  let j = i + W;
+  while (j < SIZE && shoot(type[j])) j += W;
+  if (j < SIZE && type[j] === EMPTY) {
+    move(w, i, j, mark);
+    return true;
+  }
+  const first = (w.rng.nextU32() & 1) === 1 ? 1 : -1;
+  for (let d = 1; d <= OFF_PLANT_REACH; d++) {
+    for (const s of [first, -first]) {
+      const nx = x + s * d;
+      if (nx >= 0 && nx < W && type[i + s * d] === EMPTY) {
+        move(w, i, i + s * d, mark);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** How far sideways something slides to get off a plant. */
+const OFF_PLANT_REACH = 4 * SCALE;
+
 /** Sand and soil fall, sinking through water, and slide off slopes. */
 function fallPowder(w: World, x: number, y: number, i: number, mark: number): void {
   if (y === H - 1) return;
@@ -235,15 +285,8 @@ function fallPowder(w: World, x: number, y: number, i: number, mark: number): vo
     move(w, i, b, mark);
     return;
   }
-  // A seed that lands on a plant slips down between the leaves to the ground.
-  if (type[i] === SEED && PLANT_PART[type[b]] && type[b] !== ROOT) {
-    let j = b + W;
-    while (j < SIZE && PLANT_PART[type[j]] && type[j] !== ROOT) j += W;
-    if (j < SIZE && type[j] === EMPTY) {
-      move(w, i, j, mark);
-      return;
-    }
-  }
+  // Nothing rests on a plant: it falls through, or slides off.
+  if (shoot(type[b]) && offPlant(w, x, i, mark)) return;
   // Soil is a little sticky: it only slides where the cell beside it is open.
   const sticky = type[i] === SOIL;
   const canL = x > 0 && isFree(type[b - 1]) && (!sticky || isFree(type[i - 1]));
@@ -269,8 +312,8 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       return;
     }
     // A drop on a plant: the plant drinks it, or it runs down through the
-    // plant to the ground. It never rests on the leaves.
-    if (PLANT_PART[tb] && tb !== ROOT) {
+    // plant to the ground, or off it. It never rests on the leaves.
+    if (shoot(tb)) {
       const p = w.orgs.get(w.org[b]);
       if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
         p.water += WATER_UNITS;
@@ -278,18 +321,13 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
         return;
       }
       let j = b + W;
-      while (j < SIZE && PLANT_PART[type[j]] && type[j] !== ROOT) j += W;
-      if (j < SIZE) {
-        if (type[j] === EMPTY) {
-          move(w, i, j, mark);
-          return;
-        }
-        if (POROUS[type[j]] && wet[j] <= SOAKS_UP_TO) {
-          wet[j] += WATER_UNITS;
-          clearCell(w, i);
-          return;
-        }
+      while (j < SIZE && shoot(type[j])) j += W;
+      if (j < SIZE && POROUS[type[j]] && wet[j] <= SOAKS_UP_TO) {
+        wet[j] += WATER_UNITS;
+        clearCell(w, i);
+        return;
       }
+      if (offPlant(w, x, i, mark)) return;
     }
     const dl = x > 0 && type[b - 1] === EMPTY;
     const dr = x < W - 1 && type[b + 1] === EMPTY;
@@ -396,6 +434,7 @@ const RAY_SHIFT = Array.from({ length: H }, (_, y) => (y / 3) | 0);
 
 export function computeLight(w: World): void {
   const { type, light } = w;
+  let leaves = 0;
   for (let c = -RAY_SHIFT[H - 1]; c < W; c++) {
     let l = 255;
     for (let y = 0; y < H; y++) {
@@ -405,8 +444,10 @@ export function computeLight(w: World): void {
       const i = y * W + x;
       light[i] = l;
       l -= (l * ABSORB[type[i]]) >> 8;
+      if (type[i] === LEAF) leaves++;
     }
   }
+  w.leaves = leaves;
 }
 
 /**
@@ -464,6 +505,20 @@ function condense(w: World): void {
 
 /** Advances the glass by one step. */
 export function stepWorld(w: World): void {
+  while (w.arrivals.length > 0 && w.arrivals[0].tick <= w.tick) {
+    const a = w.arrivals.shift()!;
+    const before = totalUnits(w);
+    releaseCreature(w, a.x, 0, a.species);
+    // Newcomers are made of what is already in the glass: their units are
+    // taken from the soil, deepest first, so nothing is created.
+    let extra = totalUnits(w) - before;
+    for (let i = SIZE - 1; i >= 0 && extra > 0; i--) {
+      if (w.type[i] === SOIL && w.food[i] > 0) {
+        w.food[i]--;
+        extra--;
+      }
+    }
+  }
   // Things fall and flow SCALE cells per step, so they keep their speed
   // in the glass.
   for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);

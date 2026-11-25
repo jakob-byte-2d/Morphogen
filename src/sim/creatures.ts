@@ -1,4 +1,4 @@
-import { APHID, CREATURE_PART, EMPTY, FEED, FLOWER, LEAF, PLANT_PART, SLIME, STEM, WASTE, WATER } from "./cells";
+import { APHID, CREATURE_PART, EMPTY, FEED, LEAF, PLANT_PART, ROOT, SLIME, STEM, WASTE, WATER } from "./cells";
 import type { CreatureSpecies } from "./species";
 import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
@@ -27,7 +27,14 @@ const MAX_CREATURES = 160;
 /** Bugs (plant eaters): one cell each. */
 const BUG = {
   start: 120,
-  lifespan: 240,
+  lifespan: 480,
+  /** Breeding needs fewer than `crowd` other bugs within this many cells. */
+  crowdRadius: 4 * SCALE,
+  crowd: 4,
+  /** Leaves in the glass it takes to feed one more bug. */
+  leavesEach: 15,
+  /** How far a hungry bug can sense leaves. */
+  sense: 8 * SCALE,
   /** Updates between droppings. */
   dropEvery: 40,
 };
@@ -71,6 +78,9 @@ const MASS = {
   dropEvery: 24,
   /** Energy to grow (and given back by losing) one cell. */
   cellCost: (60 / AREA) | 0,
+  /** Below this energy it eats waste too, for this much energy per unit. */
+  scavengeBelow: 200,
+  perWaste: 40,
 };
 
 const NEIGHBOURS = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
@@ -119,6 +129,62 @@ export function spawnCreature(w: World, species: number, at: number[], energy: n
   w.creatures.push(c);
   w.orgs.set(id, c);
   return c;
+}
+
+/** The empty cell where something dropped at (x, y) comes to rest, or -1 over water. */
+function landing(w: World, x: number, y: number): number {
+  while (y < H - 1 && w.type[(y + 1) * W + x] === EMPTY) y++;
+  const i = y * W + x;
+  if (w.type[i] !== EMPTY) return -1;
+  return y < H - 1 && w.type[i + W] === WATER ? -1 : i;
+}
+
+/**
+ * Lets a creature go at (cx, cy): it lands on whatever is below. Plant
+ * eaters come as a little group, creature eaters as a small mass.
+ */
+export function releaseCreature(w: World, cx: number, cy: number, species: number): void {
+  if (cx < 0 || cx >= W || cy < 0 || cy >= H) return;
+  const sp = w.creatureSpecies[Math.min(species, w.creatureSpecies.length - 1)];
+  const k = w.creatureSpecies.indexOf(sp);
+  // Over water? Let it go on the nearest dry spot instead. A mass, which
+  // cannot climb, goes on the nearest bare ground, not on top of a plant.
+  const ground = sp.diet !== "plants";
+  for (let d = 0; d < W; d++) {
+    const x = cx + (d % 2 === 0 ? d >> 1 : -((d + 1) >> 1));
+    if (x < 0 || x >= W) continue;
+    const i = landing(w, x, cy);
+    if (i >= 0 && !(ground && i < W * (H - 1) && PLANT_PART[w.type[i + W]])) {
+      cx = x;
+      break;
+    }
+  }
+  let y = cy;
+  while (y < H - 1 && w.type[(y + 1) * W + cx] === EMPTY) y++;
+  if (w.type[y * W + cx] !== EMPTY) return;
+  if (sp.diet === "plants") {
+    for (const dx of [0, -2 * SCALE, 2 * SCALE]) {
+      const x = cx + dx;
+      if (x < 0 || x >= W) continue;
+      let yy = cy;
+      while (yy < H - 1 && w.type[(yy + 1) * W + x] === EMPTY) yy++;
+      const i = yy * W + x;
+      if (w.type[i] === EMPTY) spawnCreature(w, k, [i], 120);
+    }
+  } else {
+    // A small low mound: each cell of the shape is SCALE × SCALE cells.
+    const cells: number[] = [];
+    for (const [ux, uy] of [[0, 0], [-1, 0], [1, 0], [0, -1], [-2, 0], [2, 0]])
+      for (let a = 0; a < SCALE; a++)
+        for (let b = 0; b < SCALE; b++) {
+          const x = cx + ux * SCALE + a;
+          const yy = y + uy * SCALE - b;
+          if (x < 0 || x >= W || yy < 0) continue;
+          const i = yy * W + x;
+          if (w.type[i] === EMPTY) cells.push(i);
+        }
+    if (cells.length > 0) spawnCreature(w, k, cells, 320);
+  }
 }
 
 /** Leaves a dropping (one unit of waste) in an empty cell next to i. */
@@ -176,16 +242,46 @@ function eat(w: World, c: Creature, j: number, perUnit: number): void {
 }
 
 /** Bugs eat leaves, flowers and feed, but leave stems, so plants can leaf out again. */
+/** Bugs eat leaves and feed. They leave the flowers be, so plants can set seed. */
 function edibleForBug(t: number): boolean {
-  return t === LEAF || t === FLOWER || t === FEED;
+  return t === LEAF || t === FEED;
+}
+
+
+/**
+ * Room to breed: not too many other bugs close by, and no more bugs in the
+ * glass than its leaves can feed. This keeps bugs from eating their plants
+ * bare and then all starving together.
+ */
+function roomToBreed(w: World, i: number, species: number): boolean {
+  const r = BUG.crowdRadius;
+  const x0 = i % W;
+  const y0 = (i / W) | 0;
+  let others = 0;
+  for (let y = Math.max(0, y0 - r); y <= Math.min(H - 1, y0 + r); y++) {
+    for (let x = Math.max(0, x0 - r); x <= Math.min(W - 1, x0 + r); x++) {
+      const j = y * W + x;
+      if (j !== i && w.type[j] === APHID && w.kind[j] === species) others++;
+    }
+  }
+  if (others >= BUG.crowd) return false;
+  let bugs = 0;
+  for (const c of w.creatures) if (c.species === species) bugs++;
+  return bugs * BUG.leavesEach < w.leaves;
+}
+
+/** How long a bug lives: about BUG.lifespan, give or take a fifth, so they do not all die at once. */
+function bugLifespan(c: Creature): number {
+  return ((BUG.lifespan * TICKS_PER_SECOND * (80 + (c.id % 41))) / 100) | 0;
 }
 
 /** A plant eater: one speck that crawls over plants and ground, eats and breeds. */
 function updateBug(w: World, c: Creature): void {
   const i = c.cells[0];
   const g = c.genes;
-  c.energy -= upkeep(1, g.speed, c.age);
-  if (c.energy <= 0 || c.age * CREATURE_EVERY > BUG.lifespan * TICKS_PER_SECOND) {
+  // A bug lives frugally: half a unit of energy per update, at speed 3.
+  c.energy -= upkeep(c.age & 1, g.speed, c.age >> 1);
+  if (c.energy <= 0 || c.age * CREATURE_EVERY > bugLifespan(c)) {
     killCreature(w, c);
     return;
   }
@@ -203,7 +299,7 @@ function updateBug(w: World, c: Creature): void {
   }
   if (c.age % BUG.dropEvery === 0 && c.store > 2) drop(w, c, i);
   // Breed: a new bug beside it, made from one unit of what it has eaten.
-  if (c.energy >= breedAt && c.store >= 1) {
+  if (c.energy >= breedAt && c.store >= 1 && roomToBreed(w, i, c.species)) {
     for (const d of NEIGHBOURS) {
       const j = i + d;
       if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, 0)) continue;
@@ -225,27 +321,64 @@ function updateBug(w: World, c: Creature): void {
     }
     return;
   }
-  for (let k = moves(w, g); k > 0; k--) crawlBug(w, c);
+  // Nothing to eat right here: head for the nearest leaves.
+  let hungryHere = true;
+  for (const d of NEIGHBOURS) if (inGlass(i + d, i) && edibleForBug(w.type[i + d])) hungryHere = false;
+  const target = hungryHere ? nearestFood(w, i) : -1;
+  for (let k = moves(w, g); k > 0; k--) crawlBug(w, c, target);
 }
 
-/** Crawl to a neighbouring cell with something to hold on to, preferring food. */
-function crawlBug(w: World, c: Creature): void {
+/** The nearest leaf (or feed) a bug can sense from i, or -1. */
+function nearestFood(w: World, i: number): number {
+  const r = BUG.sense;
+  const x0 = i % W;
+  const y0 = (i / W) | 0;
+  let best = -1;
+  let bestD = 1e9;
+  for (let y = Math.max(0, y0 - r); y <= Math.min(H - 1, y0 + r); y++) {
+    for (let x = Math.max(0, x0 - r); x <= Math.min(W - 1, x0 + r); x++) {
+      if (!edibleForBug(w.type[y * W + x])) continue;
+      const d = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+      if (d < bestD) {
+        bestD = d;
+        best = y * W + x;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Crawl to a neighbouring cell with something to hold on to: next to leaves
+ * if it can, towards the nearest leaves it can sense if not, and away from
+ * other bugs, so they spread out over the plants.
+ */
+function crawlBug(w: World, c: Creature, target: number): void {
   const i = c.cells[0];
   if (!supported(w, i, c.id)) return;
+  const tx = target % W;
+  const ty = (target / W) | 0;
   let best = -1;
-  let bestScore = -1;
+  let bestScore = -1e9;
   const start = w.rng.below(8);
   for (let k = 0; k < 8; k++) {
     const j = i + NEIGHBOURS[(start + k) & 7];
     if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, c.id)) continue;
-    // Bugs stay on plants (where the slime cannot reach), and go for food.
-    let score = 1;
+    let score = 0;
     for (const d of NEIGHBOURS) {
       const n = j + d;
       if (!inGlass(n, j)) continue;
       const t = w.type[n];
       if (edibleForBug(t)) score += 3;
-      else if (t === STEM) score += 2;
+      else if (t === STEM) score += 1;
+      else if (t === APHID && w.org[n] !== c.id) score -= 2;
+      // Keep away from slime.
+      else if (t === SLIME) score -= 12;
+    }
+    if (target >= 0) {
+      const x = j % W;
+      const y = (j / W) | 0;
+      score -= ((x - tx) * (x - tx) + (y - ty) * (y - ty)) >> 2;
     }
     if (score > bestScore) {
       bestScore = score;
@@ -263,6 +396,25 @@ function moveCell(w: World, c: Creature, k: number, j: number): void {
   addCell(w, c, j, units);
   c.cells.pop();
   c.cells[k] = j;
+}
+
+/**
+ * A mass does not lie on plants: any part of it resting on one falls on
+ * through the plant, or else creeps out onto the ground beside it.
+ */
+function offPlants(w: World, c: Creature): void {
+  for (let k = 0; k < c.cells.length; k++) {
+    const i = c.cells[k];
+    let j = i + W;
+    if (j >= W * H || !PLANT_PART[w.type[j]] || w.type[j] === ROOT) continue;
+    while (j < W * H && PLANT_PART[w.type[j]] && w.type[j] !== ROOT) j += W;
+    if (j < W * H && w.type[j] === EMPTY) {
+      moveCell(w, c, k, j);
+      continue;
+    }
+    const front = frontier(w, c);
+    if (front.length > 0) moveCell(w, c, k, front[0]);
+  }
 }
 
 /** Empty cells next to the mass where it can creep or grow to. */
@@ -306,31 +458,43 @@ function slump(w: World, c: Creature): boolean {
 
 /** A creature eater: a soft mass that creeps along the ground towards prey. */
 function updateMass(w: World, c: Creature): void {
+  offPlants(w, c);
   if (slump(w, c)) return;
   const n = c.cells.length;
   const g = c.genes;
   c.energy -= upkeep((c.age & 1) + ((n / (8 * AREA)) | 0), g.speed, c.age);
 
+  // A hungry mass also takes waste: enough to get by on, not to grow on.
+  const hungry = c.energy < MASS.scavengeBelow;
+  const food = (j: number) => {
+    const t = w.type[j];
+    if (t === FEED || (CREATURE_PART[t] && w.kind[j] !== c.species && w.org[j] !== c.id)) return 1;
+    return hungry && t === WASTE ? 2 : 0;
+  };
+
   // Where are we, and is there anything to go for?
   let sx = 0;
   let sy = 0;
+  let base = 0;
   for (const i of c.cells) {
     sx += i % W;
     sy += (i / W) | 0;
+    base = Math.max(base, (i / W) | 0);
   }
+  // It cannot climb, so anything higher up than it can heap itself is out of reach.
+  const reach = base - MASS.height;
   const cx = (sx / n) | 0;
   const cy = (sy / n) | 0;
   let tx = -1;
   let ty = -1;
   let bestD = 1e9;
   const r = MASS.sense;
-  for (let y = Math.max(0, cy - r); y <= Math.min(H - 1, cy + r); y++) {
+  for (let y = Math.max(0, cy - r, reach); y <= Math.min(H - 1, cy + r); y++) {
     for (let x = Math.max(0, cx - r); x <= Math.min(W - 1, cx + r); x++) {
-      const j = y * W + x;
-      const t = w.type[j];
-      const prey = t === FEED || (CREATURE_PART[t] && w.kind[j] !== c.species);
-      if (!prey) continue;
-      const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      const kind = food(y * W + x);
+      if (kind === 0) continue;
+      // Waste counts as four times as far as prey: it goes for prey first.
+      const d = ((x - cx) * (x - cx) + (y - cy) * (y - cy)) * (kind === 1 ? 1 : 4);
       if (d < bestD) {
         bestD = d;
         tx = x;
@@ -346,11 +510,10 @@ function updateMass(w: World, c: Creature): void {
     for (const d of [-1, 1, -W, W, -W - 1, -W + 1]) {
       const j = i + d;
       if (!inGlass(j, i)) continue;
-      const t = w.type[j];
-      if (t === FEED || (CREATURE_PART[t] && w.kind[j] !== c.species && w.org[j] !== c.id)) {
-        eat(w, c, j, MASS_PER_UNIT[g.growth - 1]);
-        if (++bites >= SCALE) break;
-      }
+      const kind = food(j);
+      if (kind === 0) continue;
+      eat(w, c, j, kind === 1 ? MASS_PER_UNIT[g.growth - 1] : MASS.perWaste);
+      if (++bites >= SCALE) break;
     }
   }
 
