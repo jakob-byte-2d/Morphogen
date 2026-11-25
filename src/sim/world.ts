@@ -1,18 +1,18 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SOIL, WATER } from "./cells";
+import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SEED, SOIL, WATER } from "./cells";
 import { updateCreatures, type Creature } from "./creatures";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
 import { CREATURE_SPECIES, PLANT_SPECIES, type CreatureSpecies, type PlantSpecies } from "./species";
 
-import { H, SIZE, W } from "./dims";
+import { AREA, H, SCALE, SIZE, W } from "./dims";
 
-export { H, SIZE, TICKS_PER_SECOND, W } from "./dims";
+export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
 
 /**
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 5;
+export const SIM_VERSION = 6;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -31,9 +31,9 @@ export const WATER_UNITS = 32;
 export const MAX_WET = 255;
 
 /** Moisture one dew event puts back into the ground. */
-const DEW = 8;
+const DEW = 8 * SCALE;
 /** Plants drink dew and drops until they hold this much water. */
-const PLANT_DRINKS_TO = 200;
+const PLANT_DRINKS_TO = 200 * SCALE;
 
 export interface World {
   readonly seed: number;
@@ -55,7 +55,7 @@ export interface World {
   readonly kind: Uint8Array;
   /** Organism a living cell belongs to (0 = none). */
   readonly org: Uint16Array;
-  /** Light reaching each cell, 0–255. Recomputed every step. */
+  /** Light reaching each cell, 0–255. Recomputed every four steps. */
   readonly light: Uint8Array;
   /** Step in which a cell last moved, so nothing moves twice in one step. */
   readonly stamp: Uint32Array;
@@ -190,6 +190,15 @@ function fallPowder(w: World, x: number, y: number, i: number, mark: number): vo
     move(w, i, b, mark);
     return;
   }
+  // A seed that lands on a plant slips down between the leaves to the ground.
+  if (type[i] === SEED && PLANT_PART[type[b]] && type[b] !== ROOT) {
+    let j = b + W;
+    while (j < SIZE && PLANT_PART[type[j]] && type[j] !== ROOT) j += W;
+    if (j < SIZE && type[j] === EMPTY) {
+      move(w, i, j, mark);
+      return;
+    }
+  }
   // Soil is a little sticky: it only slides where the cell beside it is open.
   const sticky = type[i] === SOIL;
   const canL = x > 0 && isFree(type[b - 1]) && (!sticky || isFree(type[i - 1]));
@@ -270,24 +279,28 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
  */
 function spreadMoisture(w: World): void {
   const { type, wet } = w;
-  // Runs every other step; alternate the side it shares with each time.
+  // Runs every other step and shares with one side each time, alternating.
+  // The row is walked towards that side, so both sides get the same.
   const side = (w.tick & 2) === 0 ? 1 : -1;
   for (let y = H - 1; y >= 0; y--) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      if (!POROUS[type[i]]) continue;
+    const rowStart = y * W;
+    for (let n = 0; n < W; n++) {
+      const x = side === 1 ? n : W - 1 - n;
+      const i = rowStart + x;
+      const t = type[i];
+      if (!POROUS[t]) continue;
       if (y < H - 1) {
         const b = i + W;
         if (POROUS[type[b]]) {
-          const excess = wet[i] - FIELD_CAPACITY[type[i]];
+          const excess = wet[i] - FIELD_CAPACITY[t];
           const room = MAX_WET - wet[b];
           if (excess > 0 && room > 0) {
-            const f = Math.min(room, (excess + 3) >> 2);
+            const f = Math.min(room, (excess + 1) >> 1);
             wet[i] -= f;
             wet[b] += f;
           } else if (wet[b] > wet[i] + 16) {
             // Capillary rise: dry soil draws water up from below.
-            const f = (wet[b] - wet[i]) >> 3;
+            const f = (wet[b] - wet[i]) >> 2;
             wet[b] -= f;
             wet[i] += f;
           }
@@ -297,7 +310,7 @@ function spreadMoisture(w: World): void {
       if (nx >= 0 && nx < W) {
         const k = i + side;
         if (POROUS[type[k]]) {
-          const f = ((wet[i] - wet[k]) / 8) | 0;
+          const f = ((wet[i] - wet[k]) / 4) | 0;
           wet[i] -= f;
           wet[k] += f;
         }
@@ -335,13 +348,14 @@ export function computeLight(w: World): void {
  */
 function condense(w: World): void {
   // A little water escapes all the time, so the glass needs watering now and then.
-  if (w.humidity > 0 && (w.rng.nextU32() & 1) === 0) {
-    w.humidity--;
-    w.lostWater++;
-  }
+  // (Half a unit per step for every unit of area: the glass holds AREA times
+  // as much water as it did at scale 1.)
+  const leak = Math.min(w.humidity, (AREA + (w.rng.nextU32() & 1)) >> 1);
+  w.humidity -= leak;
+  w.lostWater += leak;
   if (w.humidity < DEW * 4) return;
   // The more water in the air, the more dew.
-  const events = Math.min(12, w.humidity >> 8) + (w.rng.below(4) === 0 ? 1 : 0);
+  const events = Math.min(12 * SCALE, w.humidity >> 8) + (w.rng.below(4) === 0 ? 1 : 0);
   const { type, wet } = w;
   for (let k = 0; k < events && w.humidity >= DEW; k++) {
     const x = w.rng.below(W);
@@ -381,16 +395,45 @@ function condense(w: World): void {
 
 /** Advances the glass by one step. */
 export function stepWorld(w: World): void {
-  const mark = w.tick + 1;
+  // Things fall and flow SCALE cells per step, so they keep their speed
+  // in the glass.
+  for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);
+  if ((w.tick & 1) === 0) spreadMoisture(w);
+  // Light changes slowly (as plants grow), so it is worked out every few steps.
+  if ((w.tick & 3) === 0) computeLight(w);
+  updatePlants(w);
+  updateCreatures(w);
+  if ((w.tick & 3) === 2) slowPass(w);
+  condense(w);
+  w.tick++;
+}
+
+/** Per band of chunks: is any chunk in it awake? (Scratch space for movePass.) */
+const rowAwake = new Uint8Array(CHUNKS_Y);
+
+/** One sweep of falling and flowing over the chunks that are awake. */
+function movePass(w: World, pass: number): void {
+  const mark = w.tick * SCALE + pass + 1;
   const { type, stamp } = w;
   const awake = w.wakeNext;
   w.wakeNext = w.awake;
   w.awake = awake;
-  if (w.tick % WAKE_ALL_EVERY === 0) awake.fill(1);
+  if (pass === 0 && w.tick % WAKE_ALL_EVERY === 0) awake.fill(1);
   w.wakeNext.fill(0);
+  for (let cy = 0; cy < CHUNKS_Y; cy++) {
+    let any = 0;
+    for (let cx = 0; cx < CHUNKS_X; cx++) any |= awake[cy * CHUNKS_X + cx];
+    rowAwake[cy] = any;
+  }
   for (let y = H - 1; y >= 0; y--) {
-    const row = ((y / CHUNK) | 0) * CHUNKS_X;
-    const leftToRight = ((y + w.tick) & 1) === 0;
+    const cy = (y / CHUNK) | 0;
+    if (rowAwake[cy] === 0) {
+      // The whole band of chunks is asleep: skip to the band above.
+      y = cy * CHUNK;
+      continue;
+    }
+    const row = cy * CHUNKS_X;
+    const leftToRight = ((y + w.tick + pass) & 1) === 0;
     for (let n = 0; n < W; n++) {
       const x = leftToRight ? n : W - 1 - n;
       if (awake[row + ((x / CHUNK) | 0)] === 0) {
@@ -405,13 +448,6 @@ export function stepWorld(w: World): void {
       else if (t === WATER) flowWater(w, x, y, i, mark);
     }
   }
-  if ((w.tick & 1) === 0) spreadMoisture(w);
-  computeLight(w);
-  updatePlants(w);
-  updateCreatures(w);
-  if ((w.tick & 3) === 2) slowPass(w);
-  condense(w);
-  w.tick++;
 }
 
 /** All water in the glass, in moisture units: in cells, in plants and in the air. */

@@ -6,6 +6,7 @@ import {
   EMPTY,
   FEED,
   H,
+  SCALE,
   LEAF,
   setCell,
   SLIME,
@@ -104,7 +105,8 @@ describe("creature tool", () => {
     applyTool(w, "creature", 20, 10, 0);
     applyTool(w, "creature", 50, 10, 1);
     expect(w.creatures.length).toBeGreaterThanOrEqual(2);
-    for (const c of w.creatures) for (const i of c.cells) expect((i / W) | 0).toBeGreaterThan(H - 6);
+    // They land on the soil: a low mound at most, nothing left hanging in the air.
+    for (const c of w.creatures) for (const i of c.cells) expect((i / W) | 0).toBeGreaterThan(H - 4 - 2 * SCALE);
     expect(w.type[at(20, 10)]).toBe(EMPTY);
   });
 });

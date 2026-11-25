@@ -264,6 +264,10 @@ let frames = 0;
 let ticks = 0;
 let stepMs = 0;
 let statTime = last;
+let lastDraw = 0;
+/** While catching up: milliseconds of stepping per frame, and how often the glass is drawn. */
+const CATCH_UP_MS = 40;
+const CATCH_UP_DRAW_EVERY = 250;
 
 function frame(now: number): void {
   const dt = Math.min(0.25, (now - last) / 1000);
@@ -280,11 +284,12 @@ function frame(now: number): void {
 
   const t0 = performance.now();
   if (catchUp.left > 0) {
-    // Making up for the time the app was closed, as fast as the phone allows.
+    // Making up for the time the app was closed, as fast as the phone allows:
+    // most of each frame goes to the glass, which is drawn only now and then.
     do {
       step();
       catchUp.left--;
-    } while (catchUp.left > 0 && performance.now() - t0 < 14);
+    } while (catchUp.left > 0 && performance.now() - t0 < CATCH_UP_MS);
     catchUpLabel.textContent = t.catchUp(Math.round(100 * (1 - catchUp.left / catchUp.total)));
     catchUpLabel.classList.toggle("on", catchUp.left > 0);
     if (catchUp.left === 0) keep();
@@ -312,8 +317,11 @@ function frame(now: number): void {
   }
   stepMs += performance.now() - t0;
 
-  renderer.overlay = dev.overlay;
-  renderer.draw(world, now / 1000, dt);
+  if (catchUp.left === 0 || now - lastDraw > CATCH_UP_DRAW_EVERY) {
+    renderer.overlay = dev.overlay;
+    renderer.draw(world, now / 1000, dt);
+    lastDraw = now;
+  }
 
   frames++;
   if (settings.devMode && now - statTime > 500) {
