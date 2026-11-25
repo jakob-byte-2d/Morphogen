@@ -1,92 +1,122 @@
 # Morphogen – plan
 
-Et spill der du designer organismer med et genom, ser dem vokse i en petriskål og lar dem kjempe mot andre spilleres genomer på nett. Inspirert av Cell Lab (spillmekanikk) og Gladiabots/Robocode (du lager «AI-en», ikke styrer selv).
+Et virtuelt terrarium i lomma: et glass med vann sett rett fra siden, i ren 2D, der enkle cellebaserte organismer lever i et lukket kretsløp. Du designer artene selv med genomet, slipper dem ut i glasset og må stelle det – fôre, styre lyset, rengjøre og tilsette nye arter – slik at livet holder seg i balanse.
+
+Inspirert av Cell Lab (organismer av celler med genom), lukkede økosystemer i glass og Tamagotchi (noe du må passe på).
 
 ## Prinsipper
 
-Lærdom fra tilbakemeldingene på Cell Lab:
-
-- **Én ny ting om gangen.** Cell Lab ble for bratt da nye celletyper kom. Hver utfordring introduserer én ting, med hint.
-- **Ingen skjulte funksjoner.** Ingen lange trykk eller hemmelige knapper. Lås heller opp innstillinger gradvis.
-- **Likt resultat i alle hastigheter.** Simuleringen er deterministisk: samme genomer + samme seed = samme resultat, på alle enheter.
-- **Rask på mobil.** Simuleringen i Web Worker, tegning separat, tak på antall celler.
-- **Enkel deling.** Genomer og kamper deles med kode eller lenke, ikke filer.
+- **Ett lukket kretsløp.** Stoff forsvinner aldri og oppstår aldri av seg selv. Det går i ring mellom celler, dødt materiale og næring i vannet. Bare lyset kommer utenfra, og bare spilleren kan tilsette eller fjerne stoff.
+- **Glasset forteller selv hvordan det har det.** Grumsete vann, algebelegg og slam synes. Målerne bekrefter det du ser.
+- **Forsømmelse synes, men kan repareres.** Et glass som har forfalt, skal kunne reddes med stell. Mer omsorg, mindre skyldfølelse.
+- **Én ny ting om gangen.** Nye celletyper og verktøy låses opp gradvis, med forklaring.
+- **Ingen skjulte funksjoner.** Ingen lange trykk eller hemmelige knapper.
+- **Alltid samme resultat.** Simuleringen er deterministisk: samme glass, seed og handlinger gir nøyaktig samme utvikling på alle enheter. Det gjør at glass kan lagres, spilles av og deles.
+- **Rask på mobil.** Simulering i Web Worker, tegning separat, tak på antall celler.
 
 Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 
-## Fase 0 – Oppsett ✅
+## Tekniske hovedgrep
 
-- [x] Vite + TypeScript, mappene `src/engine`, `src/genome`, `src/ui`, `src/challenges`
-- [x] Deterministisk tilfeldighetsgenerator (sfc32) og egne `sin`/`cos`
-- [x] Test som sjekker at samme seed gir nøyaktig samme verden etter 10 000 steg
-- [x] GitHub Actions: tester og bygger ved hver push
-- [x] Automatisk publisering til GitHub Pages (krever at repoet er offentlig eller GitHub Pro)
+- **Én verden: glasset.** Den runde petriskålen erstattes av et stående, rektangulært glass med vannflate øverst og bunn nederst. Laboratoriet (sandkassen og genomeditoren) bruker et lite glass, så det du tester er det samme som du slipper ut.
+- **Massebalanse.** All masse ligger i ett av tre lagre: celler, dødt materiale eller næring i vannet. Hver prosess flytter masse fra ett lager til et annet. En test summerer alle lagrene og sjekker at totalen aldri endres.
+- **Næring i et rutenett.** Vannet deles i et grovt rutenett, for eksempel 20 × 30 ruter, der næringen sprer seg litt hvert steg. Celler tar opp og slipper ut næring i ruten de er i.
+- **Lys i kolonner.** Lyset kommer ovenfra, svekkes nedover i vannet, og hver celle skygger for dem under seg i samme kolonne. Lyssamlere må konkurrere om plassen nær overflaten.
+- **Tyngdekraft og oppdrift per celletype.** Lyssamlere flyter litt, spisere synker litt, dødt materiale synker og blir til bunnslam. Svømmere kan motvirke det. Lagdelingen oppstår av seg selv.
+- **Organisme-id per celle.** Døtre som henger sammen arver morens organisme-id, en knopp får ny. Jegere spiser bare celler fra andre organismer.
+- **Handlinger som hendelser.** Alt spilleren gjør (fôre, rengjøre, tilsette en art) lagres som en hendelse med tidspunkt (steg). Glasset er dermed fullt beskrevet av start-seed, genomer og hendelseslogg, og kan spilles av og deles nøyaktig.
+- **Lagring.** Øyeblikksbilde av hele tilstanden pluss hendelsesloggen, merket med `ENGINE_VERSION`. Et lagret glass fortsetter også etter en oppdatering, men da med de nye reglene.
+- **Tiden mens du er borte.** Når appen åpnes, regner Web Workeren glasset fremover. Fordi en telefon ikke kan regne gjennom mange timer på sekunder, får borte-tiden et tak (noen sekunders regning) og en kort oppsummering av hva som skjedde.
 
-## Fase 1 – Simuleringen ✅
+## Ferdig: grunnmuren ✅
 
-- [x] Faste tidssteg, celler som runde baller, kollisjon med rutenett
-- [x] Mat som driver rundt, celler som spiser, vokser og deler seg, celler som dør
-- [x] Bindinger mellom celler: døtrene holder sammen etter deling, arver morens bindinger og ryker hvis de strekkes for langt
-- [x] Celler i samme organisme deler næring
-- [x] Knoppskyting: organismer slipper fri celler som starter nye organismer (nå styrt av genomet)
-- [x] Lys som energikilde: lyssamlere vokser av lys, og naboer som berører dem skygger
-- [x] Tak på antall celler (`maxCells`, 1000) og på cellemasse (`maxCellMass`)
-- [x] Ytelsestest på `bench.html`: måler fart med 250–2000 celler og sjekker fingeravtrykket mot fasit
-  - PC med CPU strupet 4× (omtrent en middels telefon): 1000 celler ≈ 2,4 ms per steg ≈ 9× fart
-  - [ ] Kjør testen på en ekte Android-telefon
-- **Ferdig når:** én celle spiser og deler seg ✅ – og bindinger fungerer ✅
+Fasene 0–3 i den opprinnelige planen:
 
-## Fase 2 – Genom og celletyper
-
-- [x] Genomet som JSON med versjon (`src/engine/genome.ts`). `normalizeGenome()` gjør ethvert genom fra andre spillere gyldig
-- [x] Oppskrifter (moduser): celletype, deler seg eller ikke, delingsmasse, delingsvinkel, barnas oppskrifter og vridning, binding mellom døtrene, om hver datter beholder bindingene
-- [x] De midlertidige reglene `daughtersStick` og `budEvery` er erstattet av valg i genomet
-- [x] Flere arter i samme skål, hver med sitt genom, startet speilvendt (grunnlaget for flerspiller)
+- [x] Vite + TypeScript, testing og publisering med GitHub Actions og GitHub Pages
+- [x] Deterministisk motor: egen tilfeldighetsgenerator, egne `sin`/`cos`/`atan2`, faste tidssteg, fingeravtrykk (gullhash)
+- [x] Celler med kollisjon, mat, vekst, deling og død
+- [x] Bindinger mellom celler, deling av næring og knoppskyting. Cellene snur seg med organismen
+- [x] Genomet: oppskrifter med celletype, deling, døtre og bindinger, og `normalizeGenome()` for genomer fra andre
 - [x] Celletyper: spiser, lyssamler og svømmer
-- [x] Cellene snur seg med organismen: hver binding husker hvor på cellen den sitter, så delingsvinkler og svømmere peker riktig vei når organismen roterer
-- [x] Ensomme svømmere spretter av veggen
-- [ ] Svømmende organismer samler seg ofte ved kanten. Vurder å la hele organismen snu ved veggen
-- [x] Ferdiglagde organismer å velge mellom: Spiserklump, Alge, Blanding og Svømmer (`src/genome/presets.ts`)
-- **Ferdig når:** en organisme med flere celler klarer å overleve ✅
+- [x] Flere arter i samme verden
+- [x] Genomeditor med forhåndsvisning, lagring på enheten og deling med lenke
+- [x] Ytelsestest på `bench.html`
+  - [ ] Kjør testen på en ekte Android-telefon
 
-## Fase 3 – Spillbart på mobil
+## Fase 4 – Glasset fra siden
+
+- [ ] Stående rektangulært glass (omtrent 2:3) med vegger, vannflate og bunn, i stedet for den runde skålen
+- [ ] Tyngdekraft og oppdrift per celletype
+- [ ] Lys ovenfra i kolonner: svekkes nedover og skygges av celler over
+- [ ] Dødt materiale synker og legger seg som bunnslam
+- [ ] Tegnet rett fra siden: vann, vannflate, bunn og glasskanter
+- [ ] Forhåndsvisningen i genomeditoren bruker et lite glass
+- [ ] Ferdiglagde organismer justert til glasset
+- **Ferdig når:** alger holder seg øverst og spisere nær bunnen, uten egne regler for det
+
+## Fase 5 – Kretsløpet
+
+- [ ] Næring i vannet som rutenett som sprer seg
+- [ ] Massebalanse: tre lagre (celler, dødt materiale, næring), og en test som sjekker at summen aldri endres
+- [ ] Lyssamlere trenger både lys og næring fra ruten de er i
+- [ ] Forbrenning: alle celler slipper ut næring der de er
+- [ ] Døde celler blir dødt materiale. Ingen mat dukker opp av seg selv lenger
+- [ ] Nedbrytere (dagens spiser) spiser dødt materiale. Dødt materiale løses også sakte opp av seg selv, så kretsløpet aldri stopper helt
+- [ ] Jegere: ny celletype som tar masse fra celler i andre organismer
+- [ ] Organisme-id per celle
+- **Ferdig når:** et lukket glass med alge, nedbryter og jeger lever i 24 timer spilltid med 20 ulike seeds (automatisk test)
+
+## Fase 6 – Stell
+
+- [ ] Handlinger: tilsett organisme, fôr (næring ved overflaten), lampe (timer per døgn), rengjør glasset (fjerner algebelegg), sug opp slam, bytt vann (fortynner næring og avfall)
+- [ ] Handlinger lagres som hendelser med tidspunkt
+- [ ] Døgn: dag og natt styrt av lampen
+- [ ] Målere: næring, slam, grumsete vann, biomasse per gruppe, antall arter
+- [ ] Synlige tegn: grønt eller grumsete vann, algebelegg på glasset, tykt bunnslam
+- [ ] Vurder oksygen: lyssamlere lager, alle bruker, og for lite oksygen gir massedød (særlig om natten)
+- **Ferdig når:** et forsømt glass forfaller synlig og kan reddes med stell
+
+## Fase 7 – Tiden går
 
 - [ ] Simuleringen i Web Worker
-- [ ] Zoom og panorering med fingrene
-- [x] Genomeditor (knappen «Genom»): hver oppskrift er et kort med sammendrag («Spiser · → 2 + 3»), celletype, deling, døtrene og bindinger
-- [ ] Vis oppskriftene som et tre eller diagram i tillegg til listen
-- [x] Forhåndsvisning av hvordan én organisme vokser (kjøres med samme motor, så den stemmer)
-- [x] Egne organismer lagres på enheten og deles med lenke (`?genome=custom&g=…`)
+- [ ] Lagring på enheten: øyeblikksbilde + hendelseslogg
+- [ ] Glasset regner seg frem gjennom tiden du var borte, med tak og oppsummering («Algene vokste, 2 arter døde ut»)
 - [ ] PWA, så spillet kan legges på hjemskjermen
-- **Ferdig når:** sandkassen fungerer godt på telefonen
+- [ ] Varsler («Algene tar over») – senere, krever server
+- **Ferdig når:** du lukker appen om kvelden, åpner den neste dag, og glasset har levd videre
 
-## Fase 4 – Utfordringer for én spiller
+## Fase 8 – Utseende og berøring
 
-- [ ] Format for utfordringer (se `src/challenges/README.md`)
-- [ ] De 10 første utfordringene, én ny ting i hver
-- [ ] Hint-knapp og stjerner
-- [ ] «Hvis–så»-regler: sanser (ser mat, berøres av fremmed celle, alder) → handlinger (bytt oppskrift, del deg, slipp binding)
-- [ ] Lagring av fremgang lokalt
+- [ ] Lys som faller inn ovenfra, bobler, partikler som synker, bunnslam med tekstur, refleks i glasset
+- [ ] Farger for dag og natt
+- [ ] Zoom og panorering med fingrene
+- [ ] Trykk på en celle eller organisme for å se art, alder og masse
 
-## Fase 5 – Flerspiller
+## Fase 9 – Mål og evolusjon
 
-- [ ] Supabase: brukere, genomer, kamper, rangering
-- [ ] Arena: begge arter starter speilvendt i samme skål
-- [ ] Tre moduser: utrydd motstanderen, kontroller flest soner, spis mest
-- [ ] Kamp = to genomer + seed + motorversjon. Ny sesong når motoren endres
-- [ ] Kamper uten at begge er pålogget: kampen kjøres på utfordrerens telefon
-- [ ] Elo-rangering, og sjekk av resultat med to telefoner mot juks
-- [ ] Budsjett per genom og ny arena hver uke
-- [ ] Repriser som kan deles med lenke
+- [ ] Mutasjoner ved deling (kan slås av og på), automatisk gjenkjenning av arter, slektstre
+- [ ] Mål som låser opp nye celletyper, verktøy og glass: «Hold glasset i live i 7 dager», «4 arter samtidig», «Ingen algeoppblomstring på en uke»
+- [ ] Opplæring i laboratoriet: korte oppgaver, én ny ting i hver (erstatter de gamle utfordringene)
+- [ ] Vis oppskriftene i genomet som et tre eller diagram
 
-## Fase 6 – Google Play
+## Fase 10 – Venner og deling
+
+- [ ] Del et glass som lenke (øyeblikksbilde), så andre kan se på
+- [ ] Send en art til en venns glass
+- [ ] Kamper mellom genomer som egen modus (planen fra den opprinnelige fase 5: speilvendt start, Elo, sjekk mot juks)
+- [ ] Supabase for brukere og deling
+
+## Fase 11 – Google Play
 
 - [ ] Pakk nettappen inn (TWA eller Capacitor), samme vei som Hagefugler
-- [ ] Personvernerklæring (spillet har brukerkontoer)
+- [ ] Personvernerklæring (hvis spillet får brukerkontoer)
 - [ ] Ikon, skjermbilder og butikktekst
 
 ## Åpne spørsmål
 
+- Format på glasset: stående krukke (passer telefonen) eller liggende akvarium?
+- Oksygen: gir det nok spenning til å være verdt det ekstra laget?
+- Hvor mye tid skal glasset kunne ta igjen mens du er borte?
+- Ett glass eller flere?
+- Navn på celletypene (nå: spiser, lyssamler og svømmer; snart jeger)
 - Språk: norsk først, engelsk senere? (all tekst ligger i `src/ui/strings.ts`)
-- Navn på celletypene (nå: spiser, lyssamler og svømmer)
-- Skal repoet være offentlig (gratis GitHub Pages) eller privat?
