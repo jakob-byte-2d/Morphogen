@@ -2,7 +2,7 @@ import { CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, ROOT, SAN
 import type { PlantSpecies } from "./species";
 import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { inheritPlant, packSeed, plantGenesOf, unpackSeed, type PlantGenes } from "./genes";
-import { clearCell, newOrgId, setCell, wake, WATER_UNITS, type World } from "./world";
+import { clearCell, newOrgId, rotAway, setCell, wake, WATER_UNITS, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
 export interface Tip {
@@ -65,6 +65,9 @@ const MAX_PLANTS = 80;
 /** Slow-pass checks before uneaten feed rots (about a minute). */
 const FEED_ROTS_AFTER = 150;
 const MAX_STORE = 20 * SCALE;
+/** Moist soil at the surface gives this much water to the air at a time, down to SOIL_DRIES_TO. */
+const SOIL_BREATH = 8;
+const SOIL_DRIES_TO = 60;
 
 function isGround(t: number): boolean {
   return t === SOIL || t === SAND;
@@ -131,31 +134,37 @@ function germinate(w: World, i: number): void {
   w.orgs.set(id, p);
 }
 
-/** Everything the plant is made of becomes waste; its store goes with it. */
+/**
+ * What the plant is made of becomes waste above ground; its roots, which
+ * grew where there was soil, turn back into soil. Its store goes with them.
+ */
 function killPlant(w: World, p: Plant): void {
   p.dead = true;
   w.humidity += p.water;
   p.water = 0;
   w.orgs.delete(p.id);
-  let first = -1;
+  const left: number[] = [];
   for (const i of p.cells) {
     if (w.org[i] !== p.id || !PLANT_PART[w.type[i]]) continue;
-    w.type[i] = WASTE;
+    w.type[i] = w.type[i] === ROOT ? SOIL : WASTE;
     w.org[i] = 0;
+    w.kind[i] = 0;
     wake(w, i);
-    if (first < 0) first = i;
+    left.push(i);
   }
-  if (first >= 0) {
-    let left = p.store;
-    // A cell holds at most 255 units; put the rest in the next cells.
-    for (const i of p.cells) {
-      if (left === 0) break;
-      if (w.type[i] !== WASTE) continue;
-      const add = Math.min(left, 255 - w.food[i]);
-      w.food[i] += add;
-      left -= add;
-    }
-    p.store = left;
+  // A cell holds at most 255 units; put the rest in the next cells, and
+  // anything still left into the ground below where it grew.
+  for (const i of left) {
+    if (p.store === 0) break;
+    const add = Math.min(p.store, 255 - w.food[i]);
+    w.food[i] += add;
+    p.store -= add;
+  }
+  for (let j = p.base; j < W * H && p.store > 0; j += W) {
+    if (!isBed(w.type[j])) continue;
+    const add = Math.min(p.store, 255 - w.food[j]);
+    w.food[j] += add;
+    p.store -= add;
   }
 }
 
@@ -175,12 +184,15 @@ function growRoot(w: World, p: Plant, sp: PlantSpecies, roots: number[]): boolea
     const y = (r / W) | 0;
     if (y + 1 - baseY > sp.rootDepth * SCALE || y >= H - 1) continue;
     const side = w.rng.below(2) === 0 ? -1 : 1;
-    const options = [r + W, r + W + side, r + W - side, r + side, r - side];
+    // Near the surface roots only go down, so the ground stays open for seeds.
+    const options = y - baseY < 2 * SCALE ? [r + W] : [r + W, r + W + side, r + W - side, r + side, r - side];
     for (let k = 0; k < options.length; k++) {
       const j = options[k];
       const jx = j % W;
       if (Math.abs(jx - x) > 1 || j >= W * H) continue;
-      if (isBed(w.type[j]) && (w.food[j] > 0 || p.store > 0)) return rootInto(w, p, j);
+      // Roots grow through soil and sand (not waste: a dead root becomes
+      // soil, and the ground should not grow out of rubbish).
+      if (isGround(w.type[j]) && (w.food[j] > 0 || p.store > 0)) return rootInto(w, p, j);
     }
   }
   return false;
@@ -224,9 +236,12 @@ const LEAF_SHAPE: [number, number][] = (
   [[1, 0], [2, 0], [2, -1], [3, -1], [4, -2], [3, -2]] as [number, number][]
 ).slice(0, 2 * SCALE + 2);
 
-/** Where a bush puts leaves around a new piece of stem. */
+/**
+ * Where a bush puts leaves around a new piece of stem: beside and below it,
+ * never above, where the tip has to grow on.
+ */
 const BUSH_LEAVES: [number, number][] = [];
-for (let dy = -1; dy <= 1; dy++)
+for (let dy = 0; dy <= 1; dy++)
   for (let dx = -SCALE; dx <= SCALE; dx++) if (dx !== 0 || dy !== 0) BUSH_LEAVES.push([dx, dy]);
 
 function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
@@ -272,7 +287,7 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   } else if (sp.form === "bush" && tip.len > 2 * SCALE) {
     for (let k = 0; k < sp.leaves * SCALE; k++) {
       const [dx, dy] = BUSH_LEAVES[w.rng.below(BUSH_LEAVES.length)];
-      const c = j + dy * W + (dy === -1 ? dx - tip.dx : dx);
+      const c = j + dy * W + dx;
       if (Math.abs((c % W) - nx) <= SCALE + 1 && c > W && w.type[c] === EMPTY) place(w, p, c, LEAF);
     }
   }
@@ -418,7 +433,7 @@ function updatePlant(w: World, p: Plant): void {
       p.store++;
       taken++;
       // Waste that has given up all it had is gone.
-      if (food[j] === 0 && type[j] === WASTE) clearCell(w, j);
+      if (food[j] === 0 && type[j] === WASTE) rotAway(w, j);
     }
   }
 
@@ -543,7 +558,7 @@ export function slowPass(w: World): void {
         food[j]++;
         food[i]--;
       }
-      if (food[i] === 0) clearCell(w, i);
+      if (food[i] === 0) rotAway(w, i);
     } else if (t === FUNGUS) {
       // Fungus feeds the soil next to it, much faster than waste rots alone.
       const x = i % W;
@@ -562,11 +577,16 @@ export function slowPass(w: World): void {
         food[i - W] = 1;
         food[i]--;
       }
-      if (food[i] === 0) clearCell(w, i);
+      if (food[i] === 0) rotAway(w, i);
     } else if (t === WATER && type[i - W] === EMPTY && w.rng.below(1500) === 0) {
       // Open water slowly evaporates into the air.
       clearCell(w, i);
       w.humidity += WATER_UNITS;
+    } else if (t === SOIL && type[i - W] === EMPTY && wet[i] > SOIL_DRIES_TO + SOIL_BREATH && w.rng.below(64) === 0) {
+      // Moist soil breathes out a little water too, so there is dew in the
+      // glass even when few plants are growing.
+      wet[i] -= SOIL_BREATH;
+      w.humidity += SOIL_BREATH;
     }
   }
 }
