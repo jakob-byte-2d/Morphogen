@@ -37,6 +37,25 @@ body {
   padding: 0.75rem 1rem 0.25rem;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.title-row select {
+  min-height: 40px;
+  padding: 0 0.75rem;
+  border: 1px solid #2a4440;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
 .hud h1 {
   margin: 0;
   font-size: 1.25rem;

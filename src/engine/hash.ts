@@ -26,6 +26,8 @@ export function hashWorld(w: World): string {
   mixNumber(w.cells.length);
   for (const c of w.cells) {
     mixNumber(c.id);
+    mixNumber(c.species);
+    mixNumber(c.mode);
     mixNumber(CELL_TYPES.indexOf(c.type));
     mixNumber(c.x);
     mixNumber(c.y);
@@ -34,7 +36,6 @@ export function hashWorld(w: World): string {
     mixNumber(c.mass);
     mixNumber(c.angle);
     mixNumber(c.age);
-    mixNumber(c.generation);
   }
 
   mixNumber(w.bonds.length);

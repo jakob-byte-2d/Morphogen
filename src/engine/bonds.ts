@@ -80,8 +80,8 @@ export function applyBondForces(w: World): void {
  * list, with scratch.divisions filled. A bond to a parent goes to the daughter
  * on the neighbour's side; if the neighbour lies near the division plane,
  * both daughters keep it, which makes organisms stiff instead of floppy.
- * A budding daughter keeps nothing. Bonds to dead cells disappear. New
- * daughter pairs bond to each other.
+ * A daughter whose mode says not to keep bonds gets none. Bonds to dead
+ * cells disappear. Daughters bond to each other if the mode says so.
  */
 export function rebuildBonds(w: World, anyDeaths: boolean): void {
   const { env } = w;
@@ -114,14 +114,14 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
   const heirs = (id: number, nx: number, ny: number): number[] => {
     const div = divisions.get(id);
     if (!div) return index.has(id) ? [id] : [];
-    if (div.secondBuds) return [div.first];
     const dx = nx - div.x;
     const dy = ny - div.y;
     const d = sqrt(dx * dx + dy * dy);
     const along = d > 0 ? (dx * div.dirX + dy * div.dirY) / d : 0;
-    if (along > SHARE_BOTH_THRESHOLD) return [div.first];
-    if (along < -SHARE_BOTH_THRESHOLD) return [div.second];
-    return [div.first, div.second];
+    const result: number[] = [];
+    if (div.keepFirst && along >= -SHARE_BOTH_THRESHOLD) result.push(div.first);
+    if (div.keepSecond && along <= SHARE_BOTH_THRESHOLD) result.push(div.second);
+    return result;
   };
 
   for (const bond of w.bonds) {
@@ -133,11 +133,9 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
     }
   }
 
-  if (env.daughtersStick) {
-    // Map iteration follows insertion order, which is cell order: deterministic.
-    for (const div of divisions.values()) {
-      if (!div.secondBuds) add(div.first, div.second);
-    }
+  // Map iteration follows insertion order, which is cell order: deterministic.
+  for (const div of divisions.values()) {
+    if (div.makeBond) add(div.first, div.second);
   }
 
   w.bonds = out;

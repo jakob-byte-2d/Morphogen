@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ENGINE_VERSION, countOrganisms, createWorld, hashWorld, stepWorldN } from "../src/engine";
+import { GOLDEN } from "../src/engine/golden";
 
 /**
- * The most important test in the project: the same seed must always give
+ * The most important tests in the project: the same seed must always give
  * exactly the same world. Online matches and replays depend on it.
- *
- * If you change the simulation rules ON PURPOSE:
- *   1. bump ENGINE_VERSION in src/engine/world.ts
- *   2. update GOLDEN below to the new hash the test prints
+ * The golden hash lives in src/engine/golden.ts.
  */
-const GOLDEN = { engineVersion: 2, seed: 42, ticks: 10000, hash: "e3362411" };
 
 describe("determinism", () => {
   it("same seed gives an identical world after 10 000 ticks", () => {
@@ -47,7 +44,7 @@ describe("determinism", () => {
 describe("simulation sanity", () => {
   it("organisms grow, reproduce and stay valid", () => {
     const w = createWorld(42);
-    stepWorldN(w, 21000);
+    stepWorldN(w, 27000);
     expect(w.cells.length).toBeGreaterThan(100);
     expect(countOrganisms(w)).toBeGreaterThan(10);
     for (const c of w.cells) {

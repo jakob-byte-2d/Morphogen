@@ -1,4 +1,4 @@
-import { radiusOf, type World } from "../engine";
+import { CELL_TYPES, radiusOf, type CellType, type World } from "../engine";
 import { TWO_PI } from "../engine/fmath";
 
 const COLORS = {
@@ -7,11 +7,15 @@ const COLORS = {
   dishEdge: "#0e1d20",
   dishRim: "rgba(190, 230, 225, 0.28)",
   food: "#d4ec9a",
-  cellFill: "rgba(110, 205, 170, 0.55)",
-  cellFillRipe: "rgba(170, 230, 150, 0.7)",
   cellStroke: "#a6ead0",
   nucleus: "rgba(20, 60, 50, 0.75)",
   bond: "rgba(225, 250, 238, 0.6)",
+};
+
+/** Body colour per cell type: [growing, nearly ready to divide]. */
+const CELL_FILL: Record<CellType, [string, string]> = {
+  eater: ["rgba(110, 205, 170, 0.55)", "rgba(150, 225, 190, 0.75)"],
+  photo: ["rgba(120, 190, 60, 0.6)", "rgba(185, 225, 80, 0.8)"],
 };
 
 /** Draws the world onto a canvas. Reads the world, never changes it. */
@@ -58,18 +62,23 @@ export function render(canvas: HTMLCanvasElement, world: World): void {
   ctx.fillStyle = COLORS.food;
   ctx.fill();
 
-  // Cells: bodies, then membranes, then nuclei.
-  const ripeMass = world.env.splitMass * 0.8;
-  for (const ripe of [false, true]) {
-    ctx.beginPath();
-    for (const c of world.cells) {
-      if (c.mass >= ripeMass !== ripe) continue;
-      const r = radiusOf(c.mass);
-      ctx.moveTo(c.x + r, c.y);
-      ctx.arc(c.x, c.y, r, 0, TWO_PI);
+  // Cells: bodies (one path per type and ripeness), then membranes, then nuclei.
+  const isRipe = (c: World["cells"][number]): boolean => {
+    const m = world.genomes[c.species].modes[c.mode];
+    return m.canSplit && c.mass >= m.splitMass * 0.8;
+  };
+  for (const type of CELL_TYPES) {
+    for (const ripe of [false, true]) {
+      ctx.beginPath();
+      for (const c of world.cells) {
+        if (c.type !== type || isRipe(c) !== ripe) continue;
+        const r = radiusOf(c.mass);
+        ctx.moveTo(c.x + r, c.y);
+        ctx.arc(c.x, c.y, r, 0, TWO_PI);
+      }
+      ctx.fillStyle = CELL_FILL[type][ripe ? 1 : 0];
+      ctx.fill();
     }
-    ctx.fillStyle = ripe ? COLORS.cellFillRipe : COLORS.cellFill;
-    ctx.fill();
   }
 
   ctx.beginPath();
