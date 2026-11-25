@@ -1,5 +1,5 @@
 import { alignOrientations, applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
-import { TWO_PI, atan2, cos, sin, sqrt } from "./fmath";
+import { PI, TWO_PI, atan2, cos, sin } from "./fmath";
 import { DEFAULT_GENOME, normalizeGenome, type Genome } from "./genome";
 import { SpatialGrid } from "./grid";
 import { radiusOf, type Cell, type Environment, type Food, type World } from "./model";
@@ -12,21 +12,32 @@ export * from "./model";
  * replays store the engine version, so results from different rule sets are
  * never mixed. Remember to update the golden hash in src/engine/golden.ts.
  */
-export const ENGINE_VERSION = 4;
+export const ENGINE_VERSION = 5;
 
 /** Fixed simulation time step in seconds. Never vary this at runtime. */
 export const DT = 1 / 30;
 
+/**
+ * The glass, seen from the side. x runs left to right, y runs from the water
+ * surface (0) down to the bottom (tankHeight).
+ */
 export const DEFAULT_ENVIRONMENT: Environment = {
-  dishRadius: 300,
-  foodPerSecond: 25,
-  maxFood: 1000,
+  tankWidth: 300,
+  tankHeight: 450,
+  foodPerSecond: 18,
+  maxFood: 500,
   foodMass: 12,
-  foodKick: 0.5,
+  foodKick: 0.25,
   foodDamping: 0.9,
+  foodSink: 0.008,
+  sludgeDrift: 1.2,
+  sludgeDissolve: 0.003,
   light: 1,
+  lightDepth: 560,
+  lightColumnWidth: 20,
+  shadePerCell: 0.35,
   photoRate: 4.5,
-  shadePerContact: 0.5,
+  sink: { eater: 4, photo: -6, swim: 0 },
   metabolism: 1.5,
   minMass: 40,
   maxCellMass: 400,
@@ -50,10 +61,9 @@ export interface WorldOptions {
   genomes?: readonly unknown[];
 }
 
-function randomPointInDish(rng: Rng, radius: number): Food {
-  const r = radius * sqrt(rng.next());
-  const a = rng.range(0, TWO_PI);
-  return { x: r * cos(a), y: r * sin(a), vx: 0, vy: 0 };
+/** Food dropped in just below the water surface. */
+function surfaceFood(rng: Rng, env: Environment): Food {
+  return { x: rng.range(2, env.tankWidth - 2), y: rng.range(1, 6), vx: 0, vy: 0 };
 }
 
 export function createWorld(seed: number, options: WorldOptions = {}): World {
@@ -61,7 +71,7 @@ export function createWorld(seed: number, options: WorldOptions = {}): World {
   const genomes: Genome[] = (options.genomes ?? [DEFAULT_GENOME]).map(normalizeGenome);
   if (genomes.length === 0) genomes.push(normalizeGenome(DEFAULT_GENOME));
   const rng = new Rng(seed);
-  const maxRadius = radiusOf(env.maxCellMass);
+  const gridSize = radiusOf(env.maxCellMass) * 2;
   const world: World = {
     env,
     seed,
@@ -74,40 +84,46 @@ export function createWorld(seed: number, options: WorldOptions = {}): World {
     nextId: 1,
     foodAccumulator: 0,
     scratch: {
-      cellGrid: new SpatialGrid(env.dishRadius, maxRadius * 2),
-      foodGrid: new SpatialGrid(env.dishRadius, maxRadius * 2),
+      cellGrid: new SpatialGrid(env.tankWidth, env.tankHeight, gridSize),
+      foodGrid: new SpatialGrid(env.tankWidth, env.tankHeight, gridSize),
       indexById: new Map(),
       divisions: new Map(),
       bondDegree: new Map(),
-      contacts: new Uint16Array(64),
+      light: new Float64Array(64),
+      lightKey: new Float64Array(64),
+      lightOrder: [],
       turnX: new Float64Array(64),
       turnY: new Float64Array(64),
     },
   };
 
+  // A fresh glass starts with some food spread through the water.
   const initialFood = Math.floor(env.maxFood * 0.4);
   for (let i = 0; i < initialFood; i++) {
-    world.food.push(randomPointInDish(rng, env.dishRadius - 2));
+    world.food.push({
+      x: rng.range(2, env.tankWidth - 2),
+      y: rng.range(2, env.tankHeight - 2),
+      vx: 0,
+      vy: 0,
+    });
   }
 
-  // One founder per species. Several species start evenly around the dish,
-  // turned the same way relative to the centre, so no one gets a better start.
+  // One founder per species, side by side at half depth. With two species
+  // the start is a mirror image, so neither gets a better position.
   const baseAngle = rng.range(0, TWO_PI);
   for (let s = 0; s < genomes.length; s++) {
     const g = genomes[s];
-    const around = (s * TWO_PI) / genomes.length;
-    const r = genomes.length === 1 ? 0 : env.dishRadius / 2;
     world.cells.push({
       id: world.nextId++,
       species: s,
       mode: g.startMode,
       type: g.modes[g.startMode].cellType,
-      x: r * cos(around),
-      y: r * sin(around),
+      x: (env.tankWidth * (s + 1)) / (genomes.length + 1),
+      y: env.tankHeight / 2,
       vx: 0,
       vy: 0,
       mass: 120,
-      angle: baseAngle + around,
+      angle: s % 2 === 0 ? baseAngle : PI - baseAngle,
       age: 0,
     });
   }
@@ -116,40 +132,115 @@ export function createWorld(seed: number, options: WorldOptions = {}): World {
   return world;
 }
 
-/** Keeps a point inside a circle of the given radius around the origin. */
-function clampToDish(p: { x: number; y: number }, limit: number): boolean {
-  const d2 = p.x * p.x + p.y * p.y;
-  if (d2 <= limit * limit) return false;
-  const s = limit / sqrt(d2);
-  p.x *= s;
-  p.y *= s;
-  return true;
+/**
+ * Computes how much light reaches every cell. Light comes from above, fades
+ * with depth, and each cell blocks part of it for the cells below it in the
+ * same column. Results go to world.scratch.light.
+ */
+function computeLight(w: World): void {
+  const { env, cells } = w;
+  const n = cells.length;
+  if (w.scratch.light.length < n) {
+    w.scratch.light = new Float64Array(n * 2);
+    w.scratch.lightKey = new Float64Array(n * 2);
+  }
+  const light = w.scratch.light;
+  // Only light collectors use light, so skip the work when there are none.
+  let anyPhoto = false;
+  for (let i = 0; i < n; i++) {
+    if (cells[i].type === "photo") {
+      anyPhoto = true;
+      break;
+    }
+  }
+  if (!anyPhoto) return;
+
+  // Sort by column, then depth, then index. One number per cell (column
+  // times a factor bigger than any depth, plus depth) keeps the sort cheap,
+  // and the index tie-break makes the order fully determined.
+  const colWidth = env.lightColumnWidth;
+  const key = w.scratch.lightKey;
+  const stride = env.tankHeight + 1;
+  for (let i = 0; i < n; i++) key[i] = Math.floor(cells[i].x / colWidth) * stride + cells[i].y;
+  const order = w.scratch.lightOrder;
+  order.length = n;
+  for (let i = 0; i < n; i++) order[i] = i;
+  order.sort((a, b) => key[a] - key[b] || a - b);
+
+  let currentColumn = -1;
+  let remaining = 0;
+  for (const i of order) {
+    const c = cells[i];
+    const col = Math.floor(key[i] / stride);
+    if (col !== currentColumn) {
+      currentColumn = col;
+      remaining = env.light;
+    }
+    const depthFactor = Math.max(0, 1 - c.y / env.lightDepth);
+    light[i] = remaining * depthFactor;
+    const coverage = Math.min(1, (2 * radiusOf(c.mass)) / colWidth);
+    remaining *= 1 - env.shadePerCell * coverage;
+  }
 }
 
 /** Advances the world by exactly one fixed time step (DT). */
 export function stepWorld(w: World): void {
   const { env, rng } = w;
   const { cellGrid, foodGrid } = w.scratch;
+  const W = env.tankWidth;
+  const H = env.tankHeight;
 
-  // 1. Spawn food.
+  // 1. Food is dropped in at the surface, unless the water is already full of it.
+  const bottom = H - 1.5;
+  let floating = 0;
+  for (const f of w.food) if (f.y < bottom) floating++;
   w.foodAccumulator += env.foodPerSecond * DT;
   while (w.foodAccumulator >= 1) {
     w.foodAccumulator -= 1;
-    if (w.food.length < env.maxFood) w.food.push(randomPointInDish(rng, env.dishRadius - 2));
+    if (floating < env.maxFood) {
+      w.food.push(surfaceFood(rng, env));
+      floating++;
+    }
   }
 
-  // 2. Food drifts randomly.
+  // 2. Food drifts and sinks. On the bottom it settles as sludge, which
+  //    creeps slowly sideways and little by little dissolves.
   const kick = env.foodKick;
-  for (const f of w.food) {
+  const dissolve = env.sludgeDissolve * DT;
+  let anyDissolved = false;
+  const dissolved = new Uint8Array(w.food.length);
+  for (let i = 0; i < w.food.length; i++) {
+    const f = w.food[i];
+    if (f.y >= bottom) {
+      if (rng.next() < dissolve) {
+        dissolved[i] = 1;
+        anyDissolved = true;
+        continue;
+      }
+      f.x = Math.min(W - 1, Math.max(1, f.x + rng.range(-env.sludgeDrift, env.sludgeDrift)));
+      continue;
+    }
     f.vx = (f.vx + rng.range(-kick, kick)) * env.foodDamping;
-    f.vy = (f.vy + rng.range(-kick, kick)) * env.foodDamping;
+    f.vy = (f.vy + rng.range(-kick, kick) + env.foodSink) * env.foodDamping;
     f.x += f.vx;
     f.y += f.vy;
-    if (clampToDish(f, env.dishRadius - 2)) {
+    if (f.x < 1) {
+      f.x = 1;
+      f.vx = 0;
+    } else if (f.x > W - 1) {
+      f.x = W - 1;
+      f.vx = 0;
+    }
+    if (f.y < 1) {
+      f.y = 1;
+      f.vy = 0;
+    } else if (f.y >= bottom) {
+      f.y = bottom;
       f.vx = 0;
       f.vy = 0;
     }
   }
+  if (anyDissolved) w.food = w.food.filter((_, i) => dissolved[i] === 0);
 
   // 3. Eaters eat food they touch. Earlier cells in the list win ties.
   foodGrid.clear();
@@ -172,13 +263,7 @@ export function stepWorld(w: World): void {
   }
   if (anyEaten) w.food = w.food.filter((_, i) => eaten[i] === 0);
 
-  // 4. Overlapping cells push each other apart (each pair once, i < k),
-  //    and we count how many neighbours touch each cell.
-  if (w.scratch.contacts.length < w.cells.length) {
-    w.scratch.contacts = new Uint16Array(w.cells.length * 2);
-  }
-  const contacts = w.scratch.contacts;
-  contacts.fill(0, 0, w.cells.length);
+  // 4. Overlapping cells push each other apart (each pair once, i < k).
   cellGrid.clear();
   for (let i = 0; i < w.cells.length; i++) cellGrid.insert(i, w.cells[i].x, w.cells[i].y);
   const maxRadius = radiusOf(env.maxCellMass);
@@ -194,9 +279,7 @@ export function stepWorld(w: World): void {
       const minDist = ra + rb;
       const d2 = dx * dx + dy * dy;
       if (d2 >= minDist * minDist) return;
-      contacts[i]++;
-      contacts[k]++;
-      const dist = sqrt(d2);
+      const dist = Math.sqrt(d2);
       const push = (minDist - dist) * env.stiffness;
       let nx = 1;
       let ny = 0; // Fixed direction if the cells are exactly on top of each other.
@@ -214,18 +297,21 @@ export function stepWorld(w: World): void {
     });
   }
 
-  // 5. Light collectors gain mass; neighbours shade them. Swimmers push
-  //    themselves forward at a cost. Everyone burns food.
-  const photoGain = env.light * env.photoRate * DT;
+  // 5. Light collectors grow in the light that reaches them. Swimmers push
+  //    themselves forward at a cost. Cells sink or float by type. Everyone
+  //    burns food.
+  computeLight(w);
+  const light = w.scratch.light;
   for (let i = 0; i < w.cells.length; i++) {
     const c = w.cells[i];
     if (c.type === "photo") {
-      c.mass += photoGain / (1 + contacts[i] * env.shadePerContact);
+      c.mass += env.photoRate * light[i] * DT;
     } else if (c.type === "swim") {
       c.vx += cos(c.angle) * env.swimForce * DT;
       c.vy += sin(c.angle) * env.swimForce * DT;
       c.mass -= env.swimCost * DT;
     }
+    c.vy += env.sink[c.type] * DT;
     c.mass -= env.metabolism * DT;
     if (c.mass > env.maxCellMass) c.mass = env.maxCellMass;
     c.age++;
@@ -238,35 +324,45 @@ export function stepWorld(w: World): void {
   applyBondForces(w);
   alignOrientations(w);
 
-  // 7. Move, apply friction and keep cells inside the dish.
+  // 7. Move, apply friction and keep cells inside the glass.
   for (const c of w.cells) {
     c.vx *= env.drag;
     c.vy *= env.drag;
     c.x += c.vx * DT;
     c.y += c.vy * DT;
-    const limit = env.dishRadius - radiusOf(c.mass);
-    if (clampToDish(c, limit)) {
-      // Remove the outward part of the velocity.
-      const d = sqrt(c.x * c.x + c.y * c.y);
-      const nx = c.x / d;
-      const ny = c.y / d;
-      const vn = c.vx * nx + c.vy * ny;
-      if (vn > 0) {
-        c.vx -= vn * nx;
-        c.vy -= vn * ny;
-      }
-      // A swimmer heading into the wall turns away, like a ball bouncing off it.
-      if (c.type === "swim") {
-        const fx = cos(c.angle);
-        const fy = sin(c.angle);
-        const fn = fx * nx + fy * ny;
-        if (fn > 0) c.angle = atan2(fy - 2 * fn * ny, fx - 2 * fn * nx);
-      }
+    const r = radiusOf(c.mass);
+    // Outward normal of the wall the cell hit, if any.
+    let nx = 0;
+    let ny = 0;
+    if (c.x < r) {
+      c.x = r;
+      nx = -1;
+    } else if (c.x > W - r) {
+      c.x = W - r;
+      nx = 1;
+    }
+    if (c.y < r) {
+      c.y = r;
+      ny = -1;
+    } else if (c.y > H - r) {
+      c.y = H - r;
+      ny = 1;
+    }
+    if (nx !== 0 && c.vx * nx > 0) c.vx = 0;
+    if (ny !== 0 && c.vy * ny > 0) c.vy = 0;
+    // A swimmer heading into a wall turns away, like a ball bouncing off it.
+    if (c.type === "swim" && (nx !== 0 || ny !== 0)) {
+      let fx = cos(c.angle);
+      let fy = sin(c.angle);
+      if (fx * nx > 0) fx = -fx;
+      if (fy * ny > 0) fy = -fy;
+      c.angle = atan2(fy, fx);
     }
   }
 
   // 8. Division and death, following each cell's mode. Order is preserved:
-  //    daughters replace the parent in the list.
+  //    daughters replace the parent in the list. A dead cell leaves its mass
+  //    behind as particles of dead matter, which sink like food.
   const divisions = w.scratch.divisions;
   divisions.clear();
   let anyDeaths = false;
@@ -276,6 +372,16 @@ export function stepWorld(w: World): void {
     if (c.mass < env.minMass) {
       anyDeaths = true;
       population--;
+      const r = radiusOf(c.mass);
+      const pieces = Math.floor(c.mass / env.foodMass);
+      for (let p = 0; p < pieces; p++) {
+        w.food.push({
+          x: Math.min(W - 1, Math.max(1, c.x + rng.range(-r, r) * 0.5)),
+          y: Math.min(H - 1.5, Math.max(1, c.y + rng.range(-r, r) * 0.5)),
+          vx: 0,
+          vy: 0,
+        });
+      }
       continue;
     }
     const m = w.genomes[c.species].modes[c.mode];
@@ -325,13 +431,16 @@ function daughter(
   mode: number,
   turn: number,
 ): Cell {
+  // Keep the daughter inside the glass even if her mother sat against a wall.
+  const r = radiusOf(mass);
+  const { tankWidth: W, tankHeight: H } = w.env;
   return {
     id: w.nextId++,
     species: parent.species,
     mode,
     type: w.genomes[parent.species].modes[mode].cellType,
-    x: parent.x + side * ox * offset,
-    y: parent.y + side * oy * offset,
+    x: Math.min(W - r, Math.max(r, parent.x + side * ox * offset)),
+    y: Math.min(H - r, Math.max(r, parent.y + side * oy * offset)),
     vx: parent.vx + side * ox * w.env.splitSpeed,
     vy: parent.vy + side * oy * w.env.splitSpeed,
     mass,

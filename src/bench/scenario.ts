@@ -9,7 +9,7 @@ import {
   type World,
 } from "../engine";
 import { indexCells } from "../engine/bonds";
-import { TWO_PI, cos, sin, sqrt } from "../engine/fmath";
+import { TWO_PI, sqrt } from "../engine/fmath";
 
 /**
  * A crowded dish with exactly `count` cells, for measuring speed. The cells
@@ -21,11 +21,14 @@ export function crowdedWorld(count: number): World {
   const scale = sqrt(count / 200);
   const env = {
     ...DEFAULT_ENVIRONMENT,
-    dishRadius: 300 * scale,
+    tankWidth: 300 * scale,
+    tankHeight: 450 * scale,
     maxFood: Math.round(5 * count),
     foodPerSecond: (25 * count) / 200,
     metabolism: 0,
     maxCells: count,
+    // No sinking, so the cells stay spread out while we measure.
+    sink: { eater: 0, photo: 0, swim: 0 },
   };
   const genome = {
     version: 1,
@@ -39,7 +42,6 @@ export function crowdedWorld(count: number): World {
   const cells: Cell[] = [];
   const bonds: Bond[] = [];
   for (let i = 0; i < count; i++) {
-    const r = (env.dishRadius - 20) * sqrt(rng.next());
     const a = rng.range(0, TWO_PI);
     const id = i + 1;
     cells.push({
@@ -47,8 +49,8 @@ export function crowdedWorld(count: number): World {
       species: 0,
       mode: 0,
       type: "eater",
-      x: r * cos(a),
-      y: r * sin(a),
+      x: rng.range(20, env.tankWidth - 20),
+      y: rng.range(20, env.tankHeight - 20),
       vx: 0,
       vy: 0,
       mass: 150,

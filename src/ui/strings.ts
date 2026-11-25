@@ -2,7 +2,7 @@
 export const strings = {
   play: "▶ Spill",
   pause: "❚❚ Pause",
-  newDish: "Ny skål",
+  newDish: "Nytt glass",
   organism: "Organisme",
   speed: (n: number) => `${n}× fart`,
   stats: (s: { seconds: number; organisms: number; cells: number; seed: number }) =>

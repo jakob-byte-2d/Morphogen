@@ -4,10 +4,13 @@ import type { Genome } from "./genome";
 import type { Rng } from "./rng";
 
 export interface Environment {
-  /** Radius of the petri dish. */
-  dishRadius: number;
-  /** New food particles per second. */
+  /** Inner width of the glass. x runs from 0 (left) to tankWidth (right). */
+  tankWidth: number;
+  /** Water depth. y runs from 0 (water surface) to tankHeight (bottom). */
+  tankHeight: number;
+  /** New food particles per second, dropped in at the water surface. */
   foodPerSecond: number;
+  /** No new food is dropped in while this many particles float in the water (sludge not counted). */
   maxFood: number;
   /** Mass an eater gains from one food particle. */
   foodMass: number;
@@ -15,19 +18,34 @@ export interface Environment {
   foodKick: number;
   /** Food velocity multiplier per tick. */
   foodDamping: number;
-  /** Light strength, 0 (dark) to 1 (full sun). */
+  /** How fast food and dead matter sink: speed gained per tick, per tick. */
+  foodSink: number;
+  /** Random sideways step of sludge on the bottom per tick, so eaters there can reach it. */
+  sludgeDrift: number;
+  /**
+   * Share of the sludge that dissolves per second. For now it just disappears;
+   * in phase 5 it will turn into nutrients in the water.
+   */
+  sludgeDissolve: number;
+  /** Light strength at the water surface, 0 (dark) to 1 (full sun). */
   light: number;
-  /** Mass a light collector gains per second in full light, before shading. */
+  /** Depth at which the water has swallowed all the light. */
+  lightDepth: number;
+  /** Width of the light columns cells shade each other in. */
+  lightColumnWidth: number;
+  /** Share of the light a cell as wide as a column blocks for those below it. */
+  shadePerCell: number;
+  /** Mass a light collector gains per second in full light. */
   photoRate: number;
-  /** Each touching neighbour shades a light collector by this much (1 / (1 + n * shade)). */
-  shadePerContact: number;
+  /** Sinking (positive) or rising (negative) per cell type, as speed gained per second. */
+  sink: Record<CellType, number>;
   /** Mass every cell burns per second. */
   metabolism: number;
   /** A cell dies below this mass. */
   minMass: number;
   /** No cell grows heavier than this; extra food is wasted. */
   maxCellMass: number;
-  /** Cells stop dividing when the dish holds this many. Keeps phones fast. */
+  /** Cells stop dividing when the glass holds this many. Keeps phones fast. */
   maxCells: number;
   /** Speed the two daughter cells get when a cell divides. */
   splitSpeed: number;
@@ -79,9 +97,14 @@ export interface Cell {
   age: number;
 }
 
+/**
+ * A particle of organic matter: food dropped in at the surface, or what is
+ * left of a dead cell. It sinks and settles on the bottom as sludge.
+ */
 export interface Food {
   x: number;
   y: number;
+  /** Velocity in units per tick. */
   vx: number;
   vy: number;
 }
@@ -129,8 +152,12 @@ export interface Scratch {
   divisions: Map<number, Division>;
   /** Cell id -> number of bonds, while bonds are rebuilt. */
   bondDegree: Map<number, number>;
-  /** Touching neighbours per cell index, counted during collisions. */
-  contacts: Uint16Array;
+  /** Light reaching each cell this tick, per cell index (0–1). */
+  light: Float64Array;
+  /** Sort key (column and depth) per cell index, for the light calculation. */
+  lightKey: Float64Array;
+  /** Cell indices sorted by light column and depth. */
+  lightOrder: number[];
   /** Sum of the directions each cell's bonds want it to face, per cell index. */
   turnX: Float64Array;
   turnY: Float64Array;

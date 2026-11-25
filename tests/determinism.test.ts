@@ -42,14 +42,18 @@ describe("determinism", () => {
 });
 
 describe("simulation sanity", () => {
-  it("organisms grow, reproduce and stay valid", () => {
+  it("organisms grow, reproduce and stay valid inside the glass", () => {
     const w = createWorld(42);
     stepWorldN(w, 27000);
-    expect(w.cells.length).toBeGreaterThan(100);
-    expect(countOrganisms(w)).toBeGreaterThan(10);
+    expect(w.cells.length).toBeGreaterThan(10);
+    expect(countOrganisms(w)).toBeGreaterThan(2);
+    const { tankWidth: W, tankHeight: H } = w.env;
     for (const c of w.cells) {
       expect(Number.isFinite(c.x) && Number.isFinite(c.y) && Number.isFinite(c.mass)).toBe(true);
-      expect(Math.hypot(c.x, c.y)).toBeLessThanOrEqual(w.env.dishRadius);
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.x).toBeLessThanOrEqual(W);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeLessThanOrEqual(H);
     }
     // Every bond joins two different, living cells, and no pair is bonded twice.
     const ids = new Set(w.cells.map((c) => c.id));

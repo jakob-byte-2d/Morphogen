@@ -67,8 +67,10 @@ describe("species", () => {
   it("two species start mirrored, keep their own cells and never bond to each other", () => {
     const w = createWorld(8, { genomes: [PRESETS.klump, PRESETS.alge] });
     const [a, b] = w.cells;
-    expect(a.x).toBeCloseTo(-b.x, 9);
-    expect(a.y).toBeCloseTo(-b.y, 9);
+    expect(a.x).toBeCloseTo(w.env.tankWidth - b.x, 9);
+    expect(a.y).toBe(b.y);
+    expect(Math.cos(a.angle)).toBeCloseTo(-Math.cos(b.angle), 9);
+    expect(Math.sin(a.angle)).toBeCloseTo(Math.sin(b.angle), 9);
     expect([a.species, b.species]).toEqual([0, 1]);
 
     stepWorldN(w, 9000);

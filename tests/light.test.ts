@@ -63,22 +63,26 @@ describe("light", () => {
     expect(w.food.length).toBe(food);
   });
 
-  it("touching neighbours shade a light collector", () => {
-    const w = world({}, "photo");
-    // One lonely cell and one surrounded by three neighbours.
-    w.cells = [
-      cellAt(w, 1, -200, 0, 100),
-      cellAt(w, 2, 100, 0, 100),
-      cellAt(w, 3, 119, 0, 100),
-      cellAt(w, 4, 81, 0, 100),
-      cellAt(w, 5, 100, 19, 100),
-    ];
-    w.nextId = 6;
+  it("light fades with depth", () => {
+    const w = world({ sink: { eater: 0, photo: 0, swim: 0 } }, "photo");
+    w.cells = [cellAt(w, 1, 50, 40, 100), cellAt(w, 2, 250, 400, 100)];
+    w.nextId = 3;
     indexCells(w);
     stepWorld(w);
-    const lonely = w.cells.find((c) => c.id === 1)!;
+    const [shallow, deep] = w.cells;
+    expect(shallow.mass).toBeGreaterThan(deep.mass);
+  });
+
+  it("a cell shades the cells below it in the same column", () => {
+    const w = world({ sink: { eater: 0, photo: 0, swim: 0 } }, "photo");
+    // Cells 1 and 2 share a column, 2 lies under 1. Cell 3 is alone at the same depth as 2.
+    w.cells = [cellAt(w, 1, 110, 60, 100), cellAt(w, 2, 110, 120, 100), cellAt(w, 3, 210, 120, 100)];
+    w.nextId = 4;
+    indexCells(w);
+    stepWorld(w);
     const shaded = w.cells.find((c) => c.id === 2)!;
-    expect(lonely.mass).toBeGreaterThan(shaded.mass);
+    const alone = w.cells.find((c) => c.id === 3)!;
+    expect(alone.mass).toBeGreaterThan(shaded.mass);
   });
 
   it("no cell grows past the mass limit", () => {

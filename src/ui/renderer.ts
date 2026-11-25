@@ -3,10 +3,14 @@ import { TWO_PI } from "../engine/fmath";
 
 const COLORS = {
   background: "#0b1416",
-  dishCenter: "#14292d",
-  dishEdge: "#0e1d20",
-  dishRim: "rgba(190, 230, 225, 0.28)",
+  glass: "rgba(190, 230, 225, 0.32)",
+  glassFill: "rgba(190, 230, 225, 0.04)",
+  waterTop: "#1f4f52",
+  waterBottom: "#0b1a1e",
+  surface: "rgba(200, 240, 235, 0.55)",
   food: "#d4ec9a",
+  sludge: "#9a7a48",
+  sludgeLayer: "rgba(120, 90, 50, 0.35)",
   cellStroke: "#a6ead0",
   nucleus: "rgba(20, 60, 50, 0.75)",
   bond: "rgba(225, 250, 238, 0.6)",
@@ -20,7 +24,11 @@ const CELL_FILL: Record<CellType, [string, string]> = {
   swim: ["rgba(90, 150, 220, 0.6)", "rgba(140, 185, 240, 0.8)"],
 };
 
-/** Draws the world onto a canvas. Reads the world, never changes it. */
+/** Glass thickness and the air gap above the water, in world units. */
+const RIM = 6;
+const AIR = 16;
+
+/** Draws the glass from the side. Reads the world, never changes it. */
 export function render(canvas: HTMLCanvasElement, world: World): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -36,33 +44,64 @@ export function render(canvas: HTMLCanvasElement, world: World): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, width, height);
 
-  // World units -> screen pixels, dish centred and fitted to the canvas.
-  const R = world.env.dishRadius;
-  const scale = (Math.min(width, height) / 2 - 8) / R;
-  ctx.translate(width / 2, height / 2);
+  // World units -> screen pixels: the whole glass fitted and centred.
+  const W = world.env.tankWidth;
+  const H = world.env.tankHeight;
+  const outerW = W + 2 * RIM;
+  const outerH = H + AIR + RIM;
+  const scale = Math.min((width - 16) / outerW, (height - 16) / outerH);
+  ctx.translate((width - W * scale) / 2, (height - outerH * scale) / 2 + AIR * scale);
   ctx.scale(scale, scale);
 
-  // Dish.
-  const grad = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R);
-  grad.addColorStop(0, COLORS.dishCenter);
-  grad.addColorStop(1, COLORS.dishEdge);
+  // Glass.
   ctx.beginPath();
-  ctx.arc(0, 0, R, 0, TWO_PI);
-  ctx.fillStyle = grad;
+  ctx.roundRect(-RIM, -AIR, W + 2 * RIM, H + AIR + RIM, [4, 4, 14, 14]);
+  ctx.fillStyle = COLORS.glassFill;
   ctx.fill();
-  ctx.lineWidth = 3 / scale;
-  ctx.strokeStyle = COLORS.dishRim;
+  ctx.lineWidth = 2 / scale;
+  ctx.strokeStyle = COLORS.glass;
   ctx.stroke();
 
-  // Food: one path for all particles.
-  const foodRadius = Math.max(1.4, 1.2 / scale);
+  // Water: lighter near the lamp, darker towards the bottom.
+  const water = ctx.createLinearGradient(0, 0, 0, H);
+  water.addColorStop(0, COLORS.waterTop);
+  water.addColorStop(1, COLORS.waterBottom);
   ctx.beginPath();
-  for (const f of world.food) {
-    ctx.moveTo(f.x + foodRadius, f.y);
-    ctx.arc(f.x, f.y, foodRadius, 0, TWO_PI);
-  }
-  ctx.fillStyle = COLORS.food;
+  ctx.roundRect(0, 0, W, H, [0, 0, 10, 10]);
+  ctx.fillStyle = water;
   ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(W, 0);
+  ctx.lineWidth = 1.5 / scale;
+  ctx.strokeStyle = COLORS.surface;
+  ctx.stroke();
+
+  // Sludge: food and dead matter that has settled on the bottom.
+  const settledY = H - 2;
+  let settled = 0;
+  for (const f of world.food) if (f.y >= settledY) settled++;
+  if (settled > 0) {
+    const layer = Math.min(H * 0.1, 2 + settled * 0.06);
+    ctx.beginPath();
+    ctx.roundRect(0, H - layer, W, layer, [0, 0, 10, 10]);
+    ctx.fillStyle = COLORS.sludgeLayer;
+    ctx.fill();
+  }
+
+  // Particles: one path for floating food, one for sludge.
+  const foodRadius = Math.max(1.4, 1.2 / scale);
+  for (const onBottom of [false, true]) {
+    ctx.beginPath();
+    for (const f of world.food) {
+      if (f.y >= settledY !== onBottom) continue;
+      ctx.moveTo(f.x + foodRadius, f.y);
+      ctx.arc(f.x, f.y, foodRadius, 0, TWO_PI);
+    }
+    ctx.fillStyle = onBottom ? COLORS.sludge : COLORS.food;
+    ctx.fill();
+  }
 
   // Cells: bodies (one path per type and ripeness), then membranes, then nuclei.
   const isRipe = (c: World["cells"][number]): boolean => {
