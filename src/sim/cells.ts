@@ -18,9 +18,10 @@ export const POROUS = new Uint8Array(MAX_TYPES);
 /** Moisture a porous type holds against gravity; more seeps down. */
 export const FIELD_CAPACITY = new Uint8Array(MAX_TYPES);
 /**
- * How much of the light reaching a cell it stops, out of 256. Set for
- * SCALE 2: masses that are thicker in cells than before (leaves, water,
- * waste) let more through per cell, so they shade as much as they did.
+ * How much of the light reaching a cell it stops, out of 256. Above ground
+ * only leaves (and a little, flowers) cast shade, so the shade under a
+ * plant goes with how dense its leaves are; stems, seeds, dead leaves and
+ * animals let the light through. Set for SCALE 2.
  */
 export const ABSORB = new Uint16Array(MAX_TYPES);
 
@@ -48,12 +49,10 @@ POWDER[WASTE] = 1;
 POROUS[ROOT] = 1;
 FIELD_CAPACITY[ROOT] = 140;
 // Dead leaves (WASTE) hold no water: rain and dew run off them into the ground.
-ABSORB[SEED] = 60;
 ABSORB[ROOT] = 256;
-ABSORB[STEM] = 70;
+ABSORB[STEM] = 6;
 ABSORB[LEAF] = 59;
-ABSORB[FLOWER] = 44;
-ABSORB[WASTE] = 160;
+ABSORB[FLOWER] = 24;
 
 /** Living plant cells. */
 export const PLANT_PART = new Uint8Array(MAX_TYPES);
@@ -66,12 +65,10 @@ PLANT_PART[FLOWER] = 1;
 export const FEED = 11;
 /** A skrukketroll (woodlouse). Was an aphid once; same number. */
 export const ISOPOD = 12;
+/** No longer used (there is no slime: only plant eaters), but keeps its number. */
 export const SLIME = 13;
 
 POWDER[FEED] = 1;
-ABSORB[FEED] = 99;
-ABSORB[ISOPOD] = 60;
-ABSORB[SLIME] = 69;
 
 /** Cells that belong to a creature. */
 export const CREATURE_PART = new Uint8Array(MAX_TYPES);
@@ -86,6 +83,4 @@ export const FUNGUS = 15;
 
 POROUS[FUNGUS] = 1;
 FIELD_CAPACITY[FUNGUS] = 100;
-ABSORB[WORM] = 256;
-ABSORB[FUNGUS] = 84;
 CREATURE_PART[WORM] = 1;

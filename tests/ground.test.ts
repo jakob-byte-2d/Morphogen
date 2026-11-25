@@ -36,12 +36,12 @@ describe("the ground", () => {
     expect(w.type[at(30, H - 10)]).toBe(EMPTY);
   });
 
-  it("does not load glasses from before the skrukketroll came", () => {
+  it("does not load glasses from before there were only plant eaters", () => {
     const w = createWorld(8);
     stepWorldN(w, 100);
     const data = saveWorld(w);
     expect(loadWorld(JSON.parse(JSON.stringify(data)))).not.toBeNull();
-    data.v = 11;
+    data.v = 12;
     expect(loadWorld(JSON.parse(JSON.stringify(data)))).toBeNull();
   });
 });

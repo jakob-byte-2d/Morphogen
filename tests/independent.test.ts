@@ -14,7 +14,7 @@ import {
   SAND,
   SEED,
   setCell,
-  SLIME,
+  ISOPOD,
   SOIL,
   START_TICKS,
   STEM,
@@ -70,26 +70,25 @@ describe("plants are independent", () => {
     expect(onPlants(w, [SOIL, SAND, WATER, FEED, SEED])).toBe(0);
   });
 
-  it("are not something slime can lie on", () => {
+  it("are not something skrukketroll live on", () => {
     const w = bushBed();
     const top = Math.min(...w.plants[0].cells.filter((i) => [LEAF, STEM, FLOWER].includes(w.type[i])));
-    // Dropped right over the bush, it lands on the ground beside it.
-    applyTool(w, "creature", top % W, 5, 1);
+    // Dropped right over the bush, they land on the ground beside it.
+    applyTool(w, "creature", top % W, 5, 0);
     stepWorldN(w, 200);
-    expect(onPlants(w, [SLIME])).toBe(0);
-    expect(w.type.includes(SLIME)).toBe(true);
+    expect(onPlants(w, [ISOPOD])).toBe(0);
+    expect(w.type.includes(ISOPOD)).toBe(true);
   });
 });
 
 describe("a new glass", () => {
-  it("gets its skrukketroll and slime once the plants have grown, made from its own nutrients", () => {
+  it("gets its skrukketroll once the plants have grown, made from its own nutrients", () => {
     const w = createWorld(3);
     const ledger = unitLedger(w);
     expect(w.creatures.length).toBe(0);
     stepWorldN(w, START_TICKS);
     expect(w.plants.length).toBeGreaterThan(5);
     expect(w.creatures.some((c) => c.species === 0)).toBe(true);
-    expect(w.creatures.some((c) => c.species === 1)).toBe(true);
     expect(unitLedger(w)).toBe(ledger);
   });
 

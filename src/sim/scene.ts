@@ -33,7 +33,6 @@ const START_PLANTS: [number, number][] = [
 const START_ANIMALS = [
   { tick: 1800, species: 0, x: 12 },
   { tick: 1800, species: 0, x: 63 },
-  { tick: 2400, species: 1, x: 60 },
 ];
 
 /** How far a new glass is run before the player sees it: the animals are in, and settled. */
@@ -101,8 +100,7 @@ export function createWorld(seed: number): World {
     setCell(w, i - W, WASTE);
     w.food[i - W] = 2;
   }
-  // Once they have grown a little, the animals come: skrukketroll, then a
-  // little slime.
+  // Once they have grown a little, the skrukketroll come.
   for (const a of START_ANIMALS) w.arrivals.push({ tick: a.tick, species: a.species, x: a.x * S });
   computeLight(w);
   return w;

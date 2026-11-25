@@ -1,4 +1,4 @@
-import type { CreatureSpecies, Diet, PlantForm, PlantSpecies } from "../sim";
+import type { CreatureSpecies, PlantForm, PlantSpecies } from "../sim";
 import { creatureIcon, iconCanvas, plantIcon } from "./icons";
 import { t } from "./strings";
 
@@ -211,15 +211,6 @@ export class Creator {
         sp.color = c;
         draw();
       }, t.creator.color),
-    );
-    const diets: [Diet, string][] = (["litter", "creatures"] as Diet[]).map((d) => [d, t.creator.diets[d]]);
-    this.row(
-      body,
-      t.creator.eats,
-      this.choices(diets, sp.diet, (d) => {
-        sp.diet = d;
-        draw();
-      }, t.creator.eats),
     );
     this.trait(body, "size", sp.traits.size, 1, (v) => (sp.traits.size = v));
     this.trait(body, "speed", sp.traits.speed, 1, (v) => (sp.traits.speed = v));

@@ -11,12 +11,10 @@ const KEY = "morphogen.mySpecies";
 export function loadLibrary(): Library {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
-    const creatures = Array.isArray(raw.creatures) ? raw.creatures : [];
     return {
       plants: Array.isArray(raw.plants) ? raw.plants : [],
-      // Waste eaters (worms) are no more; leave out any made before. (Plant
-      // eaters made before are litter eaters now: see normalizeCreatureSpecies.)
-      creatures: creatures.filter((c: { diet?: unknown }) => c && c.diet !== "waste"),
+      // Creatures made before, whatever they ate, eat dead leaves now (see normalizeCreatureSpecies).
+      creatures: Array.isArray(raw.creatures) ? raw.creatures : [],
     };
   } catch {
     return { plants: [], creatures: [] };

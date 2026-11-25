@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, SLIME, stepWorldN } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, stepWorldN } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -13,25 +13,25 @@ describe("species the player makes", () => {
     expect(w.plants.some((p) => p.species === k)).toBe(true);
   });
 
-  it("live the way their food decides", () => {
+  it("are all plant eaters living on the ground, whatever they ate before", () => {
     const w = createWorld(32);
-    // A plant eater made before step 16 is a litter eater now.
     const bug = addCreatureSpecies(w, { name: "Lus", diet: "plants", color: "#aa8866" });
     const mass = addCreatureSpecies(w, { name: "Grøt", diet: "creatures", color: "#88aa66" });
+    expect(w.creatureSpecies[mass].diet).toBe("litter");
     applyTool(w, "creature", 10 * SCALE, 20 * SCALE, bug);
     applyTool(w, "creature", 64 * SCALE, 20 * SCALE, mass);
-    const b = w.creatures.find((x) => x.species === bug);
-    const m = w.creatures.find((x) => x.species === mass);
-    expect(b!.cells.every((i) => w.type[i] === ISOPOD)).toBe(true);
-    expect(m!.cells.every((i) => w.type[i] === SLIME)).toBe(true);
-    expect(m!.cells.length).toBeGreaterThan(1);
+    for (const k of [bug, mass]) {
+      const c = w.creatures.filter((x) => x.species === k);
+      expect(c.length).toBeGreaterThan(0);
+      expect(c.every((x) => x.cells.length === 1 && w.type[x.cells[0]] === ISOPOD)).toBe(true);
+    }
   });
 
   it("are cleaned up and limited in number", () => {
     const w = createWorld(33);
     const k = addCreatureSpecies(w, { diet: "everything", color: "javascript:" });
     expect(w.creatureSpecies[k].diet).toBe("litter");
-    // Worms are gone, and plant eaters too: both become litter eaters.
+    // Worms, plant eaters and slime are gone: they all become litter eaters.
     expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "waste" })].diet).toBe("litter");
     expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "plants" })].diet).toBe("litter");
     expect(w.creatureSpecies[k].color).toMatch(/^#[0-9a-f]{6}$/);

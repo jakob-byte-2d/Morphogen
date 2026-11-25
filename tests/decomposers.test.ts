@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWorld, H, ISOPOD, setCell, SLIME, SOIL, stepWorldN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
+import { createWorld, H, ISOPOD, setCell, SOIL, stepWorldN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -52,7 +52,7 @@ describe("water", () => {
 });
 
 describe("the whole cycle", () => {
-  it("light, plants, dead leaves, skrukketroll, slime and soil for a quarter of an hour", () => {
+  it("light, plants, dead leaves, skrukketroll and soil for a quarter of an hour", () => {
     const w = createWorld(42);
     const ledger = unitLedger(w);
     const units = totalUnits(w);
@@ -63,7 +63,7 @@ describe("the whole cycle", () => {
     expect(w.fixed).toBeGreaterThan(w.burned);
     expect(totalUnits(w)).toBeGreaterThan(units);
     // There are animals, and the leaves that fell have not just piled up.
-    expect(count(w, ISOPOD) + count(w, SLIME)).toBeGreaterThan(0);
+    expect(count(w, ISOPOD)).toBeGreaterThan(0);
     expect(count(w, WASTE)).toBeLessThan(1500);
   });
 });

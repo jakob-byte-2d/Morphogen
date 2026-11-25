@@ -1,4 +1,4 @@
-import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SATURATED, SCALE, SIZE, W, type World } from "../sim/world";
@@ -41,6 +41,8 @@ const SOAKED = [0.9, 0.93, 1.04];
 
 /** Colour shift per step of a gene tint: warmer one way, cooler the other. */
 const TINT = 6;
+/** How far sideways the drawn shade is evened out, in cells. */
+const SOFT = 2;
 
 const SOLID = new Uint8Array(32);
 SOLID[STONE] = 1;
@@ -326,7 +328,7 @@ export class Renderer {
             if (above === EMPTY) open++;
             if (open >= 2) a = 170 + (s & 63);
           }
-        } else if (t === ISOPOD || t === SLIME) {
+        } else if (t === ISOPOD) {
           const tab = this.creatureTable(w, w.kind[i]);
           r = tab[s * 3];
           g = tab[s * 3 + 1];
@@ -336,15 +338,7 @@ export class Renderer {
             r += c.genes.tint * TINT;
             b -= c.genes.tint * TINT;
           }
-          if (t === SLIME) {
-            // A soft, glistening mass: lighter on top, see-through at the edges.
-            if (above !== SLIME) {
-              r += (255 - r) * 0.25;
-              g += (255 - g) * 0.25;
-              b += (255 - b) * 0.2;
-              a = 175 + (s & 63);
-            }
-          } else a = 235;
+          a = 235;
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;
@@ -451,7 +445,11 @@ export class Renderer {
     d[o + 3] = alpha;
   }
 
-  /** Warm shafts of light, and soft shadows where something blocks it. */
+  /**
+   * Warm shafts of light, and soft shade under the leaves. The shade is the
+   * light the plants get, evened out a little sideways, so it looks like
+   * shade from foliage rather than sharp stripes.
+   */
   private drawLight(w: World, time: number): void {
     const { type, light } = w;
     const d = this.lightImage.data;
@@ -467,7 +465,17 @@ export class Renderer {
           continue;
         }
         const ray = x - ((y / 3) | 0) + off;
-        const l = light[i] / 255;
+        let sum = 0;
+        let n = 0;
+        for (let dx = -SOFT; dx <= SOFT; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= W) continue;
+          const tn = type[i + dx];
+          if (tn !== EMPTY && tn !== WATER) continue;
+          sum += light[i + dx];
+          n++;
+        }
+        const l = sum / n / 255;
         // Shafts keep their width in the glass however fine the cells are.
         const band = (ray / SCALE) | 0;
         const shimmer = 0.85 + 0.15 * Math.sin(time * 0.3 + band * 0.7);
