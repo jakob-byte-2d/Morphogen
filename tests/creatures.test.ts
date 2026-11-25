@@ -9,11 +9,9 @@ import {
   SCALE,
   LEAF,
   setCell,
-  SLIME,
   SOIL,
   spawnCreature,
   stepWorldN,
-  STEM,
   STONE,
   unitLedger,
   W,
@@ -94,60 +92,6 @@ describe("skrukketroll", () => {
   });
 });
 
-describe("slime", () => {
-  it("creeps over to feed and eats it", () => {
-    const w = floor();
-    setCell(w, at(42, H - 2), FEED);
-    w.food[at(42, H - 2)] = 2;
-    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 320);
-    stepWorldN(w, 600);
-    expect(count(w, FEED)).toBe(0);
-    // Of the two units of feed, one was burnt and one went into its body or its store.
-    expect(w.burned).toBe(1);
-    expect(count(w, SLIME) + w.creatures[0].store).toBe(5);
-  });
-
-  it("eats skrukketroll it reaches", () => {
-    const w = floor();
-    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 320);
-    spawnCreature(w, 0, [at(38, H - 2)], 2000);
-    stepWorldN(w, 600);
-    expect(count(w, ISOPOD)).toBe(0);
-    expect(count(w, SLIME)).toBeGreaterThan(0);
-  });
-
-  it("stays low on the ground", () => {
-    const w = floor();
-    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2)], 3000);
-    w.creatures[0].store = 30;
-    stepWorldN(w, 600);
-    let top = H;
-    for (let i = 0; i < W * H; i++) if (w.type[i] === SLIME) top = Math.min(top, (i / W) | 0);
-    expect(H - 1 - top).toBeLessThanOrEqual(3);
-  });
-
-  it("dies of old age, as food for the skrukketroll", () => {
-    const w = floor();
-    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2)], 1e6);
-    stepWorldN(w, 6000);
-    expect(count(w, SLIME)).toBeGreaterThan(0);
-    stepWorldN(w, 9000);
-    expect(count(w, SLIME)).toBe(0);
-    expect(count(w, WASTE)).toBeGreaterThan(0);
-  });
-
-  it("flows on between plant stems", () => {
-    const w = floor();
-    // A row of stems in its way, and feed beyond them.
-    for (let x = 40; x < 80; x += 3) for (let y = H - 12; y < H - 1; y++) setCell(w, at(x, y), STEM);
-    setCell(w, at(90, H - 2), FEED);
-    w.food[at(90, H - 2)] = 2;
-    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 2000);
-    stepWorldN(w, 1500);
-    expect(count(w, FEED)).toBe(0);
-  });
-});
-
 describe("feed", () => {
   it("goes off into litter if nobody eats it", () => {
     const w = floor();
@@ -165,9 +109,10 @@ describe("creature tool", () => {
     const w = floor();
     for (let x = 0; x < W; x++) setCell(w, at(x, H - 2), SOIL);
     applyTool(w, "creature", 20, 10, 0);
-    applyTool(w, "creature", 50, 10, 1);
+    applyTool(w, "creature", 50, 10, 0);
     expect(w.creatures.length).toBeGreaterThanOrEqual(2);
-    // They land on the soil: a low mound at most, nothing left hanging in the air.
+    expect(w.creatures.every((c) => c.cells.every((i) => w.type[i] === ISOPOD))).toBe(true);
+    // They land on the soil, nothing left hanging in the air.
     for (const c of w.creatures) for (const i of c.cells) expect((i / W) | 0).toBeGreaterThan(H - 4 - 2 * SCALE);
     expect(w.type[at(20, 10)]).toBe(EMPTY);
   });
@@ -179,7 +124,7 @@ describe("the closed glass with creatures", () => {
     stepWorldN(w, 900);
     applyTool(w, "creature", 22, 40, 0);
     applyTool(w, "creature", 52, 40, 0);
-    applyTool(w, "creature", 40, 60, 1);
+    applyTool(w, "creature", 40, 60, 0);
     const ledger = unitLedger(w);
     for (let k = 0; k < 8; k++) {
       stepWorldN(w, 600);

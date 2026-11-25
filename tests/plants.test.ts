@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTool,
+  computeLight,
   createWorld,
   EMPTY,
   FLOWER,
   H,
+  ISOPOD,
   LEAF,
   ROOT,
   SEED,
@@ -122,6 +124,24 @@ describe("growth", () => {
     // The shoot becomes litter; the roots, which grew where there was soil, become soil again.
     expect(count(w, WASTE)).toBeGreaterThanOrEqual(shoot);
     for (const i of roots) expect(w.type[i]).toBe(SOIL);
+  });
+});
+
+describe("shade", () => {
+  /** Light below a band of `rows` rows of type t across the whole glass. */
+  const below = (t: number, rows: number) => {
+    const w = emptyWorld(6);
+    for (let y = 40; y < 40 + rows; y++) for (let x = 0; x < W; x++) setCell(w, at(x, y), t);
+    computeLight(w);
+    return w.light[at(W >> 1, 100)];
+  };
+
+  it("comes from the leaves: the denser they are, the darker below", () => {
+    expect(below(LEAF, 2)).toBeLessThan(200);
+    expect(below(LEAF, 6)).toBeLessThan(below(LEAF, 2));
+    // Stems, seeds, dead leaves and animals hardly shade at all.
+    expect(below(STEM, 6)).toBeGreaterThan(200);
+    for (const t of [SEED, WASTE, ISOPOD]) expect(below(t, 6)).toBe(255);
   });
 });
 

@@ -6,7 +6,7 @@ import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 /** Oldest engine version whose saved glasses can still be loaded. */
-const SAVES_FROM = 12;
+const SAVES_FROM = 13;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -106,7 +106,7 @@ function cellList(v: unknown): number[] {
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Partial<SavedGlass>;
-  // Glasses saved from version 12 on (skrukketroll, no fungus) carry on under newer rules.
+  // Glasses saved from version 13 on (only plant eaters, shade from leaves) carry on under newer rules.
   if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
   const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
@@ -183,7 +183,6 @@ export function loadWorld(data: unknown): World | null {
       store: int(r.store, 0, 100000),
       age: int(r.age, 0, 2 ** 31),
       cells: cellList(r.cells),
-      dir: int(r.dir, -1, 1) || 1,
       genes: creatureGenesOf(creatureSpecies[0]),
       dead: false,
     };

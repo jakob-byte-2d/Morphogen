@@ -101,11 +101,12 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
 }
 
 /**
- * What a creature eats decides how it lives: litter eaters (skrukketroll)
- * crawl about the ground as little specks eating fallen leaves, and creature
- * eaters creep along the ground as a soft mass. Both leave soil behind.
+ * All creatures are plant eaters of one kind: skrukketroll-like specks that
+ * crawl about the ground eating fallen leaves (never living plants), and
+ * feed the soil with their droppings. The field is kept so species keep
+ * their shape; there were plant eaters, worms and slime once.
  */
-export type Diet = "litter" | "creatures";
+export type Diet = "litter";
 
 export interface CreatureSpecies {
   name: string;
@@ -117,10 +118,7 @@ export interface CreatureSpecies {
 
 export const CREATURE_SPECIES: CreatureSpecies[] = [
   { name: "Skrukketroll", diet: "litter", color: "#8c8e96", traits: { ...CREATURE_TRAITS } },
-  { name: "Slim", diet: "creatures", color: "#d8b040", traits: { ...CREATURE_TRAITS } },
 ];
-
-const DIETS: Diet[] = ["litter", "creatures"];
 
 export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const d = CREATURE_SPECIES[0];
@@ -128,8 +126,8 @@ export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const tr = (o.traits && typeof o.traits === "object" ? o.traits : {}) as Record<string, unknown>;
   return {
     name: typeof o.name === "string" && o.name.trim() ? o.name.trim().slice(0, 24) : d.name,
-    // Plant eaters (and waste eaters before them) are litter eaters now.
-    diet: DIETS.includes(o.diet as Diet) ? (o.diet as Diet) : d.diet,
+    // Whatever it ate before (plants, waste, creatures), it eats dead leaves now.
+    diet: "litter",
     color: color(o.color, d.color),
     traits: {
       size: int(tr.size, CREATURE_TRAITS.size, 1, 5),

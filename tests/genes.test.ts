@@ -4,7 +4,6 @@ import {
   applyTool,
   createWorld,
   creatureGenesOf,
-  FEED,
   H,
   hashWorld,
   inheritCreature,
@@ -26,6 +25,7 @@ import {
   STONE,
   unpackSeed,
   W,
+  WASTE,
   type CreatureGenes,
   type PlantGenes,
 } from "../src/sim";
@@ -137,19 +137,18 @@ describe("what the genes do", () => {
     expect(grown(5)).toBeGreaterThan(grown(1));
   });
 
-  it("fast creatures get there sooner, and pay for it", () => {
+  it("fast creatures get about more, and pay for it", () => {
     const run = (speed: number) => {
       const w = emptyWorld(4);
       for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
-      setCell(w, at(70, H - 2), FEED);
-      w.food[at(70, H - 2)] = 2;
-      spawnCreature(w, 1, [at(50, H - 2)], 2000, { size: 3, speed, growth: 3, mutation: 0, tint: 0 });
-      let t = 0;
-      while (w.type[at(70, H - 2)] === FEED && t < 3000) {
+      const c = spawnCreature(w, 0, [at(W >> 1, H - 2)], 2000, { size: 3, speed, growth: 3, mutation: 0, tint: 0 })!;
+      let moved = 0;
+      for (let t = 0; t < 600; t++) {
+        const was = c.cells[0];
         stepWorld(w);
-        t++;
+        if (c.cells[0] !== was) moved++;
       }
-      return t;
+      return moved;
     };
     const tired = (speed: number) => {
       const w = emptyWorld(4);
@@ -158,25 +157,25 @@ describe("what the genes do", () => {
       stepWorldN(w, 200);
       return 2000 - c.energy;
     };
-    expect(run(5) * 2).toBeLessThan(run(1));
+    expect(run(5)).toBeGreaterThan(run(1) * 1.3);
     expect(tired(5)).toBeGreaterThan(tired(1) * 3);
   });
 
-  it("small-bodied slime splits sooner", () => {
-    const largest = (size: number) => {
+  it("small skrukketroll breed more often", () => {
+    const young = (size: number) => {
       const w = emptyWorld(5);
       for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
-      const c = spawnCreature(w, 1, [at(70, H - 2)], 30000, { size, speed: 3, growth: 5, mutation: 0, tint: 0 })!;
-      c.store = 400;
-      let max = 0;
-      for (let t = 0; t < 4000 && w.creatures.length === 1; t++) {
-        stepWorld(w);
-        max = Math.max(max, c.cells.length);
-      }
-      expect(w.creatures.length).toBe(2);
-      return max;
+      // A wide bed of dead leaves.
+      for (let x = 0; x < W; x++)
+        for (let y = H - 5; y < H - 1; y++) {
+          setCell(w, at(x, y), WASTE);
+          w.food[at(x, y)] = 3;
+        }
+      spawnCreature(w, 0, [at(W >> 1, H - 6)], 200, { size, speed: 3, growth: 3, mutation: 0, tint: 0 });
+      stepWorldN(w, 2400);
+      return w.creatures.length;
     };
-    expect(largest(1)).toBeLessThan(largest(5));
+    expect(young(1)).toBeGreaterThan(young(5));
   });
 });
 

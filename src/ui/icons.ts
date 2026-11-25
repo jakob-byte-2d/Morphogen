@@ -58,7 +58,6 @@ export function plantIcon(form: string, colors: { leaf: string; stem: string; fl
 /** Creature icons by diet, coloured from the species. */
 const CREATURE_ICONS: Record<string, string[]> = {
   litter: ["           ", "           ", "    hhhh   ", "k  haAaAa  ", " kaAaAaAaa ", " aAaAaAaAaa", "  k k k k  "],
-  creatures: ["           ", "    yyy    ", "  yhyyYyy  ", " yhyyyyyYy ", "yyyyYyyyyyy", "YyyyyyyYyyY", " YYYyyYYY  "],
 };
 
 export function creatureIcon(diet: string, color: string, light: (c: string) => string, dark: (c: string) => string): Icon {

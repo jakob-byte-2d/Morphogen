@@ -32,9 +32,9 @@ export const t = {
     speed: "Fart",
   },
   info: {
-    text: "Et lite terrarium der hver rute er én celle. Plantene bygger seg av lys, vann og næring fra jorda og vokser seg stadig større. Gamle blader faller av, skrukketrollene spiser dem og bæsjer næring ned i jorda, og slimet spiser skrukketrollene. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
-    cycle: ["Planter", "Visne blader", "Skrukketroll", "Slim", "Jord"],
-    cycleNote: "Lyset gir ny næring, og dyrene puster ut noe av den igjen. Litt vann slipper ut, så glasset må vannes av og til.",
+    text: "Et lite terrarium der hver rute er én celle. Plantene bygger seg av lys, vann og næring fra jorda og vokser seg stadig større. Gamle blader faller av, og skrukketrollene spiser dem og bæsjer næring ned i jorda, som plantene vokser av igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
+    cycle: ["Planter", "Visne blader", "Skrukketroll", "Jord"],
+    cycleNote: "Lyset gir ny næring, og skrukketroll og råte puster ut noe av den igjen. Skyggen kommer av bladene: jo tettere løv, jo mørkere under. Litt vann slipper ut, så glasset må vannes av og til.",
     version: (app: string, sim: number) => `Versjon ${app} · motor ${sim}`,
     devOn: "Utviklermodus er på",
     devOff: "Utviklermodus er av",
@@ -64,8 +64,7 @@ export const t = {
     grass: "Lavt og tett. Brer seg utover.",
     flower: "Stengler med blomster som slipper frø.",
     bush: "Vokser seg stor og greinete.",
-    litter: "Spiser visne blader og fôr på bakken og gjødsler jorda.",
-    creatures: "Kryper langs bakken, spiser kryp og fôr og gjødsler jorda. Lever i omtrent tjue minutter.",
+    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Lever i omtrent åtte minutter.",
   } as Record<string, string>,
   help: {
     water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
@@ -96,8 +95,6 @@ export const t = {
     height: "Høyde",
     branches: "Greiner",
     color: "Farge",
-    eats: "Spiser",
-    diets: { litter: "Visne blader", creatures: "Kryp" } as Record<string, string>,
     traits: { plantGrowth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", growth: "Vekst", mutation: "Mutasjon" },
     /** What the two ends of each trait mean: the trade-off in a few words. */
     ends: {
