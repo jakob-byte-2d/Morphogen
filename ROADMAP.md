@@ -35,7 +35,7 @@ Den første versjonen (sirkelceller med bindinger og genomer) ligger på grenen 
 
 ## Meny
 
-Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×), informasjon, statistikk, arter, hjelp, ta bilde, nytt glass.
+Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer hvis spillet får lyd), informasjon, statistikk, arter, hjelp, ta bilde, nytt glass.
 
 ## Teknisk
 
@@ -52,7 +52,7 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×), informasj
 - [x] **3. Kryp og fôr.** Bladlus, slim og 🥣.
 - [x] **4. Nedbrytere.** Meitemark og sopp. Vann som fordamper. Kretsløpet er lukket.
 - [x] **5. Tid.** Automatisk lagring, spoling når du kommer tilbake, app på hjemskjermen. Første gang er glasset allerede i gang.
-- [ ] **6. Menyen.** Alt i menyen og full utviklermodus.
+- [x] **6. Menyen.** Alt i menyen og full utviklermodus.
 - [ ] **7. Lag din egen.** «＋» sist i frø- og krypvelgeren: farge, høyde og greiner for planter, farge og mat for kryp.
 - [ ] **8. Vi tester sammen.** Lenke, skjermbilder og sjekkliste.
 

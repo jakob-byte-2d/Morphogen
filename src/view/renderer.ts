@@ -62,6 +62,10 @@ export class Renderer {
   /** Colour tables per species and plant part, made when first needed. */
   private speciesTables = new Map<number, Uint8ClampedArray>();
   private sparkles: { i: number; life: number }[] = [];
+  /** Developer view: moisture, nutrients or light laid over the glass. */
+  overlay: "none" | "wet" | "food" | "light" = "none";
+  private overlayCanvas = document.createElement("canvas");
+  private overlayImage = new ImageData(W, H);
 
   constructor(
     readonly el: HTMLElement,
@@ -71,7 +75,7 @@ export class Renderer {
     this.backdrop.width = 18;
     this.backdrop.height = 32;
     this.screen.className = "screen";
-    for (const c of [this.lightCanvas, this.cellCanvas]) {
+    for (const c of [this.lightCanvas, this.cellCanvas, this.overlayCanvas]) {
       c.width = W;
       c.height = H;
     }
@@ -153,6 +157,48 @@ export class Renderer {
     ctx.drawImage(this.lightCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.cellCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
+    if (this.overlay !== "none") {
+      this.drawOverlay(w);
+      ctx.drawImage(this.overlayCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
+    }
+  }
+
+  private drawOverlay(w: World): void {
+    const d = this.overlayImage.data;
+    for (let i = 0; i < SIZE; i++) {
+      const o = i * 4;
+      const t = w.type[i];
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      if (this.overlay === "wet") {
+        if (POROUS[t]) [r, g, b, a] = [60, 140, 255, (w.wet[i] / 255) * 230];
+        else if (t === WATER) [r, g, b, a] = [60, 140, 255, 230];
+      } else if (this.overlay === "food") {
+        if (w.food[i] > 0) [r, g, b, a] = [190, 240, 80, Math.min(1, w.food[i] / 10) * 230];
+      } else {
+        const l = w.light[i] / 255;
+        [r, g, b, a] = l > 0.5 ? [255, 250, 210, (l - 0.5) * 300] : [0, 0, 0, (0.5 - l) * 300];
+      }
+      d[o] = r;
+      d[o + 1] = g;
+      d[o + 2] = b;
+      d[o + 3] = a;
+    }
+    this.overlayCanvas.getContext("2d")!.putImageData(this.overlayImage, 0, 0);
+  }
+
+  /** A picture of the glass as it looks now, backdrop included. */
+  snapshot(): HTMLCanvasElement {
+    const c = document.createElement("canvas");
+    c.width = this.screen.width;
+    c.height = this.screen.height;
+    const ctx = c.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.backdrop, 0, 0, c.width, c.height);
+    ctx.drawImage(this.screen, 0, 0);
+    return c;
   }
 
   private drawCells(w: World, dt: number): void {

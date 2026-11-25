@@ -5,6 +5,7 @@ export interface DevState {
   max: boolean;
   paused: boolean;
   stepOnce: boolean;
+  overlay: "none" | "wet" | "food" | "light";
 }
 
 /** Developer panel: speed, pause, single steps and a few numbers. Opened with ?dev. */
@@ -37,9 +38,24 @@ export class DevPanel {
       b.dataset.speed = String(s);
       this.el.append(b);
     }
+    for (const o of ["none", "wet", "food", "light"] as const) {
+      const b = this.button(t.dev.overlays[o], () => {
+        state.overlay = o;
+        this.refresh();
+      });
+      b.dataset.overlay = o;
+      this.el.append(b);
+    }
     this.info.className = "dev-info";
-    this.el.append(this.info);
+    this.counts.className = "dev-info";
+    this.el.append(this.info, this.counts);
     this.refresh();
+  }
+
+  private counts = document.createElement("div");
+
+  setCounts(plants: number, creatures: number, units: number, water: number): void {
+    this.counts.textContent = t.dev.counts(plants, creatures, units, water);
   }
 
   private button(label: string, fn: () => void): HTMLButtonElement {
@@ -57,6 +73,9 @@ export class DevPanel {
     for (const b of this.el.querySelectorAll<HTMLButtonElement>("button[data-speed]")) {
       const s = Number(b.dataset.speed);
       b.setAttribute("aria-pressed", String(s === 0 ? this.state.max : !this.state.max && s === this.state.speed));
+    }
+    for (const b of this.el.querySelectorAll<HTMLButtonElement>("button[data-overlay]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.overlay === this.state.overlay));
     }
   }
 
