@@ -55,6 +55,10 @@ export const t = {
       return h > 0 ? `${h} t ${m} min` : `${m} min`;
     },
   },
+  /** A trait's name; plants and creatures share some. */
+  traitName: (k: string, _plant: boolean) =>
+    (({ growth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", mutation: "Mutasjon" }) as Record<string, string>)[k] ?? k,
+  speciesNow: (n: number, text: string) => `Nå, snitt av ${n}: ${text}`,
   about: {
     grass: "Lavt og raskt. Trenger lys, vann og næring.",
     flower: "Én stengel med blomst som slipper frø.",
@@ -95,6 +99,16 @@ export const t = {
     color: "Farge",
     eats: "Spiser",
     diets: { plants: "Planter", creatures: "Kryp", waste: "Avfall" } as Record<string, string>,
+    traits: { plantGrowth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", growth: "Vekst", mutation: "Mutasjon" },
+    /** What the two ends of each trait mean: the trade-off in a few words. */
+    ends: {
+      plantGrowth: ["Langsom, billig", "Rask, dyr"],
+      seed: ["Mange små", "Få store"],
+      size: ["Mange små", "Få store"],
+      speed: ["Treg, sparsom", "Rask, sulten"],
+      growth: ["Langsom, nøysom", "Rask, grådig"],
+      mutation: ["Ingen", "Mye"],
+    } as Record<string, [string, string]>,
     make: "Lag",
     cancel: "Avbryt",
     full: "Glasset har ikke plass til flere arter.",

@@ -1,4 +1,5 @@
 import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER, WORM } from "../sim/cells";
+import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SCALE, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
@@ -34,6 +35,9 @@ interface Mote {
   a: number;
   c: [number, number, number];
 }
+
+/** Colour shift per step of a gene tint: warmer one way, cooler the other. */
+const TINT = 6;
 
 const SOLID = new Uint8Array(32);
 SOLID[STONE] = 1;
@@ -278,14 +282,26 @@ export class Renderer {
           r = tab[s * 3];
           g = tab[s * 3 + 1];
           b = tab[s * 3 + 2];
-          if (t !== SEED) {
-            // Thirsty plants fade towards straw yellow.
+          if (t === SEED) {
+            const v = w.org[i];
+            if (v & SEED_GENES) {
+              const tint = ((v >> 9) & 31) - 16;
+              r += tint * TINT;
+              b -= tint * TINT;
+            }
+          } else {
             const p = w.orgs.get(w.org[i]);
-            if (p && p.kind === "plant" && p.thirst > 0) {
-              const f = Math.min(0.85, p.thirst / THIRST_LIMIT);
-              r += (this.wilted[0] - r) * f;
-              g += (this.wilted[1] - g) * f;
-              b += (this.wilted[2] - b) * f;
+            if (p && p.kind === "plant") {
+              // Each line of descent drifts a little in colour.
+              r += p.genes.tint * TINT;
+              b -= p.genes.tint * TINT;
+              // Thirsty plants fade towards straw yellow.
+              if (p.thirst > 0) {
+                const f = Math.min(0.85, p.thirst / THIRST_LIMIT);
+                r += (this.wilted[0] - r) * f;
+                g += (this.wilted[1] - g) * f;
+                b += (this.wilted[2] - b) * f;
+              }
             }
             // Soft edges: cells with open air on several sides are see-through.
             let open = 0;
@@ -303,6 +319,11 @@ export class Renderer {
           r = tab[s * 3];
           g = tab[s * 3 + 1];
           b = tab[s * 3 + 2];
+          const c = w.orgs.get(w.org[i]);
+          if (c && c.kind === "creature") {
+            r += c.genes.tint * TINT;
+            b -= c.genes.tint * TINT;
+          }
           if (t === SLIME) {
             // A soft, glistening mass: lighter on top, see-through at the edges.
             if (above !== SLIME) {

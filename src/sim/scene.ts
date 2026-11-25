@@ -1,4 +1,5 @@
 import { EMPTY, SAND, SEED, SOIL, STONE, WATER } from "./cells";
+import { packSeed, plantGenesOf } from "./genes";
 import { applyTool } from "./tools";
 import { computeLight, emptyWorld, H, SCALE, setCell, W, type World } from "./world";
 
@@ -84,6 +85,7 @@ export function createWorld(seed: number): World {
       setCell(w, j, SEED);
       w.kind[j] = species;
       w.food[j] = 1;
+      w.org[j] = packSeed(plantGenesOf(w.plantSpecies[species]));
       break;
     }
   }

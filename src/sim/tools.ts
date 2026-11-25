@@ -1,5 +1,6 @@
 import { EMPTY, FEED, SAND, SEED, SOIL, WATER } from "./cells";
 import { spawnCreature } from "./creatures";
+import { packSeed, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { clearCell, H, SCALE, setCell, W, type World } from "./world";
 
@@ -50,6 +51,7 @@ export function applyTool(w: World, tool: Tool, cx: number, cy: number, species 
       setCell(w, i, SEED);
       w.kind[i] = Math.min(species, w.plantSpecies.length - 1);
       w.food[i] = 1;
+      w.org[i] = packSeed(plantGenesOf(w.plantSpecies[w.kind[i]]));
       break;
     }
     case "water":
