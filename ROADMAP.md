@@ -53,7 +53,7 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer
 - [x] **4. Nedbrytere.** Meitemark og sopp. Vann som fordamper. Kretsløpet er lukket.
 - [x] **5. Tid.** Automatisk lagring, spoling når du kommer tilbake, app på hjemskjermen. Første gang er glasset allerede i gang.
 - [x] **6. Menyen.** Alt i menyen og full utviklermodus.
-- [ ] **7. Lag din egen.** «＋» sist i frø- og krypvelgeren: farge, høyde og greiner for planter, farge og mat for kryp.
+- [x] **7. Lag din egen.** «＋» sist i frø- og krypvelgeren: farge, høyde og greiner for planter, farge og mat for kryp.
 - [ ] **8. Vi tester sammen.** Lenke, skjermbilder og sjekkliste.
 
 ## Senere

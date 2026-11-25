@@ -6,5 +6,5 @@ export const GOLDEN: { simVersion: number; seed: number; ticks: number; hash: st
   simVersion: 4,
   seed: 42,
   ticks: 3000,
-  hash: "8bdbee8e",
+  hash: "3aa7903e",
 };

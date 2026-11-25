@@ -23,7 +23,8 @@ export class Picker {
     this.el.hidden = true;
   }
 
-  setItems(items: PickerItem[], selected: number): void {
+  /** Sets the choices; with `onNew`, a last «＋ Ny» item makes a new one. */
+  setItems(items: PickerItem[], selected: number, onNew?: { label: string; open: () => void }): void {
     this.el.replaceChildren();
     this.items = items.map((item, k) => {
       const b = document.createElement("button");
@@ -41,6 +42,24 @@ export class Picker {
       this.el.append(b);
       return b;
     });
+    if (onNew) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pick new";
+      b.setAttribute("aria-label", onNew.label);
+      const plus = document.createElement("span");
+      plus.className = "plus";
+      plus.textContent = "+";
+      plus.setAttribute("aria-hidden", "true");
+      const name = document.createElement("span");
+      name.textContent = onNew.label;
+      b.append(plus, name);
+      b.addEventListener("click", () => {
+        this.close();
+        onNew.open();
+      });
+      this.el.append(b);
+    }
     this.select(selected);
   }
 

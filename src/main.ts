@@ -1,8 +1,24 @@
-import { applyTool, createWorld, H, stepWorld, stepWorldN, TICKS_PER_SECOND, type Tool, totalUnits, totalWater, W, type World } from "./sim";
+import {
+  addCreatureSpecies,
+  addPlantSpecies,
+  applyTool,
+  createWorld,
+  H,
+  stepWorld,
+  stepWorldN,
+  TICKS_PER_SECOND,
+  type Tool,
+  totalUnits,
+  totalWater,
+  W,
+  type World,
+} from "./sim";
+import { Creator } from "./ui/creator";
 import { DevPanel, type DevState } from "./ui/dev";
 import { creatureIcon, plantIcon } from "./ui/icons";
 import { attachInput } from "./ui/input";
 import { Menu } from "./ui/menu";
+import { loadLibrary, saveLibrary } from "./ui/library";
 import { Picker } from "./ui/picker";
 import { loadSettings, saveSettings } from "./ui/settings";
 import { forgetHistory, loadHistory, record, SAMPLE_EVERY, saveHistory } from "./ui/stats";
@@ -14,7 +30,7 @@ import { Camera } from "./view/camera";
 import { darken, lighten } from "./view/palette";
 import { Renderer } from "./view/renderer";
 
-const APP_VERSION = "0.6";
+const APP_VERSION = "0.7";
 
 const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get("seed"));
@@ -38,6 +54,10 @@ if (saved) {
   catchUp = { left: n, total: n };
 } else {
   world = createWorld(seed);
+  // Species the player has made before come along into a new glass.
+  const lib = loadLibrary();
+  for (const sp of lib.plants) addPlantSpecies(world, sp);
+  for (const sp of lib.creatures) addCreatureSpecies(world, sp);
   // A new glass is already a couple of minutes old: seeds have sprouted.
   stepWorldN(world, 2 * 60 * TICKS_PER_SECOND);
 }
@@ -76,15 +96,47 @@ const light = (c: string) => lighten(c, 0.25);
 const dark = (c: string) => darken(c, 0.2);
 
 const seedPicker = new Picker(t.seeds, (k) => (plantSpecies = k));
-seedPicker.setItems(
-  world.plantSpecies.map((sp) => ({ label: sp.name, icon: plantIcon(sp.form, sp.colors, light, dark) })),
-  plantSpecies,
-);
 const creaturePicker = new Picker(t.creatures, (k) => (creatureSpecies = k));
-creaturePicker.setItems(
-  world.creatureSpecies.map((sp) => ({ label: sp.name, icon: creatureIcon(sp.diet, sp.color, light, dark) })),
-  creatureSpecies,
-);
+const creator = new Creator(light, dark);
+
+/** The last item in each row makes a new species, which joins the row and is chosen. */
+function fillPickers(): void {
+  seedPicker.setItems(
+    world.plantSpecies.map((sp) => ({ label: sp.name, icon: plantIcon(sp.form, sp.colors, light, dark) })),
+    plantSpecies,
+    {
+      label: t.creator.newItem,
+      open: () =>
+        creator.openPlant(world.plantSpecies.length - 2, (sp) => {
+          const k = addPlantSpecies(world, sp);
+          if (k < 0) return;
+          const lib = loadLibrary();
+          lib.plants.push(world.plantSpecies[k]);
+          saveLibrary(lib);
+          plantSpecies = k;
+          fillPickers();
+        }),
+    },
+  );
+  creaturePicker.setItems(
+    world.creatureSpecies.map((sp) => ({ label: sp.name, icon: creatureIcon(sp.diet, sp.color, light, dark) })),
+    creatureSpecies,
+    {
+      label: t.creator.newItem,
+      open: () =>
+        creator.openCreature(world.creatureSpecies.length - 2, (sp) => {
+          const k = addCreatureSpecies(world, sp);
+          if (k < 0) return;
+          const lib = loadLibrary();
+          lib.creatures.push(world.creatureSpecies[k]);
+          saveLibrary(lib);
+          creatureSpecies = k;
+          fillPickers();
+        }),
+    },
+  );
+}
+fillPickers();
 /** Tools that come with a row for choosing what to use. */
 const pickers: Partial<Record<Tool, Picker>> = { seed: seedPicker, creature: creaturePicker };
 const closePickers = () => Object.values(pickers).forEach((p) => p.close());
@@ -97,7 +149,7 @@ const toolbar = new Toolbar(TOOLS, tool, (id, again) => {
   // Choosing seeds or creatures opens their row; tapping the tool again closes it.
   if (picker && !(again && wasOpen)) picker.openAt(toolbar.centerOf(tool), toolbar.el.offsetHeight + 4);
 });
-app.append(toolbar.el, seedPicker.el, creaturePicker.el);
+app.append(toolbar.el, seedPicker.el, creaturePicker.el, creator.el);
 
 /** What the tool uses: the chosen seed or creature. */
 const choice = () => (tool === "creature" ? creatureSpecies : plantSpecies);
@@ -171,6 +223,7 @@ attachInput(
   {
     start(x, y) {
       closePickers();
+      creator.close();
       if (menu.isOpen) menu.close();
       if (settings.vibration && navigator.vibrate) navigator.vibrate(8);
       // A creature is let go once per tap; the other tools keep going while held.
