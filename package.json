@@ -2,7 +2,7 @@
   "name": "morphogen",
   "version": "0.0.1",
   "private": true,
-  "description": "Design organisms from a genome and let them compete in a petri dish.",
+  "description": "Et lite terrarium i pikselgrafikk, sett fra siden.",
   "type": "module",
   "scripts": {
     "dev": "vite",
