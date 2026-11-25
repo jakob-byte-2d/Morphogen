@@ -1,0 +1,105 @@
+import { describe, expect, it } from "vitest";
+import {
+  applyTool,
+  createWorld,
+  FEED,
+  FLOWER,
+  H,
+  hashWorld,
+  LEAF,
+  loadWorld,
+  PLANT_PART,
+  ROOT,
+  saveWorld,
+  SAND,
+  SEED,
+  setCell,
+  SLIME,
+  SOIL,
+  START_TICKS,
+  STEM,
+  stepWorldN,
+  totalUnits,
+  W,
+  WASTE,
+  WATER,
+} from "../src/sim";
+import { emptyWorld, type World } from "../src/sim/world";
+
+const at = (x: number, y: number) => y * W + x;
+
+/** A bed of soil with one grown bush in the middle. */
+function bushBed(): World {
+  const w = emptyWorld(14);
+  for (let y = H - 30; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      setCell(w, at(x, y), SOIL);
+      w.wet[at(x, y)] = 140;
+      w.food[at(x, y)] = 6;
+    }
+  setCell(w, at(72, H - 31), SEED);
+  w.kind[at(72, H - 31)] = 2;
+  w.food[at(72, H - 31)] = 1;
+  stepWorldN(w, 1500);
+  return w;
+}
+
+/** Cells of type t lying right on top of a plant's shoot. */
+function onPlants(w: World, types: number[]): number {
+  let n = 0;
+  for (let i = 0; i < W * (H - 1); i++) {
+    const b = w.type[i + W];
+    if (types.includes(w.type[i]) && PLANT_PART[b] && b !== ROOT) n++;
+  }
+  return n;
+}
+
+describe("plants are independent", () => {
+  it("let soil, sand, water, feed and seeds fall through or slide off", () => {
+    const w = bushBed();
+    expect(w.plants.length).toBeGreaterThan(0);
+    const top = Math.min(...w.plants[0].cells.filter((i) => [LEAF, STEM, FLOWER].includes(w.type[i])));
+    const y = ((top / W) | 0) - 6;
+    for (let x = 50; x < 95; x += 3) {
+      applyTool(w, "soil", x, y);
+      applyTool(w, "water", x, y - 6);
+      applyTool(w, "feed", x, y - 10);
+    }
+    setCell(w, at(72, y - 14), SAND);
+    stepWorldN(w, 120);
+    expect(onPlants(w, [SOIL, SAND, WATER, FEED, SEED, WASTE])).toBe(0);
+  });
+
+  it("are not something slime can lie on", () => {
+    const w = bushBed();
+    const top = Math.min(...w.plants[0].cells.filter((i) => [LEAF, STEM, FLOWER].includes(w.type[i])));
+    // Dropped right over the bush, it lands on the ground beside it.
+    applyTool(w, "creature", top % W, 5, 1);
+    stepWorldN(w, 200);
+    expect(onPlants(w, [SLIME])).toBe(0);
+    expect(w.type.includes(SLIME)).toBe(true);
+  });
+});
+
+describe("a new glass", () => {
+  it("gets its bugs and slime once the plants have grown, made from its own nutrients", () => {
+    const w = createWorld(3);
+    const units = totalUnits(w);
+    expect(w.creatures.length).toBe(0);
+    stepWorldN(w, START_TICKS);
+    expect(w.plants.length).toBeGreaterThan(5);
+    expect(w.creatures.some((c) => c.species === 0)).toBe(true);
+    expect(w.creatures.some((c) => c.species === 1)).toBe(true);
+    expect(totalUnits(w)).toBe(units);
+  });
+
+  it("keeps animals still to come when it is saved", () => {
+    const a = createWorld(4);
+    stepWorldN(a, 1000);
+    const b = loadWorld(JSON.parse(JSON.stringify(saveWorld(a))))!;
+    expect(b.arrivals).toEqual(a.arrivals);
+    stepWorldN(a, START_TICKS);
+    stepWorldN(b, START_TICKS);
+    expect(hashWorld(b)).toBe(hashWorld(a));
+  });
+});

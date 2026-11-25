@@ -3,8 +3,8 @@
  * alters it without meaning to change the rules, it is a bug.
  */
 export const GOLDEN: { simVersion: number; seed: number; ticks: number; hash: string } = {
-  simVersion: 10,
+  simVersion: 11,
   seed: 42,
   ticks: 3000,
-  hash: "b3b70fae",
+  hash: "48d93a31",
 };

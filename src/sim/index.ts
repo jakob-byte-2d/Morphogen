@@ -1,6 +1,6 @@
 export * from "./cells";
 export * from "./world";
-export { createWorld } from "./scene";
+export { createWorld, START_TICKS } from "./scene";
 export { addCreatureSpecies, addPlantSpecies, applyTool, MAX_SPECIES, type Tool } from "./tools";
 export { hashWorld } from "./hash";
 export { GOLDEN } from "./golden";

@@ -1,5 +1,5 @@
 import { EMPTY, FEED, SEED, SOIL, WATER } from "./cells";
-import { spawnCreature } from "./creatures";
+import { releaseCreature } from "./creatures";
 import { packSeed, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { clearCell, H, SCALE, setCell, W, type World } from "./world";
@@ -72,59 +72,6 @@ export function applyTool(w: World, tool: Tool, cx: number, cy: number, species 
         if (w.type[i] !== EMPTY) clearCell(w, i);
       });
       break;
-  }
-}
-
-/**
- * Lets a creature go at (cx, cy): it lands on whatever is below the finger.
- * Plant eaters come as a little group, creature eaters as a small mass.
- */
-/** The empty cell where something dropped at (x, y) comes to rest, or -1 over water. */
-function landing(w: World, x: number, y: number): number {
-  while (y < H - 1 && w.type[(y + 1) * W + x] === EMPTY) y++;
-  const i = y * W + x;
-  if (w.type[i] !== EMPTY) return -1;
-  return y < H - 1 && w.type[i + W] === WATER ? -1 : i;
-}
-
-function releaseCreature(w: World, cx: number, cy: number, species: number): void {
-  if (cx < 0 || cx >= W || cy < 0 || cy >= H) return;
-  const sp = w.creatureSpecies[Math.min(species, w.creatureSpecies.length - 1)];
-  const k = w.creatureSpecies.indexOf(sp);
-  // Over water? Let it go on the nearest dry spot instead.
-  for (let d = 0; d < W; d++) {
-    const x = cx + (d % 2 === 0 ? d >> 1 : -((d + 1) >> 1));
-    if (x < 0 || x >= W) continue;
-    if (landing(w, x, cy) >= 0) {
-      cx = x;
-      break;
-    }
-  }
-  let y = cy;
-  while (y < H - 1 && w.type[(y + 1) * W + cx] === EMPTY) y++;
-  if (w.type[y * W + cx] !== EMPTY) return;
-  if (sp.diet === "plants") {
-    for (const dx of [0, -2 * SCALE, 2 * SCALE]) {
-      const x = cx + dx;
-      if (x < 0 || x >= W) continue;
-      let yy = cy;
-      while (yy < H - 1 && w.type[(yy + 1) * W + x] === EMPTY) yy++;
-      const i = yy * W + x;
-      if (w.type[i] === EMPTY) spawnCreature(w, k, [i], 120);
-    }
-  } else {
-    // A small low mound: each cell of the shape is SCALE × SCALE cells.
-    const cells: number[] = [];
-    for (const [ux, uy] of [[0, 0], [-1, 0], [1, 0], [0, -1], [-2, 0], [2, 0]])
-      for (let a = 0; a < SCALE; a++)
-        for (let b = 0; b < SCALE; b++) {
-          const x = cx + ux * SCALE + a;
-          const yy = y + uy * SCALE - b;
-          if (x < 0 || x >= W || yy < 0) continue;
-          const i = yy * W + x;
-          if (w.type[i] === EMPTY) cells.push(i);
-        }
-    if (cells.length > 0) spawnCreature(w, k, cells, 320);
   }
 }
 

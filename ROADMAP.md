@@ -61,7 +61,7 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer
 - [x] **12. Jorda blir.** Døde røtter og meitemark blir jord igjen, og begravd avfall blir av og til humus, så jorda ikke spises opp. Steiner uten noe under faller. Fuktig jord fordamper litt, og fukt trekkes lettere opp, så overflaten ikke tørker ut.
 - [x] **13. Grunnvann, ingen steiner.** Under grunnvannsnivået er jorda gjennomvåt, og der den møter lufta siver vannet ut, så dammen står like høyt som grunnvannet. Vanner du mye, stiger det; tørker glasset, synker det. Meitemark lever sparsomt av næringen i jorda når det ikke er avfall.
 - [x] **14. Uten meitemark.** Meitemarken er borte; sopp og råte bryter ned det som dør, og avfallshauger råtner ned i jorda. Startglasset har bare jord, i den nederste firedelen.
-- [ ] **15. Balansert start.** Glasset starter med planter, bladlus og slim i et antall som holder seg uten at du gjør noe.
+- [x] **15. Uavhengige planter, dyr fra start.** Ingenting legger seg oppå plantene: jord, sand, vann, frø, fôr, avfall og slim faller gjennom dem eller glir av (bladlus kan fortsatt klatre på dem). Et nytt glass sås med ni planter, og når de har vokst, kommer det bladlus og et lite slim, laget av næring fra jorda. Oppstarten spoles fram før du ser glasset. (Balansen er ikke justert.)
 
 ## Senere
 

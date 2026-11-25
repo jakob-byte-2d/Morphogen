@@ -16,6 +16,29 @@ function heights(w: World, base: number, spread: number, step: number): Int16Arr
   return out;
 }
 
+/** The plants a new glass is sown with: [column in units, species]. */
+const START_PLANTS: [number, number][] = [
+  [4, 0],
+  [8, 1],
+  [12, 2],
+  [16, 0],
+  [55, 0],
+  [59, 1],
+  [63, 2],
+  [67, 0],
+  [70, 1],
+];
+
+/** The animals let in once the plants have grown: when, which, and where (in units). */
+const START_ANIMALS = [
+  { tick: 1800, species: 0, x: 12 },
+  { tick: 1800, species: 0, x: 63 },
+  { tick: 2400, species: 1, x: 60 },
+];
+
+/** How far a new glass is run before the player sees it: the animals are in, and settled. */
+export const START_TICKS = 2700;
+
 /**
  * A fresh glass: moist soil in the bottom quarter, with a wide dip in it,
  * and air above. The groundwater stands a little below the surface; where
@@ -46,7 +69,7 @@ export function createWorld(seed: number): World {
       if (y >= top) {
         setCell(w, i, SOIL);
         // Soaked below the table, moist above it, and dry at the far left.
-        const dry = x < 10 * S && y < top + 6 * S;
+        const dry = x < 3 * S && y < top + 4 * S;
         w.wet[i] = y >= table ? MAX_WET : dry ? 25 + w.rng.below(20) : 120 + w.rng.below(30);
         // The glass has AREA times as many cells as at scale 1, so each holds
         // a little less: plants, which are lines more than areas, have only
@@ -55,13 +78,8 @@ export function createWorld(seed: number): World {
       } else if (y >= table) setCell(w, i, WATER);
     }
   }
-  // A few seeds on the ground, so the glass comes to life by itself.
-  for (const [x, species] of [
-    [7, 0],
-    [14, 1],
-    [59, 2],
-    [66, 0],
-  ]) {
+  // Plants on both sides of the pond, so the glass comes to life by itself.
+  for (const [x, species] of START_PLANTS) {
     for (let y = 1; y < H; y++) {
       const i = y * W + x * S;
       if (w.type[i] === EMPTY) continue;
@@ -73,6 +91,9 @@ export function createWorld(seed: number): World {
       break;
     }
   }
+  // Once they have grown a little, the animals come: bugs onto the bushes,
+  // then a little slime on the ground.
+  for (const a of START_ANIMALS) w.arrivals.push({ tick: a.tick, species: a.species, x: a.x * S });
   computeLight(w);
   return w;
 }

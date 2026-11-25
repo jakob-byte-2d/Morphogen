@@ -4,6 +4,7 @@ export const t = {
   glass: "Terrariet. Dra med én finger for å bruke verktøyet, klyp for å zoome, dobbelttrykk for å zoome inn og ut.",
   tools: "Verktøy",
   catchUp: (percent: number) => `Spoler fram … ${percent} %`,
+  starting: (percent: number) => `Gjør klart glasset … ${percent} %`,
   seeds: "Velg frø",
   creatures: "Velg kryp",
   tool: {

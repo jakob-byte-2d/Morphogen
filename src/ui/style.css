@@ -186,6 +186,7 @@ body {
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .catchup.on {

@@ -1,5 +1,5 @@
 import type { Creature } from "./creatures";
-import { SIZE } from "./dims";
+import { SIZE, W } from "./dims";
 import type { Plant, Tip } from "./plants";
 import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
@@ -48,6 +48,8 @@ export interface SavedGlass {
   humidity: number;
   lostWater: number;
   nextOrgId: number;
+  arrivals?: unknown;
+  leaves?: number;
   cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org" | "light", string>;
   /** Which parts of the glass are at rest; needed to carry on exactly. */
   chunks: string;
@@ -66,6 +68,8 @@ export function saveWorld(w: World): SavedGlass {
     humidity: w.humidity,
     lostWater: w.lostWater,
     nextOrgId: w.nextOrgId,
+    arrivals: w.arrivals.map((a) => ({ ...a })),
+    leaves: w.leaves,
     cells: {
       type: toBase64(w.type),
       shade: toBase64(w.shade),
@@ -129,6 +133,11 @@ export function loadWorld(data: unknown): World | null {
   w.humidity = int(d.humidity, 0, 2 ** 31);
   w.lostWater = int(d.lostWater, 0, 2 ** 31);
   w.nextOrgId = int(d.nextOrgId, 1, MAX_ORG_ID);
+  w.leaves = int(d.leaves, 0, SIZE);
+  w.arrivals = (Array.isArray(d.arrivals) ? d.arrivals : [])
+    .slice(0, 64)
+    .map((r: Record<string, unknown>) => ({ tick: int(r?.tick, 0, 1e9), species: int(r?.species, 0, w.creatureSpecies.length - 1), x: int(r?.x, 0, W - 1) }))
+    .sort((a: { tick: number }, b: { tick: number }) => a.tick - b.tick);
 
   for (const raw of Array.isArray(d.plants) ? d.plants : []) {
     const r = (raw ?? {}) as Record<string, unknown>;
