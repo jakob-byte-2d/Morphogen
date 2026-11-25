@@ -80,7 +80,8 @@ describe("growth", () => {
     const cells = w.plants[0].cells.length;
     for (let i = 0; i < w.wet.length; i++) w.wet[i] = 0;
     w.humidity = 0;
-    stepWorldN(w, 600);
+    // The dew it breathes out keeps it going a little longer, but not for long.
+    for (let k = 0; k < 90 && w.plants.length > 0; k++) stepWorldN(w, 10);
     expect(w.plants.length).toBe(0);
     expect(count(w, WASTE)).toBeGreaterThanOrEqual(cells);
   });

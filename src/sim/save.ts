@@ -127,7 +127,7 @@ export function loadWorld(data: unknown): World | null {
       kind: "plant",
       id: int(r.id, 1, 65535),
       species: int(r.species, 0, plantSpecies.length - 1),
-      energy: int(r.energy, 0, 100000),
+      energy: int(r.energy, -100000, 100000),
       water: int(r.water, 0, 100000),
       store: int(r.store, 0, 100000),
       thirst: int(r.thirst, 0, 1000),

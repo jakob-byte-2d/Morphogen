@@ -62,6 +62,8 @@ export class Renderer {
   /** Colour tables per species and plant part, made when first needed. */
   private speciesTables = new Map<number, Uint8ClampedArray>();
   private sparkles: { i: number; life: number }[] = [];
+  /** Where condensed droplets sit on the glass: x and y as parts of the glass. */
+  private droplets = Array.from({ length: 70 }, (_, k) => [hash(k, 3) / 255, (hash(k, 11) / 255) ** 2]);
   /** Developer view: moisture, nutrients or light laid over the glass. */
   overlay: "none" | "wet" | "food" | "light" = "none";
   private overlayCanvas = document.createElement("canvas");
@@ -157,9 +159,36 @@ export class Renderer {
     ctx.drawImage(this.lightCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.cellCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
+    this.drawMist(ctx, w);
     if (this.overlay !== "none") {
       this.drawOverlay(w);
       ctx.drawImage(this.overlayCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
+    }
+  }
+
+  /**
+   * Moist air shows as a faint haze and still droplets on the glass near the
+   * top. Only a picture: the water itself is counted in w.humidity.
+   */
+  private drawMist(ctx: CanvasRenderingContext2D, w: World): void {
+    const a = Math.min(0.5, Math.max(0, (w.humidity - 150) / 1500));
+    if (a <= 0.01) return;
+    const cam = this.camera;
+    const k = this.screen.width / cam.width;
+    const s = cam.scale * k;
+    const x0 = cam.offsetX * k;
+    const y0 = cam.offsetY * k;
+    const g = ctx.createLinearGradient(0, y0, 0, y0 + H * 0.35 * s);
+    g.addColorStop(0, `rgba(240, 226, 232, ${(0.35 * a).toFixed(3)})`);
+    g.addColorStop(1, "rgba(240, 226, 232, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, y0, W * s, H * 0.35 * s);
+    ctx.fillStyle = `rgba(250, 240, 245, ${(0.8 * a).toFixed(3)})`;
+    const r = Math.max(1, s * 0.45);
+    for (const [dx, dy] of this.droplets) {
+      // Fewer droplets further down, where the glass is warmer.
+      if (dy > a * 1.6) continue;
+      ctx.fillRect(x0 + dx * W * s, y0 + dy * H * 0.3 * s, r, r);
     }
   }
 
