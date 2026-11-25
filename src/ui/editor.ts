@@ -230,8 +230,10 @@ export class GenomeEditor {
     // Cell type as a row of buttons.
     const types = el("div", { class: "segmented", role: "group" });
     types.setAttribute("aria-label", t.cellType);
-    for (const type of CELL_TYPES) {
-      const button = el("button", { type: "button" }, t.cellTypes[type as CellType]);
+    // Listed in the order of the food chain, as in strings.ts.
+    for (const type of Object.keys(t.cellTypes) as CellType[]) {
+      if (!CELL_TYPES.includes(type)) continue;
+      const button = el("button", { type: "button" }, t.cellTypes[type]);
       button.setAttribute("aria-pressed", String(m.cellType === type));
       button.addEventListener("click", () => {
         for (const b of types.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === button));

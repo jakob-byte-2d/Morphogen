@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ENVIRONMENT,
+  NO_SINKING,
   countOrganisms,
   createWorld,
   makeBond,
@@ -11,7 +12,6 @@ import {
 } from "../src/engine";
 import { indexCells, shareNutrients } from "../src/engine/bonds";
 
-const NO_SINKING = { eater: 0, photo: 0, swim: 0 };
 /** Centre of the glass: tests place cells relative to it, away from the walls. */
 const CX = DEFAULT_ENVIRONMENT.tankWidth / 2;
 const CY = DEFAULT_ENVIRONMENT.tankHeight / 2;
@@ -28,7 +28,7 @@ function emptyWorld(overrides: Partial<Environment> = {}): World {
 
 /** A cell of the default genome (eaters), at (x, y) from the centre. Mode 0 divides into a bonded pair. */
 function cell(id: number, x: number, y: number, mass: number, mode = 0): Cell {
-  return { id, species: 0, mode, type: "eater", x: CX + x, y: CY + y, vx: 0, vy: 0, mass, angle: 0, age: 0 };
+  return { id, species: 0, mode, type: "eater", x: CX + x, y: CY + y, vx: 0, vy: 0, mass, angle: 0, age: 0, organism: id, anchored: false };
 }
 
 function place(w: World, cells: Cell[], bonds: [number, number][] = []): void {

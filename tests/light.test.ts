@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ENVIRONMENT,
+  NO_SINKING,
   createWorld,
   mode,
   stepWorld,
@@ -29,7 +30,7 @@ function world(env: Partial<Environment>, cellType: "eater" | "photo"): World {
 
 function cellAt(w: World, id: number, x: number, y: number, mass: number): Cell {
   const type = w.genomes[0].modes[0].cellType;
-  return { id, species: 0, mode: 0, type, x, y, vx: 0, vy: 0, mass, angle: 0, age: 0 };
+  return { id, species: 0, mode: 0, type, x, y, vx: 0, vy: 0, mass, angle: 0, age: 0, organism: id, anchored: false };
 }
 
 describe("light", () => {
@@ -64,7 +65,7 @@ describe("light", () => {
   });
 
   it("light fades with depth", () => {
-    const w = world({ sink: { eater: 0, photo: 0, swim: 0 } }, "photo");
+    const w = world({ sink: NO_SINKING }, "photo");
     w.cells = [cellAt(w, 1, 50, 40, 100), cellAt(w, 2, 250, 400, 100)];
     w.nextId = 3;
     indexCells(w);
@@ -74,7 +75,7 @@ describe("light", () => {
   });
 
   it("a cell shades the cells below it in the same column", () => {
-    const w = world({ sink: { eater: 0, photo: 0, swim: 0 } }, "photo");
+    const w = world({ sink: NO_SINKING }, "photo");
     // Cells 1 and 2 share a column, 2 lies under 1. Cell 3 is alone at the same depth as 2.
     w.cells = [cellAt(w, 1, 110, 60, 100), cellAt(w, 2, 110, 120, 100), cellAt(w, 3, 210, 120, 100)];
     w.nextId = 4;

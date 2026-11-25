@@ -6,3 +6,4 @@ export { hashWorld } from "./hash";
 export { Rng, type RngState } from "./rng";
 export * from "./genome";
 export { GOLDEN } from "./golden";
+export { addNutrient, nutrientAt, totalMatter } from "./nutrients";

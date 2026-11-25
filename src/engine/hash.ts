@@ -20,6 +20,7 @@ export function hashWorld(w: World): string {
 
   mixNumber(w.tick);
   mixNumber(w.nextId);
+  mixNumber(w.nextOrganism);
   mixNumber(w.foodAccumulator);
   for (const s of w.rng.getState()) mixNumber(s);
 
@@ -36,6 +37,8 @@ export function hashWorld(w: World): string {
     mixNumber(c.mass);
     mixNumber(c.angle);
     mixNumber(c.age);
+    mixNumber(c.organism);
+    mixNumber(c.anchored ? 1 : 0);
   }
 
   mixNumber(w.bonds.length);
@@ -53,6 +56,16 @@ export function hashWorld(w: World): string {
     mixNumber(f.vx);
     mixNumber(f.vy);
   }
+
+  mixNumber(w.founderAngle);
+  mixNumber(w.arrivals.length);
+  for (const a of w.arrivals) {
+    mixNumber(a.tick);
+    mixNumber(a.species);
+  }
+
+  mixNumber(w.nutrients.length);
+  for (let i = 0; i < w.nutrients.length; i++) mixNumber(w.nutrients[i]);
 
   return (h >>> 0).toString(16).padStart(8, "0");
 }

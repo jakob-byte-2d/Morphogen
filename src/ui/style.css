@@ -249,12 +249,12 @@ body.editing {
 }
 
 .segmented {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr));
   gap: 0.3rem;
 }
 
 .segmented button {
-  flex: 1;
   padding: 0 0.3rem;
   font-size: 0.85rem;
 }
@@ -317,6 +317,22 @@ body.editing {
 
 .chip.type-swim {
   background: #5a96dc;
+}
+
+.chip.type-root {
+  background: #96693c;
+}
+
+.chip.type-grazer {
+  background: #eba03c;
+}
+
+.chip.type-hunter {
+  background: #dc4b46;
+}
+
+.chip.type-decomposer {
+  background: #9673c8;
 }
 
 .daughter {

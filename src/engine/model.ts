@@ -8,11 +8,14 @@ export interface Environment {
   tankWidth: number;
   /** Water depth. y runs from 0 (water surface) to tankHeight (bottom). */
   tankHeight: number;
-  /** New food particles per second, dropped in at the water surface. */
+  /**
+   * New food particles per second, dropped in at the water surface. This adds
+   * matter from outside, so a closed glass has 0 (feeding is a player action).
+   */
   foodPerSecond: number;
   /** No new food is dropped in while this many particles float in the water (sludge not counted). */
   maxFood: number;
-  /** Mass an eater gains from one food particle. */
+  /** Mass in one particle of food or dead matter. */
   foodMass: number;
   /** Random push food gets every tick (makes it drift like plankton). */
   foodKick: number;
@@ -22,11 +25,16 @@ export interface Environment {
   foodSink: number;
   /** Random sideways step of sludge on the bottom per tick, so eaters there can reach it. */
   sludgeDrift: number;
-  /**
-   * Share of the sludge that dissolves per second. For now it just disappears;
-   * in phase 5 it will turn into nutrients in the water.
-   */
+  /** Share of the sludge that dissolves into nutrients per second, even without decomposers. */
   sludgeDissolve: number;
+  /** Side length of a square in the nutrient grid. */
+  nutrientCellSize: number;
+  /** How fast nutrients spread between neighbouring squares, per tick (0–0.25). */
+  nutrientDiffusion: number;
+  /** Nutrients dissolved in the water of a fresh glass, per square. */
+  initialNutrient: number;
+  /** Largest share of its square's nutrients a light collector can take per tick. */
+  nutrientUptake: number;
   /** Light strength at the water surface, 0 (dark) to 1 (full sun). */
   light: number;
   /** Depth at which the water has swallowed all the light. */
@@ -39,8 +47,16 @@ export interface Environment {
   photoRate: number;
   /** Sinking (positive) or rising (negative) per cell type, as speed gained per second. */
   sink: Record<CellType, number>;
-  /** Mass every cell burns per second. */
+  /** Mass every cell burns per second. It is released as nutrients. */
   metabolism: number;
+  /** Share of what an eater, grazer or hunter eats that becomes its own mass. The rest becomes nutrients. */
+  digestEfficiency: number;
+  /** Share of dead matter a decomposer keeps for itself. The rest becomes nutrients. */
+  decomposerShare: number;
+  /** Mass a grazer can bite off plant cells per second. */
+  grazeRate: number;
+  /** Mass a hunter can bite off animal cells per second. */
+  huntRate: number;
   /** A cell dies below this mass. */
   minMass: number;
   /** No cell grows heavier than this; extra food is wasted. */
@@ -75,7 +91,7 @@ export interface Environment {
  * Cell types. The order is part of the save format and the hash: only ever
  * add new types at the end.
  */
-export const CELL_TYPES = ["eater", "photo", "swim"] as const;
+export const CELL_TYPES = ["eater", "photo", "swim", "root", "grazer", "hunter", "decomposer"] as const;
 export type CellType = (typeof CELL_TYPES)[number];
 
 export interface Cell {
@@ -95,6 +111,15 @@ export interface Cell {
   angle: number;
   /** Age in ticks. */
   age: number;
+  /** Which organism the cell belongs to. Daughters that stay attached keep it; buds get a new one. */
+  organism: number;
+  /** A root that has settled on the bottom and is fixed there for good. */
+  anchored: boolean;
+}
+
+/** Plant cells: grazers eat these, hunters do not. */
+export function isPlant(type: CellType): boolean {
+  return type === "photo" || type === "root";
 }
 
 /**
@@ -152,6 +177,10 @@ export interface Scratch {
   divisions: Map<number, Division>;
   /** Cell id -> number of bonds, while bonds are rebuilt. */
   bondDegree: Map<number, number>;
+  /** Bite left this tick for each grazer and hunter, per cell index. */
+  appetite: Float64Array;
+  /** Next-step buffer for nutrient diffusion. */
+  nutrientNext: Float64Array;
   /** Light reaching each cell this tick, per cell index (0–1). */
   light: Float64Array;
   /** Sort key (column and depth) per cell index, for the light calculation. */
@@ -173,7 +202,17 @@ export interface World {
   cells: Cell[];
   food: Food[];
   bonds: Bond[];
+  /** Nutrients dissolved in the water, one value per grid square, row by row. */
+  nutrients: Float64Array;
+  /** Size of the nutrient grid. */
+  readonly nutrientCols: number;
+  readonly nutrientRows: number;
   nextId: number;
+  nextOrganism: number;
+  /** Species still to be released into the glass, sorted by tick. */
+  arrivals: { tick: number; species: number }[];
+  /** Starting orientation of founders, so late arrivals match early ones. */
+  founderAngle: number;
   /** Fractional food carried over between ticks. */
   foodAccumulator: number;
   /** Reusable lookup structures. Not part of the simulation state. */

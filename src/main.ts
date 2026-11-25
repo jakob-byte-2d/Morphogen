@@ -1,6 +1,6 @@
 import { DT, countOrganisms, createWorld, stepWorld, type Genome, type World } from "./engine";
 import { decodeGenome, encodeGenome } from "./genome/codec";
-import { DEFAULT_PRESET, PRESETS, PRESET_IDS, isPresetId, type PresetId } from "./genome/presets";
+import { DEFAULT_SCENE, PRESETS, SCENES, SCENE_IDS, isSceneId, type SceneId } from "./genome/presets";
 import { GenomeEditor } from "./ui/editor";
 import { render } from "./ui/renderer";
 import { strings } from "./ui/strings";
@@ -15,7 +15,7 @@ const FRAME_BUDGET_MS = 12;
 const CUSTOM = "custom";
 const STORAGE_KEY = "morphogen.customGenome";
 
-type Choice = PresetId | typeof CUSTOM;
+type Choice = SceneId | typeof CUSTOM;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#dish")!;
 const stats = document.querySelector<HTMLDivElement>("#stats")!;
@@ -64,11 +64,12 @@ let customGenome: Genome | null = (linked ? decodeGenome(linked) : null) ?? load
 let choice: Choice = (() => {
   const value = params.get("genome");
   if (value === CUSTOM && customGenome) return CUSTOM;
-  return isPresetId(value) ? value : DEFAULT_PRESET;
+  return isSceneId(value) ? value : DEFAULT_SCENE;
 })();
 
-function currentGenome(): Genome {
-  return choice === CUSTOM && customGenome ? customGenome : PRESETS[choice as PresetId];
+/** The species a fresh glass starts with. */
+function currentGenomes(): Genome[] {
+  return choice === CUSTOM && customGenome ? [customGenome] : SCENES[choice as SceneId].genomes;
 }
 
 function urlFor(seed: number, c: Choice, genome: Genome | null): URL {
@@ -87,7 +88,8 @@ let accumulator = 0;
 let lastTime = performance.now();
 
 function makeWorld(seed: number): World {
-  const w = createWorld(seed, { genomes: [currentGenome()] });
+  const scene = choice === CUSTOM ? undefined : SCENES[choice as SceneId];
+  const w = createWorld(seed, { genomes: currentGenomes(), arrivals: scene?.arrivals });
   history.replaceState(null, "", urlFor(seed, choice, customGenome));
   accumulator = 0;
   return w;
@@ -95,8 +97,8 @@ function makeWorld(seed: number): World {
 
 function fillPresetSelect(): void {
   presetSelect.replaceChildren();
-  for (const id of PRESET_IDS) {
-    presetSelect.append(new Option(PRESETS[id].name, id));
+  for (const id of SCENE_IDS) {
+    presetSelect.append(new Option(SCENES[id].name, id));
   }
   if (customGenome) {
     presetSelect.append(new Option(customGenome.name || strings.editor.custom, CUSTOM));
@@ -130,7 +132,7 @@ function updateButtons(): void {
 presetSelect.addEventListener("change", () => {
   const value = presetSelect.value;
   if (value === CUSTOM && customGenome) choice = CUSTOM;
-  else if (isPresetId(value)) choice = value;
+  else if (isSceneId(value)) choice = value;
   else return;
   // Same seed, new organism: easy to compare organisms in the same dish.
   world = makeWorld(world.seed);
@@ -150,7 +152,9 @@ resetButton.addEventListener("click", () => {
   world = makeWorld(newSeed());
 });
 
-editButton.addEventListener("click", () => editor.open(currentGenome()));
+// The editor works on one genome: your own if you have one, otherwise the
+// first species in the glass.
+editButton.addEventListener("click", () => editor.open(customGenome ?? currentGenomes()[0]));
 
 function frame(now: number): void {
   // Real time only decides HOW MANY fixed ticks to run. The simulation itself

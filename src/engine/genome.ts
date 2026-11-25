@@ -135,7 +135,7 @@ export function mode(fields: Partial<Mode>): Mode {
  */
 export const DEFAULT_GENOME: Genome = {
   version: GENOME_VERSION,
-  name: "Spiserklump",
+  name: "Åtselklump",
   startMode: 0,
   modes: [
     mode({ childModes: [1, 1] }),

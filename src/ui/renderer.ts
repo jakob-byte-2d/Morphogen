@@ -22,6 +22,10 @@ const CELL_FILL: Record<CellType, [string, string]> = {
   eater: ["rgba(110, 205, 170, 0.55)", "rgba(150, 225, 190, 0.75)"],
   photo: ["rgba(120, 190, 60, 0.6)", "rgba(185, 225, 80, 0.8)"],
   swim: ["rgba(90, 150, 220, 0.6)", "rgba(140, 185, 240, 0.8)"],
+  root: ["rgba(150, 105, 60, 0.75)", "rgba(185, 135, 80, 0.85)"],
+  grazer: ["rgba(235, 160, 60, 0.6)", "rgba(250, 195, 105, 0.8)"],
+  hunter: ["rgba(220, 75, 70, 0.6)", "rgba(245, 120, 110, 0.8)"],
+  decomposer: ["rgba(150, 115, 200, 0.6)", "rgba(185, 155, 230, 0.8)"],
 };
 
 /** Glass thickness and the air gap above the water, in world units. */

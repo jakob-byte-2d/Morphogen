@@ -1,5 +1,6 @@
 import {
   DEFAULT_ENVIRONMENT,
+  NO_SINKING,
   Rng,
   createWorld,
   makeBond,
@@ -28,7 +29,7 @@ export function crowdedWorld(count: number): World {
     metabolism: 0,
     maxCells: count,
     // No sinking, so the cells stay spread out while we measure.
-    sink: { eater: 0, photo: 0, swim: 0 },
+    sink: NO_SINKING,
   };
   const genome = {
     version: 1,
@@ -56,6 +57,8 @@ export function crowdedWorld(count: number): World {
       mass: 150,
       angle: a,
       age: 0,
+      organism: Math.floor(i / 4) + 1,
+      anchored: false,
     });
     if (i % 4 !== 0) bonds.push(makeBond(cells[i - 1], cells[i]));
   }

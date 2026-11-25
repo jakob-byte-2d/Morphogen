@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ENVIRONMENT,
+  NO_SINKING,
   createWorld,
   makeBond,
   mode,
@@ -37,7 +38,7 @@ function dish(): World {
       light: 0,
       metabolism: 0,
       swimCost: 0,
-      sink: { eater: 0, photo: 0, swim: 0 },
+      sink: NO_SINKING,
     },
     genomes: [
       {
@@ -64,6 +65,8 @@ function cell(id: number, x: number, y: number, angle: number, swim = false): Ce
     mass: 100,
     angle,
     age: 0,
+    organism: id,
+    anchored: false,
   };
 }
 
