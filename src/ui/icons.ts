@@ -57,14 +57,14 @@ export function plantIcon(form: string, colors: { leaf: string; stem: string; fl
 
 /** Creature icons by diet, coloured from the species. */
 const CREATURE_ICONS: Record<string, string[]> = {
-  plants: ["           ", "   k   k   ", "    k k    ", "   aaaaa   ", "  aAaaaaa  ", " kaaaaaaak ", "  aaaaaaa  ", " k aaaaa k "],
+  litter: ["           ", "           ", "    hhhh   ", "k  haAaAa  ", " kaAaAaAaa ", " aAaAaAaAaa", "  k k k k  "],
   creatures: ["           ", "    yyy    ", "  yhyyYyy  ", " yhyyyyyYy ", "yyyyYyyyyyy", "YyyyyyyYyyY", " YYYyyYYY  "],
 };
 
 export function creatureIcon(diet: string, color: string, light: (c: string) => string, dark: (c: string) => string): Icon {
   return {
     c: { a: color, A: dark(color), y: color, Y: dark(color), h: light(color), k: INK, p: color, P: dark(color), d: "#352a33" },
-    r: CREATURE_ICONS[diet] ?? CREATURE_ICONS.plants,
+    r: CREATURE_ICONS[diet] ?? CREATURE_ICONS.litter,
   };
 }
 

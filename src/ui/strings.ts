@@ -32,9 +32,9 @@ export const t = {
     speed: "Fart",
   },
   info: {
-    text: "Et lite terrarium der hver rute er én celle. Plantene vokser mot lyset, krypene spiser dem, alt som dør blir avfall, og sopp og råte gjør avfallet om til næring igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
-    cycle: ["Planter", "Bladlus", "Slim", "Avfall", "Mark og sopp"],
-    cycleNote: "Lys og vann driver det hele. Litt vann slipper ut, så glasset må vannes av og til.",
+    text: "Et lite terrarium der hver rute er én celle. Plantene bygger seg av lys, vann og næring fra jorda og vokser seg stadig større. Gamle blader faller av, skrukketrollene spiser dem og bæsjer næring ned i jorda, og slimet spiser skrukketrollene. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
+    cycle: ["Planter", "Visne blader", "Skrukketroll", "Slim", "Jord"],
+    cycleNote: "Lyset gir ny næring, og dyrene puster ut noe av den igjen. Litt vann slipper ut, så glasset må vannes av og til.",
     version: (app: string, sim: number) => `Versjon ${app} · motor ${sim}`,
     devOn: "Utviklermodus er på",
     devOff: "Utviklermodus er av",
@@ -45,7 +45,7 @@ export const t = {
     creatures: "Kryp",
     water: "Vann i glasset",
     soilFood: "Næring i jorda",
-    waste: "Avfall og sopp",
+    waste: "Visne blader",
     records: "Rekorder",
     glass: "Glasset",
     oldestPlant: (min: number) => `Eldste plante: ${min} min`,
@@ -61,12 +61,11 @@ export const t = {
     (({ growth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", mutation: "Mutasjon" }) as Record<string, string>)[k] ?? k,
   speciesNow: (n: number, text: string) => `Nå, snitt av ${n}: ${text}`,
   about: {
-    grass: "Lavt og raskt. Trenger lys, vann og næring.",
-    flower: "Én stengel med blomst som slipper frø.",
-    bush: "Høy og greinete. Lever lenge.",
-    plants: "Spiser blader, blomster og fôr. Holder seg i plantene.",
-    creatures: "Kryper langs bakken og spiser kryp og fôr.",
-    fungus: "Sopp kommer av seg selv på fuktig avfall og gjør det om til næring.",
+    grass: "Lavt og tett. Brer seg utover.",
+    flower: "Stengler med blomster som slipper frø.",
+    bush: "Vokser seg stor og greinete.",
+    litter: "Spiser visne blader og fôr på bakken og gjødsler jorda.",
+    creatures: "Kryper langs bakken, spiser kryp og fôr og gjødsler jorda. Lever i omtrent tjue minutter.",
   } as Record<string, string>,
   help: {
     water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
@@ -74,7 +73,7 @@ export const t = {
     seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer i fuktig jord.",
     creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe dem ut.",
     feed: "Dryss fôr som krypene kan spise. Fôr som ikke blir spist, råtner.",
-    spade: "Dra for å grave bort jord, avfall eller planter.",
+    spade: "Dra for å grave bort jord, blader eller planter.",
     zoom: "Klyp med to fingre for å zoome og dra med to fingre for å flytte. Dobbelttrykk zoomer inn og ut.",
   } as Record<string, string>,
   newGlass: {
@@ -98,7 +97,7 @@ export const t = {
     branches: "Greiner",
     color: "Farge",
     eats: "Spiser",
-    diets: { plants: "Planter", creatures: "Kryp" } as Record<string, string>,
+    diets: { litter: "Visne blader", creatures: "Kryp" } as Record<string, string>,
     traits: { plantGrowth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", growth: "Vekst", mutation: "Mutasjon" },
     /** What the two ends of each trait mean: the trade-off in a few words. */
     ends: {

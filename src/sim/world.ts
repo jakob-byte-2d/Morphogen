@@ -1,4 +1,4 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, LEAF, PLANT_PART, POROUS, POWDER, ROOT, SAND, SOIL, STONE, WATER } from "./cells";
+import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "./cells";
 import { releaseCreature, updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 11;
+export const SIM_VERSION = 12;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -67,8 +67,9 @@ export interface World {
   readonly wet: Uint8Array;
   /**
    * Nutrients, in units. In soil they are free for roots to take; in a plant
-   * cell, seed or waste they are what the cell is made of. Units are never
-   * created or destroyed by the rules, only moved (see totalUnits).
+   * cell, seed or dead leaf they are what the cell is made of. Plants make
+   * units from light (photosynthesis, counted in `fixed`), and animals burn
+   * them (respiration, counted in `burned`); otherwise they are only moved.
    */
   readonly food: Uint8Array;
   /** Species of a seed, plant cell or creature cell. */
@@ -108,8 +109,13 @@ export interface World {
    * and its animals are let in once the plants have grown a little.
    */
   arrivals: Arrival[];
-  /** Leaves in the glass, counted along with the light (every four steps). */
-  leaves: number;
+  /**
+   * Nutrient units made by plants from light and air, and units burnt (by
+   * animals, and by dead leaves rotting). totalUnits - fixed + burned stays
+   * the same unless the player adds or takes something.
+   */
+  fixed: number;
+  burned: number;
 }
 
 export function emptyWorld(
@@ -140,7 +146,8 @@ export function emptyWorld(
     orgs: new Map(),
     nextOrgId: 1,
     arrivals: [],
-    leaves: 0,
+    fixed: 0,
+    burned: 0,
   };
 }
 
@@ -185,25 +192,6 @@ export function clearCell(w: World, i: number): void {
   w.food[i] = 0;
   w.org[i] = 0;
   w.kind[i] = 0;
-}
-
-/** What counts as being under ground: a cell with one of these above it is buried. */
-const GROUND = new Uint8Array(32);
-for (const t of [SOIL, SAND, STONE, ROOT]) GROUND[t] = 1;
-
-/**
- * Waste or fungus that has given up all it had. On the surface it is simply
- * gone; buried in the ground, now and then it has become soil (humus), so
- * the ground builds up a little, slowly, as things live and die on it.
- */
-export function rotAway(w: World, i: number): void {
-  if (i >= W && GROUND[w.type[i - W]] && w.rng.below(4) === 0) {
-    wake(w, i);
-    w.type[i] = SOIL;
-    w.food[i] = 0;
-    w.org[i] = 0;
-    w.kind[i] = 0;
-  } else clearCell(w, i);
 }
 
 /** Swaps two cells with everything they carry, without marking them as moved. */
@@ -312,8 +300,9 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       return;
     }
     // A drop on a plant: the plant drinks it, or it runs down through the
-    // plant to the ground, or off it. It never rests on the leaves.
-    if (shoot(tb)) {
+    // plant to the ground, or off it. It never rests on the leaves. Dead
+    // leaves it runs through too.
+    if (shoot(tb) || tb === WASTE) {
       const p = w.orgs.get(w.org[b]);
       if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
         p.water += WATER_UNITS;
@@ -321,7 +310,7 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
         return;
       }
       let j = b + W;
-      while (j < SIZE && shoot(type[j])) j += W;
+      while (j < SIZE && (shoot(type[j]) || type[j] === WASTE)) j += W;
       if (j < SIZE && POROUS[type[j]] && wet[j] <= SOAKS_UP_TO) {
         wet[j] += WATER_UNITS;
         clearCell(w, i);
@@ -434,7 +423,6 @@ const RAY_SHIFT = Array.from({ length: H }, (_, y) => (y / 3) | 0);
 
 export function computeLight(w: World): void {
   const { type, light } = w;
-  let leaves = 0;
   for (let c = -RAY_SHIFT[H - 1]; c < W; c++) {
     let l = 255;
     for (let y = 0; y < H; y++) {
@@ -444,10 +432,8 @@ export function computeLight(w: World): void {
       const i = y * W + x;
       light[i] = l;
       l -= (l * ABSORB[type[i]]) >> 8;
-      if (type[i] === LEAF) leaves++;
     }
   }
-  w.leaves = leaves;
 }
 
 /**
@@ -472,7 +458,8 @@ function condense(w: World): void {
     let i = x;
     while (i < SIZE && type[i] === EMPTY) i += W;
     if (i >= SIZE) continue;
-    // Dew on a plant: it drinks it if it is thirsty, otherwise it runs down to the ground.
+    // Dew on a plant: it drinks it if it is thirsty, otherwise it runs down
+    // to the ground, through any dead leaves lying there.
     if (PLANT_PART[type[i]] && type[i] !== ROOT) {
       const p = w.orgs.get(w.org[i]);
       if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
@@ -480,9 +467,9 @@ function condense(w: World): void {
         w.humidity -= DEW;
         continue;
       }
-      while (i < SIZE && (type[i] === EMPTY || (PLANT_PART[type[i]] && type[i] !== ROOT))) i += W;
-      if (i >= SIZE) continue;
     }
+    while (i < SIZE && (type[i] === EMPTY || type[i] === WASTE || (PLANT_PART[type[i]] && type[i] !== ROOT))) i += W;
+    if (i >= SIZE) continue;
     if (type[i] === WATER) {
       // Dew on open water adds to it, a drop's worth at a time.
       if (w.rng.below(4) === 0 && w.humidity >= WATER_UNITS && i >= W && type[i - W] === EMPTY) {
@@ -596,6 +583,14 @@ export function totalUnits(w: World): number {
   for (const p of w.plants) n += p.store;
   for (const c of w.creatures) n += c.store;
   return n;
+}
+
+/**
+ * The nutrient ledger: units in the glass, less those made by plants, plus
+ * those burnt. It changes only when the player adds or takes something.
+ */
+export function unitLedger(w: World): number {
+  return totalUnits(w) - w.fixed + w.burned;
 }
 
 export function stepWorldN(w: World, n: number): void {

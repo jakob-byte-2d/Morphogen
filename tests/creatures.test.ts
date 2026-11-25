@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  APHID,
+  ISOPOD,
   applyTool,
   createWorld,
   EMPTY,
@@ -13,8 +13,9 @@ import {
   SOIL,
   spawnCreature,
   stepWorldN,
+  STEM,
   STONE,
-  totalUnits,
+  unitLedger,
   W,
   WASTE,
 } from "../src/sim";
@@ -30,27 +31,66 @@ function floor(): World {
   return w;
 }
 
-describe("bugs", () => {
-  it("eat leaves and multiply", () => {
-    const w = floor();
-    // A hedge of leaves along the floor.
-    for (let x = 10; x < 60; x++) for (let y = H - 4; y < H - 1; y++) {
-      setCell(w, at(x, y), LEAF);
-      w.food[at(x, y)] = 1;
-    }
-    const leaves = count(w, LEAF);
-    spawnCreature(w, 0, [at(30, H - 5)], 120);
-    stepWorldN(w, 1200);
-    expect(count(w, LEAF)).toBeLessThan(leaves);
+/** Soil along the floor, with a layer of dead leaves on it. */
+function litterBed(): World {
+  const w = floor();
+  for (let x = 0; x < W; x++) {
+    setCell(w, at(x, H - 2), SOIL);
+    w.food[at(x, H - 2)] = 0;
+  }
+  for (let x = 10; x < 60; x++) {
+    setCell(w, at(x, H - 3), WASTE);
+    w.food[at(x, H - 3)] = 2;
+  }
+  return w;
+}
+
+const soilFood = (w: World) => w.food.reduce((n, f, i) => (w.type[i] === SOIL ? n + f : n), 0);
+
+describe("skrukketroll", () => {
+  it("eat dead leaves, leave droppings in the soil, and multiply", () => {
+    const w = litterBed();
+    const litter = count(w, WASTE);
+    spawnCreature(w, 0, [at(30, H - 4)], 120);
+    const ledger = unitLedger(w);
+    stepWorldN(w, 3000);
+    expect(count(w, WASTE)).toBeLessThan(litter);
     expect(w.creatures.length).toBeGreaterThan(1);
+    // Half of what they eat is burnt, the rest ends up in the soil.
+    expect(w.burned).toBeGreaterThan(0);
+    expect(soilFood(w)).toBeGreaterThan(0);
+    expect(unitLedger(w)).toBe(ledger);
   });
 
-  it("starve to waste without food", () => {
+  it("leave living plants alone", () => {
+    const w = floor();
+    // A hedge of leaves along the floor (living, or as good as).
+    for (let x = 10; x < 60; x++) for (let y = H - 4; y < H - 1; y++) {
+      setCell(w, at(x, y), LEAF);
+      w.food[at(x, y)] = 2;
+    }
+    const leaves = count(w, LEAF);
+    spawnCreature(w, 0, [at(5, H - 2)], 400);
+    stepWorldN(w, 600);
+    expect(count(w, LEAF)).toBe(leaves);
+  });
+
+  it("starve to litter without food", () => {
     const w = floor();
     spawnCreature(w, 0, [at(30, H - 2)], 50);
-    stepWorldN(w, 400);
+    stepWorldN(w, 1000);
     expect(w.creatures.length).toBe(0);
     expect(count(w, WASTE)).toBe(1);
+  });
+
+  it("die of old age", () => {
+    const w = floor();
+    // Plenty of energy, but not forever young: about eight minutes.
+    spawnCreature(w, 0, [at(30, H - 2)], 50000);
+    stepWorldN(w, 3000);
+    expect(w.creatures.length).toBe(1);
+    stepWorldN(w, 3000);
+    expect(w.creatures.length).toBe(0);
   });
 });
 
@@ -62,16 +102,17 @@ describe("slime", () => {
     spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 320);
     stepWorldN(w, 600);
     expect(count(w, FEED)).toBe(0);
-    // The two units of feed went into its body or its store.
-    expect(count(w, SLIME) + w.creatures[0].store).toBeGreaterThanOrEqual(6);
+    // Of the two units of feed, one was burnt and one went into its body or its store.
+    expect(w.burned).toBe(1);
+    expect(count(w, SLIME) + w.creatures[0].store).toBe(5);
   });
 
-  it("eats bugs it reaches", () => {
+  it("eats skrukketroll it reaches", () => {
     const w = floor();
     spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 320);
     spawnCreature(w, 0, [at(38, H - 2)], 2000);
     stepWorldN(w, 600);
-    expect(count(w, APHID)).toBe(0);
+    expect(count(w, ISOPOD)).toBe(0);
     expect(count(w, SLIME)).toBeGreaterThan(0);
   });
 
@@ -84,17 +125,38 @@ describe("slime", () => {
     for (let i = 0; i < W * H; i++) if (w.type[i] === SLIME) top = Math.min(top, (i / W) | 0);
     expect(H - 1 - top).toBeLessThanOrEqual(3);
   });
+
+  it("dies of old age, as food for the skrukketroll", () => {
+    const w = floor();
+    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2)], 1e6);
+    stepWorldN(w, 6000);
+    expect(count(w, SLIME)).toBeGreaterThan(0);
+    stepWorldN(w, 9000);
+    expect(count(w, SLIME)).toBe(0);
+    expect(count(w, WASTE)).toBeGreaterThan(0);
+  });
+
+  it("flows on between plant stems", () => {
+    const w = floor();
+    // A row of stems in its way, and feed beyond them.
+    for (let x = 40; x < 80; x += 3) for (let y = H - 12; y < H - 1; y++) setCell(w, at(x, y), STEM);
+    setCell(w, at(90, H - 2), FEED);
+    w.food[at(90, H - 2)] = 2;
+    spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 2000);
+    stepWorldN(w, 1500);
+    expect(count(w, FEED)).toBe(0);
+  });
 });
 
 describe("feed", () => {
-  it("rots into waste if nobody eats it", () => {
+  it("goes off into litter if nobody eats it", () => {
     const w = floor();
     for (let k = 0; k < 30; k++) applyTool(w, "feed", 36, 40);
     const fed = count(w, FEED);
     expect(fed).toBeGreaterThan(3);
-    stepWorldN(w, 900);
+    stepWorldN(w, 700);
     expect(count(w, FEED)).toBe(0);
-    expect(count(w, WASTE)).toBe(fed);
+    expect(count(w, WASTE)).toBeGreaterThan(fed - 3);
   });
 });
 
@@ -112,16 +174,16 @@ describe("creature tool", () => {
 });
 
 describe("the closed glass with creatures", () => {
-  it("never creates or loses nutrients", () => {
+  it("keeps its nutrient ledger", () => {
     const w = createWorld(42);
     stepWorldN(w, 900);
     applyTool(w, "creature", 22, 40, 0);
     applyTool(w, "creature", 52, 40, 0);
     applyTool(w, "creature", 40, 60, 1);
-    const units = totalUnits(w);
+    const ledger = unitLedger(w);
     for (let k = 0; k < 8; k++) {
       stepWorldN(w, 600);
-      expect(totalUnits(w)).toBe(units);
+      expect(unitLedger(w)).toBe(ledger);
     }
   });
 });

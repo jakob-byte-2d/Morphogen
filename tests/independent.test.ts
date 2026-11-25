@@ -19,9 +19,8 @@ import {
   START_TICKS,
   STEM,
   stepWorldN,
-  totalUnits,
+  unitLedger,
   W,
-  WASTE,
   WATER,
 } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
@@ -67,7 +66,8 @@ describe("plants are independent", () => {
     }
     setCell(w, at(72, y - 14), SAND);
     stepWorldN(w, 120);
-    expect(onPlants(w, [SOIL, SAND, WATER, FEED, SEED, WASTE])).toBe(0);
+    // (Dead leaves may catch in the bush, as real ones do; they rot there.)
+    expect(onPlants(w, [SOIL, SAND, WATER, FEED, SEED])).toBe(0);
   });
 
   it("are not something slime can lie on", () => {
@@ -82,15 +82,15 @@ describe("plants are independent", () => {
 });
 
 describe("a new glass", () => {
-  it("gets its bugs and slime once the plants have grown, made from its own nutrients", () => {
+  it("gets its skrukketroll and slime once the plants have grown, made from its own nutrients", () => {
     const w = createWorld(3);
-    const units = totalUnits(w);
+    const ledger = unitLedger(w);
     expect(w.creatures.length).toBe(0);
     stepWorldN(w, START_TICKS);
     expect(w.plants.length).toBeGreaterThan(5);
     expect(w.creatures.some((c) => c.species === 0)).toBe(true);
     expect(w.creatures.some((c) => c.species === 1)).toBe(true);
-    expect(totalUnits(w)).toBe(units);
+    expect(unitLedger(w)).toBe(ledger);
   });
 
   it("keeps animals still to come when it is saved", () => {

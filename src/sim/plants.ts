@@ -1,8 +1,8 @@
-import { CREATURE_PART, EMPTY, FEED, FLOWER, FUNGUS, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
+import { CREATURE_PART, EMPTY, FEED, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
 import type { PlantSpecies } from "./species";
-import { AREA, H, SCALE, TICKS_PER_SECOND, W } from "./dims";
+import { H, SCALE, W } from "./dims";
 import { inheritPlant, packSeed, plantGenesOf, unpackSeed, type PlantGenes } from "./genes";
-import { clearCell, newOrgId, rotAway, setCell, wake, WATER_UNITS, type World } from "./world";
+import { clearCell, newOrgId, setCell, wake, WATER_UNITS, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
 export interface Tip {
@@ -15,6 +15,10 @@ export interface Tip {
   done: boolean;
 }
 
+/**
+ * A plant lives as long as it has water and light: it keeps growing new
+ * shoots, sheds old leaves and flowers (they fall as litter), and seeds.
+ */
 export interface Plant {
   kind: "plant";
   id: number;
@@ -65,6 +69,19 @@ const MAX_PLANTS = 80;
 /** Slow-pass checks before uneaten feed rots (about a minute). */
 const FEED_ROTS_AFTER = 150;
 const MAX_STORE = 20 * SCALE;
+/** A plant this far in debt for sugar (too much shade) dies. */
+const STARVES_AT = -500;
+/** Most growing tips a flower or bush has at once. */
+const MAX_TIPS = 6;
+/**
+ * Leaves and flowers count their age in the moisture slot (they hold no
+ * water) and fall off when it reaches 255. A leaf in the light gains one
+ * every other update (about three and a half minutes); one in the shade
+ * or on a thirsty plant ages faster. Grass blades do not age.
+ */
+const SHADE = 64;
+/** Slow-pass checks before a dead leaf nobody eats has rotted (about ten minutes). */
+const LITTER_ROTS = 1500;
 /** Moist soil at the surface gives this much water to the air at a time, down to SOIL_DRIES_TO. */
 const SOIL_BREATH = 8;
 const SOIL_DRIES_TO = 60;
@@ -82,18 +99,37 @@ function cellCost(p: Plant): number {
   return CELL_COST[p.genes.growth - 1];
 }
 
-/** Builds one cell of the plant from a unit in its store. */
+/**
+ * Builds one cell of the plant: one unit from its store (from the soil) and
+ * two made from light and air (photosynthesis), so plants add to the glass.
+ * A root is made from sugar alone (one unit from light and air), so a plant
+ * can always reach for new ground; it takes up what that ground holds.
+ */
 function place(w: World, p: Plant, i: number, type: number): boolean {
-  if (p.store < 1) return false;
+  const root = type === ROOT;
+  if (!root && p.store < 1) return false;
   const wet = type === ROOT ? w.wet[i] : 0;
   setCell(w, i, type);
-  w.wet[i] = wet;
+  // Leaves and flowers start at a slightly different age each, so they do
+  // not all fall at once. Grass blades never fall.
+  const ages = type === FLOWER || (type === LEAF && w.plantSpecies[p.species].form !== "grass");
+  w.wet[i] = ages ? 1 + (w.shade[i] & 31) : wet;
   w.org[i] = p.id;
   w.kind[i] = p.species;
-  w.food[i] = 1;
-  p.store--;
+  w.food[i] = root ? 1 : 3;
+  w.fixed += root ? 1 : 2;
+  if (!root) p.store--;
   p.cells.push(i);
   return true;
+}
+
+/** A leaf or flower that has had its time falls off as litter, with what it is made of. */
+function shed(w: World, i: number): void {
+  w.type[i] = WASTE;
+  w.wet[i] = 0;
+  w.org[i] = 0;
+  w.kind[i] = 0;
+  wake(w, i);
 }
 
 /** A root replaces a ground cell; the nutrients in that cell go to the plant. */
@@ -135,7 +171,7 @@ function germinate(w: World, i: number): void {
 }
 
 /**
- * What the plant is made of becomes waste above ground; its roots, which
+ * What the plant is made of becomes litter above ground; its roots, which
  * grew where there was soil, turn back into soil. Its store goes with them.
  */
 function killPlant(w: World, p: Plant): void {
@@ -146,6 +182,8 @@ function killPlant(w: World, p: Plant): void {
   const left: number[] = [];
   for (const i of p.cells) {
     if (w.org[i] !== p.id || !PLANT_PART[w.type[i]]) continue;
+    // A root keeps its moisture as soil; a leaf's slot held its age, not water.
+    if (w.type[i] !== ROOT) w.wet[i] = 0;
     w.type[i] = w.type[i] === ROOT ? SOIL : WASTE;
     w.org[i] = 0;
     w.kind[i] = 0;
@@ -168,14 +206,6 @@ function killPlant(w: World, p: Plant): void {
   }
 }
 
-/** Most cells a plant's shoot grows to. */
-function shootCap(sp: PlantSpecies): number {
-  const h = sp.height * SCALE;
-  if (sp.form === "grass") return 4 + (2 + sp.branches * 2) * h;
-  if (sp.form === "flower") return h * (2 + sp.leaves * SCALE) + 8 * AREA;
-  return h * (3 + sp.leaves * 2 * SCALE);
-}
-
 function growRoot(w: World, p: Plant, sp: PlantSpecies, roots: number[]): boolean {
   const baseY = (p.base / W) | 0;
   for (let attempt = 0; attempt < 3 && roots.length > 0; attempt++) {
@@ -190,10 +220,27 @@ function growRoot(w: World, p: Plant, sp: PlantSpecies, roots: number[]): boolea
       const j = options[k];
       const jx = j % W;
       if (Math.abs(jx - x) > 1 || j >= W * H) continue;
-      // Roots grow through soil and sand (not waste: a dead root becomes
-      // soil, and the ground should not grow out of rubbish).
-      if (isGround(w.type[j]) && (w.food[j] > 0 || p.store > 0)) return rootInto(w, p, j);
+      // Roots grow through soil and sand (not litter: a dead root becomes
+      // soil, and the ground should not grow out of rubbish). They stay thin:
+      // a root does not grow up against another one.
+      if (isGround(w.type[j]) && !crowded(w, j, r)) return rootInto(w, p, j);
     }
+  }
+  return false;
+}
+
+const AROUND = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+
+/** Is there a root around cell j, other than `from` (the root it grows from) and those next to that? */
+function crowded(w: World, j: number, from: number): boolean {
+  const x = j % W;
+  const fx = from % W;
+  for (const d of AROUND) {
+    const n = j + d;
+    if (n < 0 || n >= W * H || Math.abs((n % W) - x) > 1 || w.type[n] !== ROOT) continue;
+    // The root it grows from, and the cell that root grew from, may touch it.
+    if (n === from || (Math.abs((n % W) - fx) <= 1 && Math.abs(((n / W) | 0) - ((from / W) | 0)) <= 1 && n < from)) continue;
+    return true;
   }
   return false;
 }
@@ -255,20 +302,28 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   if (sp.form === "grass") shift = tip.len % 3 === 2 ? tip.dx : 0;
   else if (!tip.main) shift = tip.len % 2 === 0 ? tip.dx : 0;
   else if (w.rng.below(7) === 0) shift = w.rng.below(2) === 0 ? -1 : 1;
-  const ny = y - 1;
-  if (ny < 1) {
-    tip.done = true;
-    return false;
-  }
-  // Grow straight on if there is room, else try leaning round the obstacle.
-  // A blocked tip is not given up: a drop of water or a seed may move away.
   let j = -1;
-  for (const d of [shift, shift === 0 ? -1 : 0, shift === 0 ? 1 : -shift]) {
-    const nx = x + d;
-    if (nx < 0 || nx >= W) continue;
-    if (w.type[ny * W + nx] === EMPTY) {
-      j = ny * W + nx;
-      break;
+  if (y - 1 < 1) {
+    // Up against the lid: it grows on along the glass, the way it leans.
+    if (tip.dx === 0) tip.dx = w.rng.below(2) === 0 ? -1 : 1;
+    const nx = x + tip.dx;
+    if (nx < 0 || nx >= W || w.type[tip.i + tip.dx] !== EMPTY) {
+      tip.done = true;
+      return false;
+    }
+    j = tip.i + tip.dx;
+  } else {
+    // Grow straight on if there is room, else try leaning round the obstacle
+    // (up the glass, if it meets a wall). A blocked tip is not given up at
+    // once: a drop of water or a seed may move away.
+    const ny = y - 1;
+    for (const d of [shift, shift === 0 ? -1 : 0, shift === 0 ? 1 : -shift]) {
+      const nx = x + d;
+      if (nx < 0 || nx >= W) continue;
+      if (w.type[ny * W + nx] === EMPTY) {
+        j = ny * W + nx;
+        break;
+      }
     }
   }
   if (j < 0) return false;
@@ -292,7 +347,7 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
     }
   }
   // Branching.
-  if (sp.form !== "grass" && sp.branches > 0 && tip.len >= 4 * SCALE && w.rng.below(12 * SCALE) < sp.branches * (sp.form === "bush" ? 2 : 1)) {
+  if (sp.form !== "grass" && sp.branches > 0 && p.tips.length < MAX_TIPS && tip.len >= 4 * SCALE && w.rng.below(12 * SCALE) < sp.branches * (sp.form === "bush" ? 2 : 1)) {
     const remaining = tip.max - tip.len;
     if (remaining > 3 * SCALE) {
       p.tips.push({ i: j, dx: w.rng.below(2) === 0 ? -1 : 1, len: 0, max: Math.max(3 * SCALE, ((remaining * 7) / 10) | 0), main: false, done: false });
@@ -301,13 +356,32 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   return true;
 }
 
+/** A blade of grass withers from the tip now and then (one in this many updates), and grows again. */
+const GRASS_WITHERS = 80;
+
+function witherBlade(w: World, p: Plant): void {
+  const tip = p.tips[w.rng.below(p.tips.length)];
+  if (!tip || !tip.done || tip.len < 2) return;
+  const i = tip.i;
+  // Not while it still carries its seed head.
+  if (i >= W && w.org[i - W] === p.id) return;
+  for (const j of [i + W, i + W - 1, i + W + 1]) {
+    if (j >= W * H || Math.abs((j % W) - (i % W)) > 1 || w.org[j] !== p.id || w.type[j] !== LEAF) continue;
+    shed(w, i);
+    tip.i = j;
+    tip.len--;
+    tip.done = false;
+    return;
+  }
+}
+
 /** Where grass puts new blades: beside its base, nearest first. */
 const BLADE_OFFSETS: number[] = [];
-for (let k = 1; k <= 4 * SCALE; k++) BLADE_OFFSETS.push(-k, k);
+for (let k = 1; k <= 8 * SCALE; k++) BLADE_OFFSETS.push(-k, k);
 
-/** Grass sends up new blades from beside its base. */
+/** Grass sends up new blades from beside its base: more as the clump gets older. */
 function newBlade(w: World, p: Plant, sp: PlantSpecies): boolean {
-  const maxBlades = 2 + sp.branches * 2;
+  const maxBlades = Math.min(BLADE_OFFSETS.length, 2 + sp.branches * 2 + (p.age >> 9));
   if (p.tips.length >= maxBlades) return false;
   const bx = p.base % W;
   const by = (p.base / W) | 0;
@@ -325,21 +399,59 @@ function newBlade(w: World, p: Plant, sp: PlantSpecies): boolean {
   return false;
 }
 
-function growShoot(w: World, p: Plant, sp: PlantSpecies): boolean {
-  // Tips that were eaten are gone; if nothing is left, start again at the base.
+/**
+ * A flower or bush that has nowhere left to grow puts out a new shoot from
+ * its stem, mostly high up, where the light is. So it keeps growing, until
+ * the glass is full.
+ */
+function newShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boolean {
+  if (stems.length === 0) return false;
+  const h = sp.height * SCALE;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let s = stems[w.rng.below(stems.length)];
+    const s2 = stems[w.rng.below(stems.length)];
+    if (s2 < s) s = s2;
+    const side = w.rng.below(2) === 0 ? -1 : 1;
+    const x = s % W;
+    for (const j of [s - W + side, s - W, s + side]) {
+      if (j < W || Math.abs((j % W) - x) > 1 || w.type[j] !== EMPTY) continue;
+      if (!place(w, p, j, STEM)) return false;
+      const main = sp.form === "flower" || w.rng.below(2) === 0;
+      p.tips.push({ i: j, dx: side, len: 1, max: (h >> 1) + w.rng.below((h >> 1) + 1), main, done: false });
+      return true;
+    }
+  }
+  return false;
+}
+
+function growShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boolean {
+  // Tips that are gone are dropped; if nothing is left, start again at the base.
   p.tips = p.tips.filter((tip) => w.org[tip.i] === p.id && PLANT_PART[w.type[tip.i]] === 1);
   if (p.tips.every((tip) => tip.done) && w.type[p.base] === EMPTY && place(w, p, p.base, sp.form === "grass" ? LEAF : STEM)) {
     p.tips.push({ i: p.base, dx: 0, len: 1, max: sp.height * SCALE, main: true, done: false });
     return true;
   }
-  if (sp.form === "grass" && w.rng.below(3) === 0 && newBlade(w, p, sp)) return true;
+  if (sp.form === "grass") {
+    // Grass keeps its finished blades as tips: they are how it counts them.
+    if (w.rng.below(3) === 0 && newBlade(w, p, sp)) return true;
+    for (let k = 0; k < p.tips.length; k++) {
+      const tip = p.tips[(p.age + k) % p.tips.length];
+      if (!tip.done && extendTip(w, p, sp, tip)) return true;
+    }
+    return newBlade(w, p, sp);
+  }
+  p.tips = p.tips.filter((tip) => !tip.done);
   const n = p.tips.length;
   for (let k = 0; k < n; k++) {
-    const tip = p.tips[(p.age + k) % n];
-    if (tip.done) continue;
-    if (extendTip(w, p, sp, tip)) return true;
+    if (extendTip(w, p, sp, p.tips[(p.age + k) % n])) return true;
   }
-  return sp.form === "grass" ? newBlade(w, p, sp) : false;
+  // Nothing could grow: now and then a blocked tip is given up, and the
+  // plant grows a new shoot somewhere else.
+  if (n >= MAX_TIPS) {
+    if (w.rng.below(4) !== 0) return false;
+    p.tips.shift();
+  }
+  return newShoot(w, p, sp, stems);
 }
 
 /** A plant that has lost its flowers flowers again at its highest point. */
@@ -354,10 +466,10 @@ function regrowFlower(w: World, p: Plant, from: number[]): boolean {
   return false;
 }
 
-/** A grown plant that has lost leaves (eaten) puts out new ones along its stems. */
-function regrowLeaf(w: World, p: Plant, stems: number[]): boolean {
-  for (let attempt = 0; attempt < 4 && stems.length > 0; attempt++) {
-    const s = stems[w.rng.below(stems.length)];
+/** A plant that has shed leaves puts out new ones along its stems where there is light (`lit`). */
+function regrowLeaf(w: World, p: Plant, lit: number[]): boolean {
+  for (let attempt = 0; attempt < 4 && lit.length > 0; attempt++) {
+    const s = lit[w.rng.below(lit.length)];
     const side = w.rng.below(2) === 0 ? -1 : 1;
     for (const j of [s + side, s - side, s - W + side]) {
       if (j < W || Math.abs((j % W) - (s % W)) > 1 || w.type[j] !== EMPTY) continue;
@@ -394,13 +506,24 @@ function updatePlant(w: World, p: Plant): void {
   let income = 0;
   const roots: number[] = [];
   const stems: number[] = [];
+  const lit: number[] = [];
   const flowers: number[] = [];
   const cells = p.cells;
+  // Old leaves and flowers fall: sooner in the shade, or when the plant is thirsty.
+  const extra = p.thirst > 0 ? 2 : 0;
   let n = 0;
   for (let k = 0; k < cells.length; k++) {
     const i = cells[k];
     const t = type[i];
     if (!PLANT_PART[t] || org[i] !== p.id) continue;
+    if ((t === LEAF || t === FLOWER) && wet[i] > 0) {
+      const age = wet[i] + ((p.age + i) & 1) + (light[i] < SHADE ? 2 : 0) + extra;
+      if (age >= 255) {
+        shed(w, i);
+        continue;
+      }
+      wet[i] = age;
+    }
     cells[n++] = i;
     if (t === LEAF) {
       green++;
@@ -409,6 +532,7 @@ function updatePlant(w: World, p: Plant): void {
     } else if (t === STEM) {
       green++;
       stems.push(i);
+      if (light[i] >= SHADE) lit.push(i);
       income += light[i] >> 7;
     } else if (t === ROOT) {
       roots.push(i);
@@ -432,13 +556,14 @@ function updatePlant(w: World, p: Plant): void {
       food[j]--;
       p.store++;
       taken++;
-      // Waste that has given up all it had is gone.
-      if (food[j] === 0 && type[j] === WASTE) rotAway(w, j);
+      // A dead leaf that has given up all it had is gone.
+      if (food[j] === 0 && type[j] === WASTE) clearCell(w, j);
     }
   }
 
-  // Living costs a little sugar, and leaves need water.
-  p.energy += income - (n >> 4);
+  // Living costs a little sugar (a seedling in deep shade starves in the
+  // end), and leaves need water.
+  p.energy += income - 1 - (n >> 4);
   // Leaves breathe water out into the air, where it will condense again.
   const need = 1 + (green >> 4);
   if (p.water >= need) {
@@ -452,14 +577,15 @@ function updatePlant(w: World, p: Plant): void {
   }
   if (p.energy > 2000) p.energy = 2000;
 
-  // A plant grazed to the ground lives on in its roots while it has sugar
-  // left to grow again.
-  const old = p.age * PLANT_EVERY > sp.lifespan * TICKS_PER_SECOND;
+  // A plant does not die of age. It dies of thirst, of too much shade, or
+  // when it has lost all its green and has no sugar left to grow again.
   const bare = green + flowers.length === 0 && p.energy < GROW_COST;
-  if (p.thirst > THIRST_LIMIT || old || roots.length === 0 || bare) {
+  if (p.thirst > THIRST_LIMIT || p.energy < STARVES_AT || roots.length === 0 || bare) {
     killPlant(w, p);
     return;
   }
+
+  if (sp.form === "grass" && w.rng.below(GRASS_WITHERS) === 0) witherBlade(w, p);
 
   // Grow a few cells every few updates (SCALE of them, so plants keep their
   // pace in the finer glass): roots first while they lag behind, then the shoot.
@@ -470,20 +596,22 @@ function updatePlant(w: World, p: Plant): void {
     const cost = cellCost(p);
     if (p.energy < cost) return;
     // A root takes the nutrients of the cell it grows into, so a plant with
-    // an empty store can still reach for new ground.
+    // an empty store reaches for new ground: roots grow when they lag behind
+    // the shoot, or when the ground they are in has nothing more to give.
     const wantRoots = Math.max(2, (p.cells.length / 4) | 0);
-    if (roots.length < wantRoots && growRoot(w, p, sp, roots)) {
+    if ((roots.length < wantRoots || p.store < 1) && growRoot(w, p, sp, roots)) {
       p.energy -= cost;
       continue;
     }
     if (p.store < 1) return;
-    if (n - roots.length < shootCap(sp) && growShoot(w, p, sp)) {
-      p.energy -= cost;
-      continue;
-    }
-    if (leaves < p.maxLeaves && regrowLeaf(w, p, stems)) {
+    // New leaves where old ones fell first; then grow on.
+    if (leaves < p.maxLeaves && regrowLeaf(w, p, lit)) {
       p.energy -= cost;
       leaves++;
+      continue;
+    }
+    if (growShoot(w, p, sp, stems)) {
+      p.energy -= cost;
       continue;
     }
     if (flowers.length < p.maxFlowers && regrowFlower(w, p, stems.length > 0 ? stems : cells)) {
@@ -510,13 +638,30 @@ export function updatePlants(w: World): void {
 }
 
 /**
- * Every few steps: seeds sprout or rot, and waste slowly gives its nutrients
- * back to the ground it lies on.
+ * Every few steps: seeds sprout or rot, feed goes off, and dead leaves rot
+ * slowly into the ground they lie on.
  */
 export function slowPass(w: World): void {
   const { type, wet, food } = w;
+  // Nutrients spread slowly through the ground with the water in it, from
+  // richer soil to poorer: each cell evens out with the one below it or
+  // beside it, one cell in eight at a time.
+  const phase = (w.tick >> 2) & 7;
+  const down = (w.tick & 32) === 0;
   for (let i = W; i < W * (H - 1); i++) {
     const t = type[i];
+    if ((i & 7) === phase && isGround(t)) {
+      const j = down ? i + W : i + 1;
+      if ((down || i % W < W - 1) && isGround(type[j])) {
+        if (food[i] > food[j] + 1) {
+          food[i]--;
+          food[j]++;
+        } else if (food[j] > food[i] + 1) {
+          food[j]--;
+          food[i]++;
+        }
+      }
+    }
     if (t === SEED) {
       const below = i + W;
       // A seed counts its age in its moisture slot. Lying on a creature it
@@ -531,56 +676,28 @@ export function slowPass(w: World): void {
         w.org[i] = 0;
       }
     } else if (t === FEED) {
-      // Feed nobody eats goes off and turns to waste. Its age is in the moisture slot.
+      // Feed nobody eats goes off and turns to litter. Its age is in the moisture slot.
       if (wet[i] < 255) wet[i]++;
       if (wet[i] >= FEED_ROTS_AFTER) {
         type[i] = WASTE;
         wet[i] = 0;
       }
     } else if (t === WASTE) {
-      // Moist waste catches fungus: from fungus next to it, or now and then
-      // from spores in the air.
-      if (wet[i] > 30) {
-        const x = i % W;
-        const nearFungus =
-          type[i - W] === FUNGUS || type[i + W] === FUNGUS || (x > 0 && type[i - 1] === FUNGUS) || (x < W - 1 && type[i + 1] === FUNGUS);
-        if (w.rng.below(nearFungus ? 12 : 2500) === 0) {
-          type[i] = FUNGUS;
-          wake(w, i);
-          continue;
-        }
+      // A dead leaf nobody eats rots slowly where it lies (even one caught
+      // in a bush), and ten times as fast under water: half of it is
+      // breathed out by the rot, the rest is washed down into the ground below.
+      if (w.rng.below(type[i - W] === WATER ? LITTER_ROTS / 10 : LITTER_ROTS) !== 0) continue;
+      let j = i + W;
+      while (j < W * H && !isGround(type[j])) j += W;
+      const u = food[i];
+      const burnt = j < W * H ? (u + 1) >> 1 : u;
+      if (j < W * H) {
+        if (food[j] + u - burnt > 255) continue;
+        food[j] += u - burnt;
       }
-      if (w.rng.below(128) !== 0) continue;
-      const x = i % W;
-      let j = isGround(type[i + W]) ? i + W : x > 0 && isGround(type[i - 1]) ? i - 1 : x < W - 1 && isGround(type[i + 1]) ? i + 1 : -1;
-      // Waste on top of a heap rots into the waste below, so a heap drains
-      // down into the ground in the end.
-      if (j < 0 && (type[i + W] === WASTE || type[i + W] === FUNGUS)) j = i + W;
-      if (j < 0 || food[j] === 255) continue;
-      if (food[i] > 0) {
-        food[j]++;
-        food[i]--;
-      }
-      if (food[i] === 0) rotAway(w, i);
-    } else if (t === FUNGUS) {
-      // Fungus feeds the soil next to it, much faster than waste rots alone.
-      const x = i % W;
-      if (w.rng.below(5) === 0 && food[i] > 0) {
-        let j = isGround(type[i + W]) ? i + W : x > 0 && isGround(type[i - 1]) ? i - 1 : x < W - 1 && isGround(type[i + 1]) ? i + 1 : -1;
-        // A mushroom with no soil next to it sends what it has down its stem.
-        if (j < 0 && (type[i + W] === FUNGUS || type[i + W] === WASTE)) j = i + W;
-        if (j >= 0 && food[j] < 255) {
-          food[j]++;
-          food[i]--;
-        }
-      }
-      // It puts up a little mushroom where there is room above.
-      if (food[i] >= 2 && i >= 2 * W && type[i - W] === EMPTY && type[i - 2 * W] === EMPTY && w.rng.below(30) === 0) {
-        setCell(w, i - W, FUNGUS);
-        food[i - W] = 1;
-        food[i]--;
-      }
-      if (food[i] === 0) rotAway(w, i);
+      w.burned += burnt;
+      food[i] = 0;
+      clearCell(w, i);
     } else if (t === WATER && type[i - W] === EMPTY && w.rng.below(1500) === 0) {
       // Open water slowly evaporates into the air.
       clearCell(w, i);

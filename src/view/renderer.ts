@@ -1,4 +1,4 @@
-import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SATURATED, SCALE, SIZE, W, type World } from "../sim/world";
@@ -7,7 +7,7 @@ import {
   BACKDROP_BASE,
   BACKDROP_BLOBS,
   BARE_TABLE,
-  CAPS,
+  AUTUMN,
   DRY_TABLE,
   DUST,
   hexToRgb,
@@ -64,7 +64,7 @@ export class Renderer {
   private shafts = new Float32Array(W + H);
   private top = new Uint8Array(SIZE);
   private waterTop = hexToRgb(WATER_TOP);
-  private caps = shadeTable(CAPS);
+  private autumn = hexToRgb(AUTUMN);
   private wilted = hexToRgb(WILTED);
   /** Colour tables per species and plant part, made when first needed. */
   private speciesTables = new Map<number, Uint8ClampedArray>();
@@ -304,6 +304,13 @@ export class Renderer {
               // Each line of descent drifts a little in colour.
               r += p.genes.tint * TINT;
               b -= p.genes.tint * TINT;
+              // Old leaves (their age is in the moisture slot) turn brown before they fall.
+              if (t === LEAF && wet[i] > 170) {
+                const f = ((wet[i] - 170) / 85) * 0.8;
+                r += (this.autumn[0] - r) * f;
+                g += (this.autumn[1] - g) * f;
+                b += (this.autumn[2] - b) * f;
+              }
               // Thirsty plants fade towards straw yellow.
               if (p.thirst > 0) {
                 const f = Math.min(0.85, p.thirst / THIRST_LIMIT);
@@ -319,11 +326,7 @@ export class Renderer {
             if (above === EMPTY) open++;
             if (open >= 2) a = 170 + (s & 63);
           }
-        } else if (t === FUNGUS && above === EMPTY) {
-          r = this.caps[s * 3];
-          g = this.caps[s * 3 + 1];
-          b = this.caps[s * 3 + 2];
-        } else if (t === APHID || t === SLIME) {
+        } else if (t === ISOPOD || t === SLIME) {
           const tab = this.creatureTable(w, w.kind[i]);
           r = tab[s * 3];
           g = tab[s * 3 + 1];

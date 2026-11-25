@@ -1,4 +1,4 @@
-import { EMPTY, SEED, SOIL, WATER } from "./cells";
+import { EMPTY, SEED, SOIL, WASTE, WATER } from "./cells";
 import { packSeed, plantGenesOf } from "./genes";
 import { computeLight, emptyWorld, H, MAX_WET, SCALE, setCell, W, type World } from "./world";
 
@@ -91,8 +91,18 @@ export function createWorld(seed: number): World {
       break;
     }
   }
-  // Once they have grown a little, the animals come: bugs onto the bushes,
-  // then a little slime on the ground.
+  // A thin layer of dead leaves on the ground, as in a real terrarium: food
+  // for the skrukketroll until the plants shed leaves of their own.
+  for (let x = 0; x < W; x++) {
+    if (w.rng.below(3) !== 0) continue;
+    let i = x;
+    while (i < H * W && w.type[i] === EMPTY) i += W;
+    if (i >= H * W || w.type[i] !== SOIL || i < W) continue;
+    setCell(w, i - W, WASTE);
+    w.food[i - W] = 2;
+  }
+  // Once they have grown a little, the animals come: skrukketroll, then a
+  // little slime.
   for (const a of START_ANIMALS) w.arrivals.push({ tick: a.tick, species: a.species, x: a.x * S });
   computeLight(w);
   return w;

@@ -197,7 +197,7 @@ export class Creator {
     const { body, preview, actions } = this.frame(t.creator.newCreature);
     const sp: CreatureSpecies = {
       name: t.creator.creatureName(number),
-      diet: "plants",
+      diet: "litter",
       color: CREATURE_COLORS[3],
       traits: { size: 3, speed: 3, growth: 3, mutation: 1 },
     };
@@ -212,7 +212,7 @@ export class Creator {
         draw();
       }, t.creator.color),
     );
-    const diets: [Diet, string][] = (["plants", "creatures"] as Diet[]).map((d) => [d, t.creator.diets[d]]);
+    const diets: [Diet, string][] = (["litter", "creatures"] as Diet[]).map((d) => [d, t.creator.diets[d]]);
     this.row(
       body,
       t.creator.eats,

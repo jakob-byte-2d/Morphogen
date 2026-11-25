@@ -17,7 +17,8 @@ export function hashWorld(w: World): string {
   for (const v of w.rng.getState()) mix(v);
   for (const arr of [w.type, w.shade, w.wet, w.food, w.org, w.kind, w.light]) for (let i = 0; i < arr.length; i++) mix(arr[i]);
   mix(w.nextOrgId);
-  mix(w.leaves);
+  mix(w.fixed);
+  mix(w.burned);
   mix(w.arrivals.length);
   for (const a of w.arrivals) for (const v of [a.tick, a.species, a.x]) mix(v);
   mix(w.plantSpecies.length);
