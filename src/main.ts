@@ -1,9 +1,12 @@
-import { applyTool, createWorld, H, stepWorld, stepWorldN, TICKS_PER_SECOND, type Tool, W, type World } from "./sim";
+import { applyTool, createWorld, H, stepWorld, stepWorldN, TICKS_PER_SECOND, type Tool, totalUnits, totalWater, W, type World } from "./sim";
 import { DevPanel, type DevState } from "./ui/dev";
 import { creatureIcon, plantIcon } from "./ui/icons";
-import { Picker } from "./ui/picker";
-import { restoreGlass, storeGlass } from "./ui/storage";
 import { attachInput } from "./ui/input";
+import { Menu } from "./ui/menu";
+import { Picker } from "./ui/picker";
+import { loadSettings, saveSettings } from "./ui/settings";
+import { forgetHistory, loadHistory, record, SAMPLE_EVERY, saveHistory } from "./ui/stats";
+import { forgetGlass, restoreGlass, storeGlass } from "./ui/storage";
 import { t } from "./ui/strings";
 import { Toolbar } from "./ui/toolbar";
 import "./ui/style.css";
@@ -11,18 +14,24 @@ import { Camera } from "./view/camera";
 import { darken, lighten } from "./view/palette";
 import { Renderer } from "./view/renderer";
 
+const APP_VERSION = "0.6";
+
 const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get("seed"));
 const seed = Number.isFinite(seedParam) && seedParam > 0 ? seedParam : (Math.random() * 1e9) | 0;
+const settings = loadSettings();
+if (params.has("dev")) settings.devMode = true;
 
 /** Time passes while the app is closed, but at most an hour is made up for. */
 const MAX_CATCH_UP = 3600 * TICKS_PER_SECOND;
-const ticksFor = (ms: number) => Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND)));
+const ticksFor = (ms: number) =>
+  settings.timeAway ? Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND * settings.speed))) : 0;
 
 // The glass from last time, if there is one (?seed=… or ?fresh starts a new one).
 let world: World;
 let catchUp = { left: 0, total: 0 };
 const saved = params.has("seed") || params.has("fresh") ? null : restoreGlass();
+const history = saved ? loadHistory() : (forgetHistory(), loadHistory());
 if (saved) {
   world = saved.world;
   const n = ticksFor(Date.now() - saved.savedAt);
@@ -32,25 +41,31 @@ if (saved) {
   // A new glass is already a couple of minutes old: seeds have sprouted.
   stepWorldN(world, 2 * 60 * TICKS_PER_SECOND);
 }
+let nextSample = Math.ceil((world.tick + 1) / SAMPLE_EVERY) * SAMPLE_EVERY;
+
+/** Saves the glass and its history, unless it is being thrown away. */
+let discarding = false;
+function keep(): void {
+  if (discarding) return;
+  storeGlass(world);
+  saveHistory(history);
+}
 
 const app = document.getElementById("app")!;
 const glass = document.createElement("div");
 glass.className = "glass";
 glass.setAttribute("role", "img");
 glass.setAttribute("aria-label", t.glass);
-const ring = document.createElement("div");
-ring.className = "ring";
-glass.append(ring);
 app.append(glass);
-
-const catchUpLabel = document.createElement("div");
-catchUpLabel.className = "catchup";
-catchUpLabel.setAttribute("aria-live", "polite");
-glass.append(catchUpLabel);
 
 const camera = new Camera();
 const renderer = new Renderer(glass, camera);
-glass.append(ring);
+const ring = document.createElement("div");
+ring.className = "ring";
+const catchUpLabel = document.createElement("div");
+catchUpLabel.className = "catchup";
+catchUpLabel.setAttribute("aria-live", "polite");
+glass.append(ring, catchUpLabel);
 
 /** Tools on the bar, in the order they appear. */
 const TOOLS: Tool[] = ["water", "soil", "seed", "creature", "feed", "spade"];
@@ -87,20 +102,49 @@ app.append(toolbar.el, seedPicker.el, creaturePicker.el);
 /** What the tool uses: the chosen seed or creature. */
 const choice = () => (tool === "creature" ? creatureSpecies : plantSpecies);
 
-const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false };
-let devPanel: DevPanel | null = null;
-if (params.has("dev")) {
-  devPanel = new DevPanel(dev);
-  app.append(devPanel.el);
+const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false, overlay: "none" };
+const devPanel = new DevPanel(dev);
+app.append(devPanel.el);
+function showDev(): void {
+  devPanel.el.hidden = !settings.devMode;
+  if (!settings.devMode) {
+    Object.assign(dev, { speed: 1, max: false, paused: false, overlay: "none" });
+    devPanel.refresh();
+  }
 }
+showDev();
 
-/** The glass keeps the world's shape and fills the space above the tools. */
+const menu = new Menu(app, {
+  world: () => world,
+  settings,
+  settingsChanged: () => saveSettings(settings),
+  history: () => history,
+  snapshot: () => renderer.snapshot(),
+  newGlass() {
+    discarding = true;
+    forgetGlass();
+    forgetHistory();
+    const keepDev = params.has("dev") ? "?dev" : "";
+    location.replace(location.pathname + keepDev);
+  },
+  toggleDev() {
+    settings.devMode = !settings.devMode;
+    saveSettings(settings);
+    showDev();
+  },
+  version: APP_VERSION,
+  light,
+  dark,
+});
+
+/** The glass keeps the world's shape and fills the space between the menu and the tools. */
 function layout(): void {
   const css = getComputedStyle(document.documentElement);
   const safeTop = parseFloat(css.getPropertyValue("--safe-top")) || 0;
   const pad = 8;
+  const top = safeTop + Math.min(56, Math.max(pad, innerHeight - toolbar.el.offsetHeight - 2 * pad - ((innerWidth - 2 * pad) * H) / W));
   const availW = innerWidth - 2 * pad;
-  const availH = innerHeight - toolbar.el.offsetHeight - safeTop - 2 * pad;
+  const availH = innerHeight - toolbar.el.offsetHeight - top - pad;
   let gw = availW;
   let gh = (gw * H) / W;
   if (gh > availH) {
@@ -111,7 +155,7 @@ function layout(): void {
   glass.style.height = `${gh}px`;
   glass.style.left = `${(innerWidth - gw) / 2}px`;
   // Any spare height goes above the glass, so the tools sit right below it.
-  glass.style.top = `${safeTop + pad + (availH - gh)}px`;
+  glass.style.top = `${top + (availH - gh)}px`;
   camera.setSize(gw, gh);
 }
 addEventListener("resize", layout);
@@ -127,6 +171,8 @@ attachInput(
   {
     start(x, y) {
       closePickers();
+      if (menu.isOpen) menu.close();
+      if (settings.vibration && navigator.vibrate) navigator.vibrate(8);
       // A creature is let go once per tap; the other tools keep going while held.
       stroke = tool === "creature" ? null : { x, y };
       toolTimer = 0;
@@ -150,6 +196,14 @@ attachInput(
     ring.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
   },
 );
+
+function step(): void {
+  stepWorld(world);
+  if (world.tick >= nextSample) {
+    record(history, world);
+    nextSample += SAMPLE_EVERY;
+  }
+}
 
 let last = performance.now();
 let acc = 0;
@@ -175,27 +229,27 @@ function frame(now: number): void {
   if (catchUp.left > 0) {
     // Making up for the time the app was closed, as fast as the phone allows.
     do {
-      stepWorld(world);
+      step();
       catchUp.left--;
     } while (catchUp.left > 0 && performance.now() - t0 < 14);
     catchUpLabel.textContent = t.catchUp(Math.round(100 * (1 - catchUp.left / catchUp.total)));
     catchUpLabel.classList.toggle("on", catchUp.left > 0);
-    if (catchUp.left === 0) storeGlass(world);
+    if (catchUp.left === 0) keep();
   } else if (dev.stepOnce) {
     dev.stepOnce = false;
-    stepWorld(world);
+    step();
     ticks++;
   } else if (!dev.paused) {
     if (dev.max) {
       do {
-        stepWorld(world);
+        step();
         ticks++;
       } while (performance.now() - t0 < 12);
     } else {
-      acc += dt * TICKS_PER_SECOND * dev.speed;
+      acc += dt * TICKS_PER_SECOND * (settings.devMode ? dev.speed : 1) * settings.speed;
       let n = 0;
       while (acc >= 1 && n < 400) {
-        stepWorld(world);
+        step();
         acc -= 1;
         n++;
         ticks++;
@@ -205,12 +259,14 @@ function frame(now: number): void {
   }
   stepMs += performance.now() - t0;
 
+  renderer.overlay = dev.overlay;
   renderer.draw(world, now / 1000, dt);
 
   frames++;
-  if (devPanel && now - statTime > 500) {
+  if (settings.devMode && now - statTime > 500) {
     const secs = (now - statTime) / 1000;
     devPanel.setInfo(world.tick, Math.round(frames / secs), ticks ? stepMs / ticks : 0, Math.round(ticks / secs));
+    devPanel.setCounts(world.plants.length, world.creatures.length, totalUnits(world), Math.round(totalWater(world) / 32));
     frames = 0;
     ticks = 0;
     stepMs = 0;
@@ -221,19 +277,19 @@ function frame(now: number): void {
 requestAnimationFrame(frame);
 
 // Keep the glass: now and then, and whenever the app goes to the background.
-setInterval(() => storeGlass(world), 10000);
+setInterval(keep, 10000);
 let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     hiddenAt = Date.now();
-    storeGlass(world);
+    keep();
   } else if (hiddenAt > 0) {
     const n = ticksFor(Date.now() - hiddenAt);
     catchUp = { left: catchUp.left + n, total: catchUp.left + n };
     last = performance.now();
   }
 });
-addEventListener("pagehide", () => storeGlass(world));
+addEventListener("pagehide", keep);
 
 // Works offline once it has been opened, and can be added to the home screen.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {

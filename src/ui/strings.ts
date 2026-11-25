@@ -14,6 +14,71 @@ export const t = {
     feed: "Fôr",
     spade: "Spade",
   } as Record<string, string>,
+  menu: {
+    open: "Meny",
+    back: "Tilbake",
+    settings: "Innstillinger",
+    info: "Informasjon",
+    stats: "Statistikk",
+    species: "Arter",
+    help: "Hjelp",
+    snapshot: "Ta bilde",
+    newGlass: "Nytt glass",
+  },
+  settings: {
+    vibration: "Vibrasjon",
+    timeAway: "Tiden går mens appen er lukket",
+    speed: "Fart",
+  },
+  info: {
+    text: "Et lite terrarium der hver rute er én celle. Plantene vokser mot lyset, krypene spiser dem, alt som dør blir avfall, og meitemark og sopp gjør avfallet om til næring igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
+    cycle: ["Planter", "Bladlus", "Slim", "Avfall", "Mark og sopp"],
+    cycleNote: "Lys og vann driver det hele. Litt vann slipper ut, så glasset må vannes av og til.",
+    version: (app: string, sim: number) => `Versjon ${app} · motor ${sim}`,
+    devOn: "Utviklermodus er på",
+    devOff: "Utviklermodus er av",
+  },
+  stats: {
+    age: (text: string) => `Glasset er ${text} gammelt.`,
+    plants: "Planter",
+    creatures: "Kryp",
+    water: "Vann i glasset",
+    soilFood: "Næring i jorda",
+    waste: "Avfall og sopp",
+    records: "Rekorder",
+    glass: "Glasset",
+    oldestPlant: (min: number) => `Eldste plante: ${min} min`,
+    mostCreatures: (n: number) => `Flest kryp på en gang: ${n}`,
+    duration: (seconds: number) => {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      return h > 0 ? `${h} t ${m} min` : `${m} min`;
+    },
+  },
+  about: {
+    grass: "Lavt og raskt. Trenger lys, vann og næring.",
+    flower: "Én stengel med blomst som slipper frø.",
+    bush: "Høy og greinete. Lever lenge.",
+    plants: "Spiser blader, blomster og fôr. Holder seg i plantene.",
+    creatures: "Kryper langs bakken og spiser kryp og fôr.",
+    waste: "Graver i jorda og gjør avfall om til næring.",
+    fungus: "Sopp kommer av seg selv på fuktig avfall og gjør det om til næring.",
+  } as Record<string, string>,
+  help: {
+    water: "Dra for å vanne. Tørr jord er lysere, og planter som tørster, blir gule.",
+    soil: "Dra for å strø jord.",
+    seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer i fuktig jord.",
+    creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe dem ut.",
+    feed: "Dryss fôr som krypene kan spise. Fôr som ikke blir spist, råtner.",
+    spade: "Dra for å grave bort jord, avfall eller planter.",
+    zoom: "Klyp med to fingre for å zoome og dra med to fingre for å flytte. Dobbelttrykk zoomer inn og ut.",
+  } as Record<string, string>,
+  newGlass: {
+    question: "Er du sikker? Dette glasset blir borte.",
+    yes: "Ja, start på nytt",
+    no: "Avbryt",
+  },
+  snapshotName: "morphogen.png",
   dev: {
     pause: "Pause",
     play: "Spill",
@@ -21,5 +86,8 @@ export const t = {
     max: "maks",
     info: (tick: number, fps: number, ms: number, tps: number) =>
       `steg ${tick} · ${fps} fps · ${ms.toFixed(2)} ms/steg · ${tps} steg/s`,
+    overlays: { none: "Ingen", wet: "Fukt", food: "Næring", light: "Lys" } as Record<string, string>,
+    counts: (plants: number, creatures: number, units: number, water: number) =>
+      `${plants} planter · ${creatures} kryp · ${units} næring · ${water} vann`,
   },
 };
