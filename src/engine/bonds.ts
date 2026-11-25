@@ -131,8 +131,9 @@ export function applyBondForces(w: World): void {
  * list, with scratch.divisions filled. A bond to a parent goes to the daughter
  * on the neighbour's side; if the neighbour lies near the division plane,
  * both daughters keep it, which makes organisms stiff instead of floppy.
- * A daughter whose mode says not to keep bonds gets none. Bonds to dead
- * cells disappear. Daughters bond to each other if the mode says so.
+ * A daughter whose mode says not to keep bonds gets none, and its sister
+ * takes them all instead. Bonds to dead cells disappear. Daughters bond to
+ * each other if the mode says so.
  */
 export function rebuildBonds(w: World, anyDeaths: boolean): void {
   const { env } = w;
@@ -173,9 +174,14 @@ export function rebuildBonds(w: World, anyDeaths: boolean): void {
     const dy = ny - div.y;
     const d = sqrt(dx * dx + dy * dy);
     const along = d > 0 ? (dx * div.dirX + dy * div.dirY) / d : 0;
+    // If only one daughter keeps bonds, it takes all of them, so a cell that
+    // buds stays attached to its organism. If both keep bonds, each takes the
+    // neighbours on its own side, and both take those beside the division plane.
     const result: number[] = [];
-    if (div.keepFirst && along >= -SHARE_BOTH_THRESHOLD) result.push(div.first);
-    if (div.keepSecond && along <= SHARE_BOTH_THRESHOLD) result.push(div.second);
+    const firstSide = along >= -SHARE_BOTH_THRESHOLD;
+    const secondSide = along <= SHARE_BOTH_THRESHOLD;
+    if (div.keepFirst && (firstSide || !div.keepSecond)) result.push(div.first);
+    if (div.keepSecond && (secondSide || !div.keepFirst)) result.push(div.second);
     return result;
   };
 

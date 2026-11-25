@@ -13,4 +13,4 @@ export const GOLDEN: {
   readonly seed: number;
   readonly ticks: number;
   readonly hash: string;
-} = { engineVersion: 4, seed: 42, ticks: 10000, hash: "a9953e42" };
+} = { engineVersion: 4, seed: 42, ticks: 10000, hash: "ee12a73b" };
