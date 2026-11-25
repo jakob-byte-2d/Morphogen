@@ -1,7 +1,8 @@
-import { applyTool, createWorld, H, stepWorld, TICKS_PER_SECOND, type Tool, W } from "./sim";
+import { applyTool, createWorld, H, stepWorld, stepWorldN, TICKS_PER_SECOND, type Tool, W, type World } from "./sim";
 import { DevPanel, type DevState } from "./ui/dev";
 import { creatureIcon, plantIcon } from "./ui/icons";
 import { Picker } from "./ui/picker";
+import { restoreGlass, storeGlass } from "./ui/storage";
 import { attachInput } from "./ui/input";
 import { t } from "./ui/strings";
 import { Toolbar } from "./ui/toolbar";
@@ -13,7 +14,24 @@ import { Renderer } from "./view/renderer";
 const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get("seed"));
 const seed = Number.isFinite(seedParam) && seedParam > 0 ? seedParam : (Math.random() * 1e9) | 0;
-const world = createWorld(seed);
+
+/** Time passes while the app is closed, but at most an hour is made up for. */
+const MAX_CATCH_UP = 3600 * TICKS_PER_SECOND;
+const ticksFor = (ms: number) => Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND)));
+
+// The glass from last time, if there is one (?seed=… or ?fresh starts a new one).
+let world: World;
+let catchUp = { left: 0, total: 0 };
+const saved = params.has("seed") || params.has("fresh") ? null : restoreGlass();
+if (saved) {
+  world = saved.world;
+  const n = ticksFor(Date.now() - saved.savedAt);
+  catchUp = { left: n, total: n };
+} else {
+  world = createWorld(seed);
+  // A new glass is already a couple of minutes old: seeds have sprouted.
+  stepWorldN(world, 2 * 60 * TICKS_PER_SECOND);
+}
 
 const app = document.getElementById("app")!;
 const glass = document.createElement("div");
@@ -24,6 +42,11 @@ const ring = document.createElement("div");
 ring.className = "ring";
 glass.append(ring);
 app.append(glass);
+
+const catchUpLabel = document.createElement("div");
+catchUpLabel.className = "catchup";
+catchUpLabel.setAttribute("aria-live", "polite");
+glass.append(catchUpLabel);
 
 const camera = new Camera();
 const renderer = new Renderer(glass, camera);
@@ -149,7 +172,16 @@ function frame(now: number): void {
   }
 
   const t0 = performance.now();
-  if (dev.stepOnce) {
+  if (catchUp.left > 0) {
+    // Making up for the time the app was closed, as fast as the phone allows.
+    do {
+      stepWorld(world);
+      catchUp.left--;
+    } while (catchUp.left > 0 && performance.now() - t0 < 14);
+    catchUpLabel.textContent = t.catchUp(Math.round(100 * (1 - catchUp.left / catchUp.total)));
+    catchUpLabel.classList.toggle("on", catchUp.left > 0);
+    if (catchUp.left === 0) storeGlass(world);
+  } else if (dev.stepOnce) {
     dev.stepOnce = false;
     stepWorld(world);
     ticks++;
@@ -187,3 +219,23 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Keep the glass: now and then, and whenever the app goes to the background.
+setInterval(() => storeGlass(world), 10000);
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    storeGlass(world);
+  } else if (hiddenAt > 0) {
+    const n = ticksFor(Date.now() - hiddenAt);
+    catchUp = { left: catchUp.left + n, total: catchUp.left + n };
+    last = performance.now();
+  }
+});
+addEventListener("pagehide", () => storeGlass(world));
+
+// Works offline once it has been opened, and can be added to the home screen.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
