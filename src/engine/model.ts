@@ -53,12 +53,16 @@ export interface Environment {
   digestEfficiency: number;
   /** Share of dead matter a decomposer keeps for itself. The rest becomes nutrients. */
   decomposerShare: number;
-  /** Mass a grazer can bite off plant cells per second. */
+  /** Mass a grazer can bite off light collectors per second. */
   grazeRate: number;
+  /** Grazers never bite a light collector below this mass, so plants grow back. */
+  grazeFloor: number;
   /** Mass a hunter can bite off animal cells per second. */
   huntRate: number;
   /** A cell dies below this mass. */
   minMass: number;
+  /** Seconds a cell lives. Organisms live on through the daughters of dividing cells. */
+  lifespan: number;
   /** No cell grows heavier than this; extra food is wasted. */
   maxCellMass: number;
   /** Cells stop dividing when the glass holds this many. Keeps phones fast. */
@@ -85,6 +89,8 @@ export interface Environment {
   swimForce: number;
   /** Extra mass a swimmer burns per second. */
   swimCost: number;
+  /** How far (radians) swimmers weave from side to side as they swim. */
+  swimWobble: number;
 }
 
 /**
@@ -117,9 +123,14 @@ export interface Cell {
   anchored: boolean;
 }
 
-/** Plant cells: grazers eat these, hunters do not. */
+/** Plant cells: light collectors and roots. */
 export function isPlant(type: CellType): boolean {
   return type === "photo" || type === "root";
+}
+
+/** Animal cells: the ones hunters eat. Plants and decomposers are not animals. */
+export function isAnimal(type: CellType): boolean {
+  return type === "eater" || type === "swim" || type === "grazer" || type === "hunter";
 }
 
 /**
@@ -190,6 +201,10 @@ export interface Scratch {
   /** Sum of the directions each cell's bonds want it to face, per cell index. */
   turnX: Float64Array;
   turnY: Float64Array;
+  /** Organism -> outward normal of the wall it bumped into this tick. */
+  wallHits: Map<number, { x: number; y: number }>;
+  /** Ids of swimmers that turned around this tick. */
+  turned: Set<number>;
 }
 
 export interface World {

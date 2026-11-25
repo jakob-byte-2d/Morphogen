@@ -84,8 +84,9 @@ export function shareNutrients(w: World, dt: number): void {
 }
 
 /**
- * Stretched bonds pull their cells together; overstretched bonds break.
- * Compression is left to the normal collision push. Requires indexCells().
+ * Stretched bonds pull their cells together; overstretched bonds break,
+ * except bonds to an anchored root. Compression is left to the normal
+ * collision push. Requires indexCells().
  */
 export function applyBondForces(w: World): void {
   const { env } = w;
@@ -100,7 +101,9 @@ export function applyBondForces(w: World): void {
     const dy = b.y - a.y;
     const d = sqrt(dx * dx + dy * dy);
     const rest = (radiusOf(a.mass) + radiusOf(b.mass)) * env.bondRestFactor;
-    if (d > rest * env.bondBreakStretch) {
+    // A bond to an anchored cell (a root) never breaks: roots hold.
+    const holds = a.anchored || b.anchored;
+    if (d > rest * env.bondBreakStretch && !holds) {
       broken ??= new Uint8Array(w.bonds.length);
       broken[i] = 1;
       continue;
@@ -109,9 +112,10 @@ export function applyBondForces(w: World): void {
     const pull = (d - rest) * env.bondStiffness;
     const nx = dx / d;
     const ny = dy / d;
+    // An anchored cell does not budge, so the other cell takes the whole pull.
     const total = a.mass + b.mass;
-    const pa = pull * (b.mass / total);
-    const pb = pull * (a.mass / total);
+    const pa = a.anchored ? 0 : b.anchored ? pull : pull * (b.mass / total);
+    const pb = b.anchored ? 0 : a.anchored ? pull : pull * (a.mass / total);
     a.vx += nx * pa;
     a.vy += ny * pa;
     b.vx -= nx * pb;

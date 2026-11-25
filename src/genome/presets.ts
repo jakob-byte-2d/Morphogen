@@ -50,10 +50,11 @@ export const PRESETS = {
       }),
       // 6 Branch: a leaf, and a seed maker at the tip.
       mode({ cellType: "photo", splitMass: 150, childModes: [7, 8], childTurns: [0, 0], color: "#7cc043" }),
-      // 7 Seed maker: keeps dropping seeds that drift off and sink.
+      // 7 Seed maker: keeps dropping seeds that drift off and sink. Seeds get
+      //   half of 240, a little more than they need to sprout.
       mode({
         cellType: "photo",
-        splitMass: 200,
+        splitMass: 240,
         childModes: [0, 7],
         makeBond: false,
         childKeepsBonds: [false, true],

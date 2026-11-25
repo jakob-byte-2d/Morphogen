@@ -1,8 +1,8 @@
 import { alignOrientations, applyBondForces, indexCells, rebuildBonds, shareNutrients } from "./bonds";
-import { HALF_PI, PI, TWO_PI, atan2, cos, sin } from "./fmath";
+import { HALF_PI, PI, TWO_PI, cos, sin, wrapAngle } from "./fmath";
 import { DEFAULT_GENOME, normalizeGenome, type Genome } from "./genome";
 import { SpatialGrid } from "./grid";
-import { isPlant, radiusOf, type Cell, type Environment, type Food, type World } from "./model";
+import { isAnimal, isPlant, radiusOf, type Cell, type Environment, type Food, type World } from "./model";
 import { addNutrient, diffuseNutrients, takeNutrient } from "./nutrients";
 import { Rng } from "./rng";
 
@@ -17,6 +17,9 @@ export const ENGINE_VERSION = 6;
 
 /** Fixed simulation time step in seconds. Never vary this at runtime. */
 export const DT = 1 / 30;
+
+/** Swimmers weave from side to side once every 20 seconds. */
+const WOBBLE_STEP = (TWO_PI * DT) / 20;
 
 /**
  * The glass, seen from the side. x runs left to right, y runs from the water
@@ -47,8 +50,10 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   digestEfficiency: 0.7,
   decomposerShare: 0.25,
   grazeRate: 3,
+  grazeFloor: 60,
   huntRate: 3,
   minMass: 40,
+  lifespan: 1800,
   maxCellMass: 400,
   maxCells: 1000,
   splitSpeed: 30,
@@ -62,6 +67,7 @@ export const DEFAULT_ENVIRONMENT: Environment = {
   alignRate: 0.3,
   swimForce: 150,
   swimCost: 0.5,
+  swimWobble: 0.7,
 };
 
 /** No cell type sinks or floats. Handy for tests and measurements. */
@@ -132,6 +138,8 @@ export function createWorld(seed: number, options: WorldOptions = {}): World {
       lightOrder: [],
       turnX: new Float64Array(64),
       turnY: new Float64Array(64),
+      wallHits: new Map(),
+      turned: new Set(),
     },
   };
 
@@ -299,8 +307,9 @@ export function stepWorld(w: World): void {
   }
   if (anyDissolved) w.food = w.food.filter((_, i) => dissolved[i] === 0);
 
-  // 3. Eaters (scavengers) and decomposers eat particles they touch. Earlier
-  //    cells in the list win ties. What they do not keep becomes nutrients.
+  // 3. Scavengers (eaters) eat dead matter floating in the water; decomposers
+  //    eat the sludge on the bottom. Earlier cells in the list win ties. What
+  //    they do not keep becomes nutrients.
   foodGrid.clear();
   for (let i = 0; i < w.food.length; i++) foodGrid.insert(i, w.food[i].x, w.food[i].y);
   const eaten = new Uint8Array(w.food.length);
@@ -308,9 +317,10 @@ export function stepWorld(w: World): void {
   for (const c of w.cells) {
     const keep = c.type === "eater" ? env.digestEfficiency : c.type === "decomposer" ? env.decomposerShare : -1;
     if (keep < 0) continue;
+    const wantsSludge = c.type === "decomposer";
     const r = radiusOf(c.mass);
     foodGrid.query(c.x, c.y, r, (i) => {
-      if (eaten[i]) return;
+      if (eaten[i] || w.food[i].y >= bottom !== wantsSludge) return;
       const dx = w.food[i].x - c.x;
       const dy = w.food[i].y - c.y;
       if (dx * dx + dy * dy <= r * r) {
@@ -336,7 +346,6 @@ export function stepWorld(w: World): void {
   cellGrid.clear();
   for (let i = 0; i < n; i++) cellGrid.insert(i, w.cells[i].x, w.cells[i].y);
   const maxRadius = radiusOf(env.maxCellMass);
-  const anchorLater: Cell[] = [];
   for (let i = 0; i < n; i++) {
     const a = w.cells[i];
     const ra = radiusOf(a.mass);
@@ -351,9 +360,10 @@ export function stepWorld(w: World): void {
       if (d2 >= minDist * minDist) return;
       if (appetite[i] > 0) bite(w, a, b, i, appetite);
       if (appetite[k] > 0) bite(w, b, a, k, appetite);
-      // A seed that lands on something already anchored takes root there.
-      if (a.type === "root" && !a.anchored && b.anchored) anchorLater.push(a);
-      if (b.type === "root" && !b.anchored && a.anchored) anchorLater.push(b);
+      // A loose root (a seed) falls through other plants instead of getting
+      // caught in their leaves, so it always reaches the bottom.
+      if (a.type === "root" && !a.anchored && isPlant(b.type)) return;
+      if (b.type === "root" && !b.anchored && isPlant(a.type)) return;
       if (a.anchored && b.anchored) return;
       const dist = Math.sqrt(d2);
       const push = (minDist - dist) * env.stiffness;
@@ -373,12 +383,6 @@ export function stepWorld(w: World): void {
     });
   }
 
-  for (const c of anchorLater) {
-    c.anchored = true;
-    c.vx = 0;
-    c.vy = 0;
-  }
-
   // 5. Light collectors build mass from light and nutrients. Swimmers push
   //    themselves forward at a cost. Cells sink or float by type. Everyone
   //    burns mass, which goes back into the water as nutrients.
@@ -386,14 +390,16 @@ export function stepWorld(w: World): void {
   const light = w.scratch.light;
   for (let i = 0; i < n; i++) {
     const c = w.cells[i];
-    // A root that has not anchored yet is a dormant seed: it burns nothing.
-    let burn = c.type === "root" && !c.anchored ? 0 : env.metabolism * DT;
+    let burn = env.metabolism * DT;
     if (c.type === "photo") {
       const want = env.photoRate * light[i] * DT;
       gain(w, c, takeNutrient(w, c.x, c.y, want, env.nutrientUptake));
     } else if (c.type === "swim") {
-      c.vx += cos(c.angle) * env.swimForce * DT;
-      c.vy += sin(c.angle) * env.swimForce * DT;
+      // Swimmers weave from side to side, each in its own rhythm, so animals
+      // wander around the glass instead of getting stuck against a wall.
+      const heading = c.angle + env.swimWobble * sin(c.age * WOBBLE_STEP + c.id);
+      c.vx += cos(heading) * env.swimForce * DT;
+      c.vy += sin(heading) * env.swimForce * DT;
       burn += env.swimCost * DT;
     }
     if (!c.anchored) c.vy += env.sink[c.type] * DT;
@@ -412,7 +418,10 @@ export function stepWorld(w: World): void {
   for (const c of w.cells) if (c.type === "root") c.angle = -HALF_PI;
 
   // 7. Move, apply friction and keep cells inside the glass. A root that
-  //    reaches the bottom anchors there for good.
+  //    reaches the bottom anchors there for good. When an organism bumps
+  //    into a wall, its swimmers that push towards the wall turn around.
+  const wallHits = w.scratch.wallHits;
+  wallHits.clear();
   for (const c of w.cells) {
     if (c.anchored) {
       c.vx = 0;
@@ -448,27 +457,29 @@ export function stepWorld(w: World): void {
       c.vx = 0;
       c.vy = 0;
     }
-    // A swimmer heading into a wall turns away, like a ball bouncing off it.
-    if (c.type === "swim" && (nx !== 0 || ny !== 0)) {
-      let fx = cos(c.angle);
-      let fy = sin(c.angle);
-      if (fx * nx > 0) fx = -fx;
-      if (fy * ny > 0) fy = -fy;
-      c.angle = atan2(fy, fx);
+    if (nx !== 0 || ny !== 0) {
+      const hit = wallHits.get(c.organism);
+      if (hit) {
+        hit.x += nx;
+        hit.y += ny;
+      } else wallHits.set(c.organism, { x: nx, y: ny });
     }
   }
+  if (wallHits.size > 0) turnAwayFromWalls(w);
 
   // 8. Division and death, following each cell's mode. Order is preserved:
-  //    daughters replace the parent in the list. A dead cell leaves its mass
-  //    behind as particles of dead matter; what does not fill a whole
-  //    particle dissolves as nutrients. Roots only sprout once anchored.
+  //    daughters replace the parent in the list. Cells die when they starve
+  //    or grow old. A dead cell leaves its mass behind as particles of dead
+  //    matter; what does not fill a whole particle dissolves as nutrients.
+  //    Roots only sprout once anchored.
   const divisions = w.scratch.divisions;
   divisions.clear();
   let anyDeaths = false;
   let population = w.cells.length;
+  const maxAge = Math.round(env.lifespan / DT);
   const next: Cell[] = [];
   for (const c of w.cells) {
-    if (c.mass < env.minMass) {
+    if (c.mass < env.minMass || c.age >= maxAge) {
       anyDeaths = true;
       population--;
       const r = radiusOf(c.mass);
@@ -531,6 +542,29 @@ export function stepWorld(w: World): void {
   w.tick++;
 }
 
+/**
+ * Swimmers in an organism that bumped into a wall turn around if they push
+ * towards it. A bonded swimmer's direction is held by its bonds, so the
+ * bonds' attachment angles turn with it; otherwise the bonds would turn it
+ * straight back.
+ */
+function turnAwayFromWalls(w: World): void {
+  const { wallHits, turned } = w.scratch;
+  turned.clear();
+  for (const c of w.cells) {
+    if (c.type !== "swim") continue;
+    const hit = wallHits.get(c.organism);
+    if (!hit || cos(c.angle) * hit.x + sin(c.angle) * hit.y <= 0) continue;
+    c.angle = wrapAngle(c.angle + PI);
+    turned.add(c.id);
+  }
+  if (turned.size === 0) return;
+  for (const b of w.bonds) {
+    if (turned.has(b.a)) b.angA = wrapAngle(b.angA + PI);
+    if (turned.has(b.b)) b.angB = wrapAngle(b.angB + PI);
+  }
+}
+
 /** Adds mass to a cell. Anything above the mass limit goes back into the water. */
 function gain(w: World, c: Cell, amount: number): void {
   const room = w.env.maxCellMass - c.mass;
@@ -544,15 +578,22 @@ function gain(w: World, c: Cell, amount: number): void {
 
 /**
  * A grazer or hunter bites into a cell it touches, if that cell is from
- * another organism and the right kind of food: grazers eat light collectors,
- * hunters eat every cell that is not a plant. Part of the bite becomes the
- * eater's mass, the rest nutrients.
+ * another species and the right kind of food. Grazers eat light collectors,
+ * but never below grazeFloor, so the plant survives and grows back. Hunters
+ * eat animal cells and can kill them. Part of the bite becomes the eater's
+ * mass, the rest nutrients.
  */
 function bite(w: World, eater: Cell, prey: Cell, eaterIndex: number, appetite: Float64Array): void {
-  if (eater.organism === prey.organism) return;
-  const edible = eater.type === "grazer" ? prey.type === "photo" : !isPlant(prey.type);
-  if (!edible) return;
-  const amount = Math.min(appetite[eaterIndex], prey.mass);
+  if (eater.species === prey.species) return;
+  let available: number;
+  if (eater.type === "grazer") {
+    if (prey.type !== "photo") return;
+    available = prey.mass - w.env.grazeFloor;
+  } else {
+    if (!isAnimal(prey.type)) return;
+    available = prey.mass;
+  }
+  const amount = Math.min(appetite[eaterIndex], available);
   if (amount <= 0) return;
   appetite[eaterIndex] -= amount;
   prey.mass -= amount;
