@@ -137,14 +137,18 @@ function drop(w: World, c: Creature, i: number): void {
   }
 }
 
-/** A dead creature becomes waste; what it had eaten goes with it. */
+/**
+ * A dead creature becomes waste; what it had eaten goes with it. A worm was
+ * made of the soil it dug through, and turns back into soil.
+ */
 function killCreature(w: World, c: Creature): void {
   c.dead = true;
   w.orgs.delete(c.id);
   let left = c.store;
   for (const i of c.cells) {
     if (w.org[i] !== c.id || !CREATURE_PART[w.type[i]]) continue;
-    w.type[i] = WASTE;
+    w.type[i] = w.type[i] === WORM ? SOIL : WASTE;
+    w.kind[i] = 0;
     w.org[i] = 0;
     const add = Math.min(left, 255 - w.food[i]);
     w.food[i] += add;
@@ -490,9 +494,11 @@ function updateWorm(w: World, c: Creature): void {
       killCreature(w, c);
       return;
     }
+    // A starving worm shrinks: its tail turns back into soil.
     const tail = c.cells.pop()!;
-    w.type[tail] = WASTE;
+    w.type[tail] = SOIL;
     w.org[tail] = 0;
+    w.kind[tail] = 0;
     c.energy += WORMS.segmentCost >> 1;
     return;
   }

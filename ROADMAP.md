@@ -58,6 +58,7 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer
 - [x] **9. Ingen regn.** Fukten i lufta legger seg som dugg i jorda i stedet for å falle som dråper. Vann renner gjennom planter og blir aldri liggende på bladene. Dugg på glasset når lufta er fuktig.
 - [x] **10. Dobbel oppløsning.** 144 × 256 ruter. Planter og kryp like store som før, men med finere detaljer. Zoom til 16×.
 - [x] **11. Egenskaper og mutasjon.** Størrelse, fart, vekst og mutasjon for kryp; vekst, frøstørrelse og mutasjon for planter. Hvert individ har sine egne gener, og arten kan utvikle seg.
+- [x] **12. Jorda blir.** Døde røtter og meitemark blir jord igjen, og begravd avfall blir av og til humus, så jorda ikke spises opp. Steiner uten noe under faller. Fuktig jord fordamper litt, og fukt trekkes lettere opp, så overflaten ikke tørker ut.
 
 ## Senere
 

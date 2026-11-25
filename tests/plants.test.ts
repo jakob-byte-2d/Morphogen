@@ -77,13 +77,17 @@ describe("growth", () => {
     const w = bed(130);
     stepWorldN(w, 600);
     expect(w.plants.length).toBe(1);
-    const cells = w.plants[0].cells.length;
+    const p = w.plants[0];
+    const roots = p.cells.filter((i) => w.type[i] === ROOT);
+    const shoot = p.cells.length - roots.length;
     for (let i = 0; i < w.wet.length; i++) w.wet[i] = 0;
     w.humidity = 0;
     // The dew it breathes out keeps it going a little longer, but not for long.
     for (let k = 0; k < 90 && w.plants.length > 0; k++) stepWorldN(w, 10);
     expect(w.plants.length).toBe(0);
-    expect(count(w, WASTE)).toBeGreaterThanOrEqual(cells);
+    // The shoot becomes waste; the roots, which grew where there was soil, become soil again.
+    expect(count(w, WASTE)).toBeGreaterThanOrEqual(shoot);
+    for (const i of roots) expect(w.type[i]).toBe(SOIL);
   });
 });
 

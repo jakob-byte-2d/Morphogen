@@ -5,6 +5,9 @@ import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plant
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
+/** Oldest engine version whose saved glasses can still be loaded. */
+const SAVES_FROM = 7;
+
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 function toBase64(bytes: Uint8Array): string {
@@ -97,7 +100,8 @@ function cellList(v: unknown): number[] {
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Partial<SavedGlass>;
-  if (d.v !== SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
+  // Glasses saved from version 7 on have the same layout and carry on under the newer rules.
+  if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
   const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
   if (plantSpecies.length === 0 || creatureSpecies.length === 0) return null;

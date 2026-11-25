@@ -1,11 +1,11 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SEED, SOIL, WATER } from "./cells";
+import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SEED, SOIL, STONE, WATER, WORM } from "./cells";
 import { updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
 import { CREATURE_SPECIES, PLANT_SPECIES, type CreatureSpecies, type PlantSpecies } from "./species";
 
-import { AREA, H, SCALE, SIZE, W } from "./dims";
+import { H, SCALE, SIZE, W } from "./dims";
 
 export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
 
@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 7;
+export const SIM_VERSION = 8;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -159,6 +159,25 @@ export function clearCell(w: World, i: number): void {
   w.kind[i] = 0;
 }
 
+/** What counts as being under ground: a cell with one of these above it is buried. */
+const GROUND = new Uint8Array(32);
+for (const t of [SOIL, SAND, STONE, ROOT, WORM]) GROUND[t] = 1;
+
+/**
+ * Waste or fungus that has given up all it had. On the surface it is simply
+ * gone; buried in the ground, now and then it has become soil (humus), so
+ * the ground builds up a little, slowly, as things live and die on it.
+ */
+export function rotAway(w: World, i: number): void {
+  if (i >= W && GROUND[w.type[i - W]] && w.rng.below(4) === 0) {
+    wake(w, i);
+    w.type[i] = SOIL;
+    w.food[i] = 0;
+    w.org[i] = 0;
+    w.kind[i] = 0;
+  } else clearCell(w, i);
+}
+
 /** Swaps two cells with everything they carry, without marking them as moved. */
 export function swapCells(w: World, i: number, j: number): void {
   move(w, i, j, 0);
@@ -288,6 +307,13 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
 }
 
 /**
+ * Dry soil draws water up from moister soil below while the difference from
+ * one cell to the next is bigger than this, so the surface stays moist
+ * enough for seeds as long as there is water further down.
+ */
+const CAPILLARY_STEP = 4;
+
+/**
  * Moisture spreads through soil and sand: sideways and upwards a little,
  * downwards whatever the soil cannot hold against gravity.
  */
@@ -312,7 +338,7 @@ function spreadMoisture(w: World): void {
             const f = Math.min(room, (excess + 1) >> 1);
             wet[i] -= f;
             wet[b] += f;
-          } else if (wet[b] > wet[i] + 16) {
+          } else if (wet[b] > wet[i] + CAPILLARY_STEP) {
             // Capillary rise: dry soil draws water up from below.
             const f = (wet[b] - wet[i]) >> 2;
             wet[b] -= f;
@@ -362,9 +388,9 @@ export function computeLight(w: World): void {
  */
 function condense(w: World): void {
   // A little water escapes all the time, so the glass needs watering now and then.
-  // (Half a unit per step for every unit of area: the glass holds AREA times
-  // as much water as it did at scale 1.)
-  const leak = Math.min(w.humidity, (AREA + (w.rng.nextU32() & 1)) >> 1);
+  // (Half a unit per step for every SCALE: plants, which keep the air moist,
+  // have about SCALE times as many cells as at scale 1.)
+  const leak = Math.min(w.humidity, (SCALE + (w.rng.nextU32() & 1)) >> 1);
   w.humidity -= leak;
   w.lostWater += leak;
   if (w.humidity < DEW * 4) return;
@@ -460,6 +486,10 @@ function movePass(w: World, pass: number): void {
       const t = type[i];
       if (POWDER[t]) fallPowder(w, x, y, i, mark);
       else if (t === WATER) flowWater(w, x, y, i, mark);
+      else if (t === STONE && y < H - 1 && isFree(type[i + W])) {
+        // A stone with nothing under it drops straight down (it never slides).
+        move(w, i, i + W, mark);
+      }
     }
   }
 }

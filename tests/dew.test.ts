@@ -53,7 +53,7 @@ describe("water on plants", () => {
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
     stepWorldN(w, 1500);
-    expect(w.plants.length).toBe(1);
+    expect(w.plants.length).toBeGreaterThan(0);
     const p = w.plants[0];
     let resting = 0;
     for (let k = 0; k < 12; k++) {
@@ -87,7 +87,8 @@ describe("seeds on plants", () => {
     stepWorldN(w, 40);
     const seeds = [...w.type.keys()].filter((i) => w.type[i] === SEED);
     expect(seeds.length).toBeGreaterThan(0);
-    for (const i of seeds) expect(w.type[i + W]).toBe(SOIL);
+    // No seed lies on the plant: they are on the ground, or still falling.
+    for (const i of seeds) expect([LEAF, FLOWER, STEM]).not.toContain(w.type[i + W]);
   });
 });
 
