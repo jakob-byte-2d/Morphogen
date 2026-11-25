@@ -1,0 +1,20 @@
+{
+  "name": "morphogen",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Design organisms from a genome and let them compete in a petri dish.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}
