@@ -45,13 +45,19 @@ export interface Environment {
   maxBondsPerCell: number;
   /** Fraction of the mass difference that flows across a bond per second. */
   nutrientShare: number;
+  /** How quickly a bonded cell turns to follow its organism, per tick (0–1). */
+  alignRate: number;
+  /** Push a swimmer gives itself, as speed gained per second. */
+  swimForce: number;
+  /** Extra mass a swimmer burns per second. */
+  swimCost: number;
 }
 
 /**
  * Cell types. The order is part of the save format and the hash: only ever
  * add new types at the end.
  */
-export const CELL_TYPES = ["eater", "photo"] as const;
+export const CELL_TYPES = ["eater", "photo", "swim"] as const;
 export type CellType = (typeof CELL_TYPES)[number];
 
 export interface Cell {
@@ -80,10 +86,18 @@ export interface Food {
   vy: number;
 }
 
-/** A bond (adhesion) between two cells, by cell id. */
+/**
+ * A bond (adhesion) between two cells, by cell id. Each end remembers where
+ * on its cell the bond is attached, as an angle relative to the cell's
+ * orientation. That is what lets cells turn along with their organism.
+ */
 export interface Bond {
   a: number;
   b: number;
+  /** Direction from a to b, relative to a's orientation, in radians. */
+  angA: number;
+  /** Direction from b to a, relative to b's orientation, in radians. */
+  angB: number;
 }
 
 /** Record of one division this tick, used to hand bonds over to the daughters. */
@@ -117,6 +131,9 @@ export interface Scratch {
   bondDegree: Map<number, number>;
   /** Touching neighbours per cell index, counted during collisions. */
   contacts: Uint16Array;
+  /** Sum of the directions each cell's bonds want it to face, per cell index. */
+  turnX: Float64Array;
+  turnY: Float64Array;
 }
 
 export interface World {

@@ -16,7 +16,7 @@ npm run typecheck  # sjekk typer
 npm run build      # bygg til dist/
 ```
 
-Legg til `?seed=123&genome=alge` i adressen for å spille av akkurat samme skål igjen med en bestemt organisme (`klump`, `alge` eller `blanding`).
+Legg til `?seed=123&genome=alge` i adressen for å spille av akkurat samme skål igjen med en bestemt organisme (`klump`, `alge`, `blanding` eller `svommer`).
 
 **Ytelsestest:** åpne `bench.html` (på nett: `/Morphogen/bench.html`). Den måler hvor raskt simuleringen går med 250–2000 celler, og sjekker at enheten regner nøyaktig likt som alle andre.
 

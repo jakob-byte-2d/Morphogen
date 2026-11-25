@@ -8,4 +8,9 @@
  * world.ts and update the hash here. If the hash changes when you did NOT
  * mean to change the rules, something is broken.
  */
-export const GOLDEN = { engineVersion: 3, seed: 42, ticks: 10000, hash: "c558fae5" } as const;
+export const GOLDEN: {
+  readonly engineVersion: number;
+  readonly seed: number;
+  readonly ticks: number;
+  readonly hash: string;
+} = { engineVersion: 4, seed: 42, ticks: 10000, hash: "a9953e42" };

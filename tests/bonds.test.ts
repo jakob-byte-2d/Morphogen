@@ -3,6 +3,7 @@ import {
   DEFAULT_ENVIRONMENT,
   countOrganisms,
   createWorld,
+  makeBond,
   stepWorld,
   type Cell,
   type Environment,
@@ -25,7 +26,8 @@ function cell(id: number, x: number, y: number, mass: number, mode = 0): Cell {
 
 function place(w: World, cells: Cell[], bonds: [number, number][] = []): void {
   w.cells = cells;
-  w.bonds = bonds.map(([a, b]) => ({ a, b }));
+  const byId = new Map(cells.map((c) => [c.id, c]));
+  w.bonds = bonds.map(([a, b]) => makeBond(byId.get(a)!, byId.get(b)!));
   w.nextId = Math.max(...cells.map((c) => c.id)) + 1;
   indexCells(w);
 }

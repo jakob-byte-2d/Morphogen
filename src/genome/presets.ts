@@ -40,6 +40,21 @@ export const PRESETS = {
       mode({ cellType: "photo", canSplit: false, color: "#b7e05a" }),
     ],
   },
+
+  svommer: {
+    version: GENOME_VERSION,
+    name: "Svømmer",
+    startMode: 0,
+    modes: [
+      // Founder eater divides into an eater (front) and a swimmer (back),
+      // both facing forward, so the swimmer pushes the eater towards food.
+      mode({ childModes: [1, 2], childTurns: [0, 0] }),
+      // The eater keeps budding off new founders.
+      mode({ childModes: [1, 0], makeBond: false, childKeepsBonds: [true, false] }),
+      // The swimmer never divides, it just swims.
+      mode({ cellType: "swim", canSplit: false, color: "#5a96dc" }),
+    ],
+  },
 } satisfies Record<string, Genome>;
 
 export type PresetId = keyof typeof PRESETS;
