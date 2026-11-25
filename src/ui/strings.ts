@@ -69,7 +69,7 @@ export const t = {
     fungus: "Sopp kommer av seg selv på fuktig avfall og gjør det om til næring.",
   } as Record<string, string>,
   help: {
-    water: "Dra for å vanne. Tørr jord er lysere, og planter som tørster, blir gule.",
+    water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
     soil: "Dra for å strø jord.",
     seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer i fuktig jord.",
     creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe dem ut.",

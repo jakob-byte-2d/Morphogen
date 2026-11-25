@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 8;
+export const SIM_VERSION = 9;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -30,6 +30,18 @@ const WAKE_ALL_EVERY = 16;
 /** Moisture one water cell carries into the soil. */
 export const WATER_UNITS = 32;
 export const MAX_WET = 255;
+
+/**
+ * Soil or sand this wet is soaked through: it is below the groundwater
+ * table. Where such ground meets open air, water seeps out, so open water
+ * stands as high as the groundwater does.
+ */
+export const SATURATED = MAX_WET - 8;
+/**
+ * Open water soaks into ground only up to here, well short of SATURATED:
+ * water that has just seeped out of soaked ground does not go straight back.
+ */
+const SOAKS_UP_TO = SATURATED - 2 * WATER_UNITS;
 
 /** Moisture one dew event puts back into the ground. */
 const DEW = 8 * SCALE;
@@ -251,7 +263,7 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       move(w, i, b, mark);
       return;
     }
-    if (POROUS[tb] && wet[b] <= MAX_WET - WATER_UNITS) {
+    if (POROUS[tb] && wet[b] <= SOAKS_UP_TO) {
       wet[b] += WATER_UNITS;
       clearCell(w, i);
       return;
@@ -272,7 +284,7 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
           move(w, i, j, mark);
           return;
         }
-        if (POROUS[type[j]] && wet[j] <= MAX_WET - WATER_UNITS) {
+        if (POROUS[type[j]] && wet[j] <= SOAKS_UP_TO) {
           wet[j] += WATER_UNITS;
           clearCell(w, i);
           return;
@@ -298,7 +310,7 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       move(w, i, k, mark);
       return;
     }
-    if (POROUS[type[k]] && wet[k] <= MAX_WET - WATER_UNITS && (r & 6) === 0) {
+    if (POROUS[type[k]] && wet[k] <= SOAKS_UP_TO && (r & 6) === 0) {
       wet[k] += WATER_UNITS;
       clearCell(w, i);
       return;
@@ -355,8 +367,25 @@ function spreadMoisture(w: World): void {
           wet[k] += f;
         }
       }
+      if (wet[i] >= SATURATED && (t === SOIL || t === SAND)) seep(w, x, y, i);
     }
   }
+}
+
+/**
+ * Ground soaked through from below (part of the groundwater, not just wet
+ * from the top) lets water out into open air beside or above it.
+ */
+function seep(w: World, x: number, y: number, i: number): void {
+  const { type, wet } = w;
+  if (y < H - 1 && !(POROUS[type[i + W]] && wet[i + W] >= SATURATED)) return;
+  let j = -1;
+  if (y > 0 && type[i - W] === EMPTY) j = i - W;
+  else if (x > 0 && type[i - 1] === EMPTY) j = i - 1;
+  else if (x < W - 1 && type[i + 1] === EMPTY) j = i + 1;
+  if (j < 0) return;
+  wet[i] -= WATER_UNITS;
+  setCell(w, j, WATER);
 }
 
 /**

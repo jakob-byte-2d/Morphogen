@@ -168,7 +168,12 @@ function eat(w: World, c: Creature, j: number, perUnit: number): void {
   c.energy += units * perUnit;
   const victim = w.org[j] ? w.orgs.get(w.org[j]) : undefined;
   w.food[j] = 0;
-  clearCell(w, j);
+  if (w.type[j] === WORM) {
+    // A bitten-off piece of worm leaves the soil it was made of.
+    w.type[j] = SOIL;
+    w.org[j] = 0;
+    w.kind[j] = 0;
+  } else clearCell(w, j);
   if (victim && victim.kind === "creature" && victim !== c) {
     victim.cells = victim.cells.filter((i) => i !== j);
     if (victim.cells.length === 0) {
@@ -448,6 +453,8 @@ const WORMS = {
   sense: 8 * SCALE,
   /** Updates between giving a unit back to the soil. */
   castEvery: 4,
+  /** Updates between taking a unit from the soil, when there is nothing better. */
+  soilEvery: 32,
   /** Energy to grow (and given back by losing) one segment. */
   segmentCost: (120 / SCALE) | 0,
 };
@@ -505,12 +512,24 @@ function updateWorm(w: World, c: Creature): void {
   const head = c.cells[0];
 
   // Eat waste, feed or fungus right next to the head.
+  let fed = false;
   for (const d of NEIGHBOURS) {
     const j = head + d;
     if (!inGlass(j, head)) continue;
     if (wormFood(w.type[j])) {
       eat(w, c, j, WORM_PER_UNIT[g.growth - 1]);
+      fed = true;
       break;
+    }
+  }
+  // Otherwise it lives, sparingly, on what is in the soil it swallows. It
+  // is enough to get by on, not to grow on; the units go back in its casts.
+  if (!fed && c.age % WORMS.soilEvery === 0) {
+    const j = head + W;
+    if (j < W * H && isSoil(w.type[j]) && w.food[j] > 0) {
+      w.food[j]--;
+      c.store++;
+      c.energy += WORM_PER_UNIT[g.growth - 1] >> 2;
     }
   }
 
