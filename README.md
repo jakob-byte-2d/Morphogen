@@ -2,7 +2,7 @@
 
 Et virtuelt terrarium: et glass med vann sett fra siden, der enkle cellebaserte organismer lever i et lukket kretsløp. Du designer artene med et genom og steller glasset så livet holder seg i balanse.
 
-Akkurat nå er spillet fortsatt en petriskål der du kan teste organismer; glasset kommer i fase 4.
+Glasset og lagdelingen er på plass (fase 4). Kretsløpet og stellet kommer i fase 5 og 6.
 
 Planen ligger i [ROADMAP.md](ROADMAP.md).
 

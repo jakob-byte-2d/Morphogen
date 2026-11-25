@@ -30,7 +30,15 @@ describe("deterministic atan/atan2", () => {
 /** A dish without food or light, with non-dividing cells of the given types. */
 function dish(): World {
   return createWorld(1, {
-    env: { ...DEFAULT_ENVIRONMENT, foodPerSecond: 0, maxFood: 0, light: 0, metabolism: 0, swimCost: 0 },
+    env: {
+      ...DEFAULT_ENVIRONMENT,
+      foodPerSecond: 0,
+      maxFood: 0,
+      light: 0,
+      metabolism: 0,
+      swimCost: 0,
+      sink: { eater: 0, photo: 0, swim: 0 },
+    },
     genomes: [
       {
         version: 1,
@@ -42,14 +50,15 @@ function dish(): World {
   });
 }
 
+/** A cell at (x, y) from the centre of the glass. */
 function cell(id: number, x: number, y: number, angle: number, swim = false): Cell {
   return {
     id,
     species: 0,
     mode: swim ? 1 : 0,
     type: swim ? "swim" : "eater",
-    x,
-    y,
+    x: DEFAULT_ENVIRONMENT.tankWidth / 2 + x,
+    y: DEFAULT_ENVIRONMENT.tankHeight / 2 + y,
     vx: 0,
     vy: 0,
     mass: 100,
@@ -69,8 +78,8 @@ describe("orientation", () => {
     indexCells(w);
 
     // Rotate the pair a quarter turn around a's centre.
-    b.x = 0;
-    b.y = 18;
+    b.x = a.x;
+    b.y = a.y + 18;
     stepWorldN(w, 60);
     expect(wrapAngle(w.cells[0].angle - (0.3 + Math.PI / 2))).toBeCloseTo(0, 2);
     expect(wrapAngle(w.cells[1].angle - (-0.5 + Math.PI / 2))).toBeCloseTo(0, 2);
@@ -87,21 +96,24 @@ describe("orientation", () => {
 
     stepWorldN(w, 90);
     const [e, s] = w.cells;
-    expect(e.x).toBeGreaterThan(20);
+    const cx = DEFAULT_ENVIRONMENT.tankWidth / 2;
+    const cy = DEFAULT_ENVIRONMENT.tankHeight / 2;
+    expect(e.x - cx).toBeGreaterThan(20);
     expect(s.x).toBeLessThan(e.x);
-    expect(Math.abs(e.y)).toBeLessThan(5);
+    expect(Math.abs(e.y - cy)).toBeLessThan(5);
     expect(w.bonds.length).toBe(1);
   });
 
   it("a lone swimmer bounces off the wall instead of getting stuck", () => {
     const w = dish();
-    w.cells = [cell(1, 250, 0, 0, true)];
+    // Starts near the right wall, heading right.
+    w.cells = [cell(1, 120, 0, 0, true)];
     w.bonds = [];
     w.nextId = 2;
     indexCells(w);
     stepWorldN(w, 120);
     const s = w.cells[0];
-    expect(Math.cos(s.angle)).toBeLessThan(0); // Now heading back into the dish.
-    expect(s.x).toBeLessThan(260);
+    expect(Math.cos(s.angle)).toBeLessThan(0); // Now heading back into the glass.
+    expect(s.x).toBeLessThan(DEFAULT_ENVIRONMENT.tankWidth - 30);
   });
 });

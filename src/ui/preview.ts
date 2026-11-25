@@ -9,9 +9,11 @@ import { render } from "./renderer";
  */
 const PREVIEW_ENV: Environment = {
   ...DEFAULT_ENVIRONMENT,
-  dishRadius: 110,
-  foodPerSecond: 90,
-  maxFood: 600,
+  tankWidth: 240,
+  tankHeight: 170,
+  lightDepth: 215,
+  foodPerSecond: 60,
+  maxFood: 500,
   metabolism: 0.5,
   swimCost: 0,
   maxCells: 120,

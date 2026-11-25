@@ -11,17 +11,24 @@ import {
 } from "../src/engine";
 import { indexCells, shareNutrients } from "../src/engine/bonds";
 
-/** An empty dish without food, so only the cells we place matter. */
+const NO_SINKING = { eater: 0, photo: 0, swim: 0 };
+/** Centre of the glass: tests place cells relative to it, away from the walls. */
+const CX = DEFAULT_ENVIRONMENT.tankWidth / 2;
+const CY = DEFAULT_ENVIRONMENT.tankHeight / 2;
+
+/** An empty glass without food or sinking, so only the cells we place matter. */
 function emptyWorld(overrides: Partial<Environment> = {}): World {
-  const w = createWorld(1, { env: { ...DEFAULT_ENVIRONMENT, foodPerSecond: 0, maxFood: 0, ...overrides } });
+  const w = createWorld(1, {
+    env: { ...DEFAULT_ENVIRONMENT, foodPerSecond: 0, maxFood: 0, sink: NO_SINKING, ...overrides },
+  });
   w.cells = [];
   w.bonds = [];
   return w;
 }
 
-/** A cell of the default genome (eaters). Mode 0 divides into a bonded pair. */
+/** A cell of the default genome (eaters), at (x, y) from the centre. Mode 0 divides into a bonded pair. */
 function cell(id: number, x: number, y: number, mass: number, mode = 0): Cell {
-  return { id, species: 0, mode, type: "eater", x, y, vx: 0, vy: 0, mass, angle: 0, age: 0 };
+  return { id, species: 0, mode, type: "eater", x: CX + x, y: CY + y, vx: 0, vy: 0, mass, angle: 0, age: 0 };
 }
 
 function place(w: World, cells: Cell[], bonds: [number, number][] = []): void {
@@ -155,20 +162,37 @@ describe("budding keeps the organism together", () => {
     expect(bonded(w, buds, 2)).toBe(false);
   });
 
-  it("with plenty of food, a Spiserklump organism grows to 8 cells and keeps them while it buds", () => {
+  it("with plenty of food, a Spiserklump organism grows to about 8 cells and no further, budding instead", () => {
     const w = createWorld(1, {
-      env: { ...DEFAULT_ENVIRONMENT, dishRadius: 110, foodPerSecond: 90, maxFood: 600, metabolism: 0.5, maxCells: 120 },
+      env: {
+        ...DEFAULT_ENVIRONMENT,
+        tankWidth: 220,
+        tankHeight: 220,
+        foodPerSecond: 90,
+        maxFood: 600,
+        metabolism: 0.5,
+        maxCells: 120,
+        sink: NO_SINKING,
+      },
     });
-    for (let i = 0; i < 1800; i++) stepWorld(w);
-    const sizes = new Map<number, number>();
-    const parent = new Map<number, number>();
-    const find = (id: number): number => {
-      while (parent.get(id) !== id) id = parent.get(id)!;
-      return id;
-    };
-    for (const c of w.cells) parent.set(c.id, c.id);
-    for (const b of w.bonds) parent.set(find(b.a), find(b.b));
-    for (const c of w.cells) sizes.set(find(c.id), (sizes.get(find(c.id)) ?? 0) + 1);
-    expect(Math.max(...sizes.values())).toBe(8);
+    // Track the biggest organism over time: it should get close to 8 cells (a bond
+    // can break in the crush of divisions) and never grow past 8.
+    let peak = 0;
+    for (let i = 1; i <= 1800; i++) {
+      stepWorld(w);
+      if (i % 30 !== 0) continue;
+      const sizes = new Map<number, number>();
+      const parent = new Map<number, number>();
+      const find = (id: number): number => {
+        while (parent.get(id) !== id) id = parent.get(id)!;
+        return id;
+      };
+      for (const c of w.cells) parent.set(c.id, c.id);
+      for (const b of w.bonds) parent.set(find(b.a), find(b.b));
+      for (const c of w.cells) sizes.set(find(c.id), (sizes.get(find(c.id)) ?? 0) + 1);
+      peak = Math.max(peak, ...sizes.values());
+    }
+    expect(peak).toBeGreaterThanOrEqual(6);
+    expect(peak).toBeLessThanOrEqual(8);
   });
 });

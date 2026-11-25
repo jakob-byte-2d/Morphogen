@@ -43,16 +43,18 @@ Fasene 0–3 i den opprinnelige planen:
 - [x] Ytelsestest på `bench.html`
   - [ ] Kjør testen på en ekte Android-telefon
 
-## Fase 4 – Glasset fra siden
+## Fase 4 – Glasset fra siden ✅
 
-- [ ] Stående rektangulært glass (omtrent 2:3) med vegger, vannflate og bunn, i stedet for den runde skålen
-- [ ] Tyngdekraft og oppdrift per celletype
-- [ ] Lys ovenfra i kolonner: svekkes nedover og skygges av celler over
-- [ ] Dødt materiale synker og legger seg som bunnslam
-- [ ] Tegnet rett fra siden: vann, vannflate, bunn og glasskanter
-- [ ] Forhåndsvisningen i genomeditoren bruker et lite glass
-- [ ] Ferdiglagde organismer justert til glasset
-- **Ferdig når:** alger holder seg øverst og spisere nær bunnen, uten egne regler for det
+- [x] Stående rektangulært glass (300 × 450, 2:3) med vegger, vannflate og bunn, i stedet for den runde skålen
+- [x] Tyngdekraft og oppdrift per celletype (`sink`): lyssamlere flyter, spisere synker, svømmere svever
+- [x] Lys ovenfra i kolonner (20 bred): svekkes nedover (`lightDepth`) og skygges av celler over (`shadePerCell`). Erstatter den gamle skyggen fra naboer som berører
+- [x] Fôr slippes ned ved vannflaten og synker
+- [x] Døde celler blir partikler av dødt materiale
+- [x] Dødt materiale og fôr legger seg som bunnslam, som kryper sakte sideveis og løses sakte opp (blir til næring i fase 5)
+- [x] Tegnet rett fra siden: vann som mørkner nedover, vannflate, bunnslam og glasskanter
+- [x] Forhåndsvisningen i genomeditoren bruker et lite, liggende glass
+- [x] Ferdiglagde organismer justert og testet i glasset
+- **Ferdig når:** alger holder seg øverst og spisere nær bunnen, uten egne regler for det ✅ (testet i `tests/tank.test.ts`)
 
 ## Fase 5 – Kretsløpet
 
