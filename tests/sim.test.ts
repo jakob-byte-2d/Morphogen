@@ -40,10 +40,12 @@ describe("falling and flowing", () => {
     for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
     for (let y = 0; y < 8; y++) setCell(w, at(36, y), WATER);
     stepWorldN(w, 400);
-    expect(count(w, WATER)).toBe(8);
+    // A drop may have evaporated into the air; nothing else is lost.
+    expect(count(w, WATER) * 32 + w.humidity + w.lostWater).toBe(8 * 32);
     let onFloor = 0;
     for (let x = 0; x < W; x++) if (w.type[at(x, H - 2)] === WATER) onFloor++;
-    expect(onFloor).toBe(8);
+    expect(onFloor).toBe(count(w, WATER));
+    expect(onFloor).toBeGreaterThan(5);
   });
 
   it("soaks water into dry soil", () => {

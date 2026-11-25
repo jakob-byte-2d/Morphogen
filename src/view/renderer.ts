@@ -1,4 +1,4 @@
-import { APHID, EMPTY, FLOWER, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER, WORM } from "../sim/cells";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SIZE, W, type World } from "../sim/world";
 import type { Camera } from "./camera";
@@ -6,6 +6,7 @@ import {
   BACKDROP_BASE,
   BACKDROP_BLOBS,
   BARE_TABLE,
+  CAPS,
   DRY_TABLE,
   DUST,
   hexToRgb,
@@ -56,6 +57,7 @@ export class Renderer {
   private shafts = new Float32Array(W + H);
   private top = new Uint8Array(SIZE);
   private waterTop = hexToRgb(WATER_TOP);
+  private caps = shadeTable(CAPS);
   private wilted = hexToRgb(WILTED);
   /** Colour tables per species and plant part, made when first needed. */
   private speciesTables = new Map<number, Uint8ClampedArray>();
@@ -217,7 +219,11 @@ export class Renderer {
             if (above === EMPTY) open++;
             if (open >= 2) a = 170 + (s & 63);
           }
-        } else if (t === APHID || t === SLIME) {
+        } else if (t === FUNGUS && above === EMPTY) {
+          r = this.caps[s * 3];
+          g = this.caps[s * 3 + 1];
+          b = this.caps[s * 3 + 2];
+        } else if (t === APHID || t === SLIME || t === WORM) {
           const tab = this.creatureTable(w, w.kind[i]);
           r = tab[s * 3];
           g = tab[s * 3 + 1];
@@ -230,7 +236,8 @@ export class Renderer {
               b += (255 - b) * 0.2;
               a = 175 + (s & 63);
             }
-          } else a = 235;
+          } else if (t === WORM) a = 150 + (s & 31);
+          else a = 235;
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;

@@ -1,4 +1,5 @@
 import { EMPTY, SAND, SEED, SOIL, STONE, WATER } from "./cells";
+import { applyTool } from "./tools";
 import { computeLight, emptyWorld, H, setCell, W, type World } from "./world";
 
 /** Integer interpolation between random heights every `step` columns. */
@@ -81,6 +82,9 @@ export function createWorld(seed: number): World {
       break;
     }
   }
+  // And two worms in the soil, to deal with what dies.
+  applyTool(w, "creature", 12, 60, 2);
+  applyTool(w, "creature", 58, 60, 2);
   computeLight(w);
   return w;
 }
