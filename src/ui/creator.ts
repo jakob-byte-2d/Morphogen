@@ -212,7 +212,7 @@ export class Creator {
         draw();
       }, t.creator.color),
     );
-    const diets: [Diet, string][] = (["plants", "creatures", "waste"] as Diet[]).map((d) => [d, t.creator.diets[d]]);
+    const diets: [Diet, string][] = (["plants", "creatures"] as Diet[]).map((d) => [d, t.creator.diets[d]]);
     this.row(
       body,
       t.creator.eats,

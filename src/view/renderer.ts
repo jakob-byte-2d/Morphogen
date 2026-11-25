@@ -1,4 +1,4 @@
-import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER, WORM } from "../sim/cells";
+import { APHID, EMPTY, FLOWER, FUNGUS, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SLIME, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
 import { H, SATURATED, SCALE, SIZE, W, type World } from "../sim/world";
@@ -323,7 +323,7 @@ export class Renderer {
           r = this.caps[s * 3];
           g = this.caps[s * 3 + 1];
           b = this.caps[s * 3 + 2];
-        } else if (t === APHID || t === SLIME || t === WORM) {
+        } else if (t === APHID || t === SLIME) {
           const tab = this.creatureTable(w, w.kind[i]);
           r = tab[s * 3];
           g = tab[s * 3 + 1];
@@ -341,8 +341,7 @@ export class Renderer {
               b += (255 - b) * 0.2;
               a = 175 + (s & 63);
             }
-          } else if (t === WORM) a = 150 + (s & 31);
-          else a = 235;
+          } else a = 235;
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;

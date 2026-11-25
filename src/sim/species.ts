@@ -102,10 +102,11 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
 
 /**
  * What a creature eats decides how it lives: plant eaters crawl about as
- * little specks, creature eaters creep along the ground as a soft mass, and
- * waste eaters burrow through the soil as worms.
+ * little specks, and creature eaters creep along the ground as a soft mass.
+ * (There were worms that ate waste; they are gone, and fungus and rot see to
+ * what dies.)
  */
-export type Diet = "plants" | "creatures" | "waste";
+export type Diet = "plants" | "creatures";
 
 export interface CreatureSpecies {
   name: string;
@@ -118,10 +119,9 @@ export interface CreatureSpecies {
 export const CREATURE_SPECIES: CreatureSpecies[] = [
   { name: "Bladlus", diet: "plants", color: "#b8d86a", traits: { ...CREATURE_TRAITS } },
   { name: "Slim", diet: "creatures", color: "#d8b040", traits: { ...CREATURE_TRAITS } },
-  { name: "Meitemark", diet: "waste", color: "#d6a8a4", traits: { ...CREATURE_TRAITS } },
 ];
 
-const DIETS: Diet[] = ["plants", "creatures", "waste"];
+const DIETS: Diet[] = ["plants", "creatures"];
 
 export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const d = CREATURE_SPECIES[0];

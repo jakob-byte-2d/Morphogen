@@ -78,7 +78,8 @@ export const CREATURE_PART = new Uint8Array(MAX_TYPES);
 CREATURE_PART[APHID] = 1;
 CREATURE_PART[SLIME] = 1;
 
-// Decomposers.
+// Decomposers. WORM is no longer used (there are no worms), but keeps its
+// number so the ones after it keep theirs.
 export const WORM = 14;
 export const FUNGUS = 15;
 

@@ -1,4 +1,4 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SEED, SOIL, STONE, WATER, WORM } from "./cells";
+import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SEED, SOIL, STONE, WATER } from "./cells";
 import { updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 9;
+export const SIM_VERSION = 10;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -173,7 +173,7 @@ export function clearCell(w: World, i: number): void {
 
 /** What counts as being under ground: a cell with one of these above it is buried. */
 const GROUND = new Uint8Array(32);
-for (const t of [SOIL, SAND, STONE, ROOT, WORM]) GROUND[t] = 1;
+for (const t of [SOIL, SAND, STONE, ROOT]) GROUND[t] = 1;
 
 /**
  * Waste or fungus that has given up all it had. On the surface it is simply

@@ -25,7 +25,7 @@ Den første versjonen (sirkelceller med bindinger og genomer) ligger på grenen 
 - **Planter:** gress, blomst og busk. Vokser rute for rute mot lyset, med røtter i jorda.
 - **Bladlus:** små flekker i klynger. Spiser blader og fôr.
 - **Slim:** en myk masse som kryper langs bakken og spiser bladlus og fôr.
-- **Meitemark:** svake streker i jorda. Gjør avfall om til næring.
+- **Meitemark:** (fjernet i steg 14) svake streker i jorda som gjorde avfall om til næring.
 - **Sopp:** dukker opp av seg selv på avfall og gjør det om til næring.
 
 ## Tempo og utviklermodus
@@ -60,6 +60,8 @@ Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer
 - [x] **11. Egenskaper og mutasjon.** Størrelse, fart, vekst og mutasjon for kryp; vekst, frøstørrelse og mutasjon for planter. Hvert individ har sine egne gener, og arten kan utvikle seg.
 - [x] **12. Jorda blir.** Døde røtter og meitemark blir jord igjen, og begravd avfall blir av og til humus, så jorda ikke spises opp. Steiner uten noe under faller. Fuktig jord fordamper litt, og fukt trekkes lettere opp, så overflaten ikke tørker ut.
 - [x] **13. Grunnvann, ingen steiner.** Under grunnvannsnivået er jorda gjennomvåt, og der den møter lufta siver vannet ut, så dammen står like høyt som grunnvannet. Vanner du mye, stiger det; tørker glasset, synker det. Meitemark lever sparsomt av næringen i jorda når det ikke er avfall.
+- [x] **14. Uten meitemark.** Meitemarken er borte; sopp og råte bryter ned det som dør, og avfallshauger råtner ned i jorda. Startglasset har bare jord, i den nederste firedelen.
+- [ ] **15. Balansert start.** Glasset starter med planter, bladlus og slim i et antall som holder seg uten at du gjør noe.
 
 ## Senere
 

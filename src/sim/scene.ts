@@ -1,6 +1,5 @@
-import { EMPTY, SAND, SEED, SOIL, WATER } from "./cells";
+import { EMPTY, SEED, SOIL, WATER } from "./cells";
 import { packSeed, plantGenesOf } from "./genes";
-import { applyTool } from "./tools";
 import { computeLight, emptyWorld, H, MAX_WET, SCALE, setCell, W, type World } from "./world";
 
 /** Integer interpolation between random heights every `step` columns. */
@@ -18,20 +17,19 @@ function heights(w: World, base: number, spread: number, step: number): Int16Arr
 }
 
 /**
- * A fresh glass: sand at the bottom, a layer of moist soil with a dip in
- * it, and air above. The groundwater stands a little below the surface;
- * where the ground dips below it, there is open water: the pond.
+ * A fresh glass: moist soil in the bottom quarter, with a wide dip in it,
+ * and air above. The groundwater stands a little below the surface; where
+ * the ground dips below it, there is open water: the pond.
  */
 export function createWorld(seed: number): World {
   const w = emptyWorld(seed);
-  // Measures are in units of SCALE cells.
+  // Measures are in units of SCALE cells (the glass is 128 units tall).
   const S = SCALE;
-  const surface = heights(w, 76 * S, 6 * S, 12 * S);
-  const sandTop = heights(w, 110 * S, 4 * S, 9 * S);
+  const surface = heights(w, 94 * S, 6 * S, 12 * S);
   const pondL = 20 * S;
   const pondR = 52 * S;
   /** The groundwater table: below it the ground is soaked through. */
-  const table = 84 * S;
+  const table = 102 * S;
 
   for (let x = 0; x < W; x++) {
     // A wide dip with a flat bottom and gently sloping sides.
@@ -45,13 +43,10 @@ export function createWorld(seed: number): World {
     }
     for (let y = 0; y < H; y++) {
       const i = y * W + x;
-      if (y >= sandTop[x]) {
-        setCell(w, i, SAND);
-        w.wet[i] = y >= table ? MAX_WET : 60;
-      } else if (y >= top) {
+      if (y >= top) {
         setCell(w, i, SOIL);
         // Soaked below the table, moist above it, and dry at the far left.
-        const dry = x < 10 * S && y < top + 8 * S;
+        const dry = x < 10 * S && y < top + 6 * S;
         w.wet[i] = y >= table ? MAX_WET : dry ? 25 + w.rng.below(20) : 120 + w.rng.below(30);
         // The glass has AREA times as many cells as at scale 1, so each holds
         // a little less: plants, which are lines more than areas, have only
@@ -78,9 +73,6 @@ export function createWorld(seed: number): World {
       break;
     }
   }
-  // And two worms in the soil, to deal with what dies.
-  applyTool(w, "creature", 10 * S, 60 * S, 2);
-  applyTool(w, "creature", 62 * S, 60 * S, 2);
   computeLight(w);
   return w;
 }

@@ -519,8 +519,8 @@ export function slowPass(w: World): void {
     const t = type[i];
     if (t === SEED) {
       const below = i + W;
-      // A seed counts its age in its moisture slot. Lying on a creature (a
-      // worm near the surface, say) it just waits for it to move on.
+      // A seed counts its age in its moisture slot. Lying on a creature it
+      // just waits for it to move on.
       if (CREATURE_PART[type[below]]) continue;
       if (wet[i] < 255) wet[i]++;
       const good = isBed(type[below]) && wet[below] > 40 && type[i - W] === EMPTY;
@@ -552,7 +552,10 @@ export function slowPass(w: World): void {
       }
       if (w.rng.below(128) !== 0) continue;
       const x = i % W;
-      const j = isGround(type[i + W]) ? i + W : x > 0 && isGround(type[i - 1]) ? i - 1 : x < W - 1 && isGround(type[i + 1]) ? i + 1 : -1;
+      let j = isGround(type[i + W]) ? i + W : x > 0 && isGround(type[i - 1]) ? i - 1 : x < W - 1 && isGround(type[i + 1]) ? i + 1 : -1;
+      // Waste on top of a heap rots into the waste below, so a heap drains
+      // down into the ground in the end.
+      if (j < 0 && (type[i + W] === WASTE || type[i + W] === FUNGUS)) j = i + W;
       if (j < 0 || food[j] === 255) continue;
       if (food[i] > 0) {
         food[j]++;

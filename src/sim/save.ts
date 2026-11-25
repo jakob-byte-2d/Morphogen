@@ -3,11 +3,10 @@ import { SIZE } from "./dims";
 import type { Plant, Tip } from "./plants";
 import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
-import { SAND, STONE } from "./cells";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 /** Oldest engine version whose saved glasses can still be loaded. */
-const SAVES_FROM = 7;
+const SAVES_FROM = 10;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -101,7 +100,7 @@ function cellList(v: unknown): number[] {
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Partial<SavedGlass>;
-  // Glasses saved from version 7 on have the same layout and carry on under the newer rules.
+  // Glasses saved from version 10 on (no worms) carry on under newer rules.
   if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
   const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
@@ -125,8 +124,6 @@ export function loadWorld(data: unknown): World | null {
   w.kind.set(arrays.kind!);
   new Uint8Array(w.org.buffer).set(arrays.org!);
   w.light.set(arrays.light!);
-  // Glasses from before version 9 had pebbles; there are no stones any more.
-  if (d.v < 9) for (let i = 0; i < SIZE; i++) if (w.type[i] === STONE) w.type[i] = SAND;
   w.tick = int(d.tick, 0, 2 ** 31);
   w.rng.setState(d.rng.map((v) => int(v, -(2 ** 31), 2 ** 32) | 0) as [number, number, number, number]);
   w.humidity = int(d.humidity, 0, 2 ** 31);
