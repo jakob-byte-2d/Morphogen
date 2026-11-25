@@ -1,5 +1,6 @@
 import { EMPTY, FEED, SAND, SEED, SOIL, WATER } from "./cells";
 import { spawnCreature } from "./creatures";
+import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { clearCell, H, setCell, W, type World } from "./world";
 
 export type Tool = "water" | "soil" | "seed" | "creature" | "feed" | "spade";
@@ -136,4 +137,21 @@ function releaseCreature(w: World, cx: number, cy: number, species: number): voi
     }
     if (cells.length > 0) spawnCreature(w, k, cells, 320);
   }
+}
+
+/** Most species a glass can hold of each kind. */
+export const MAX_SPECIES = 64;
+
+/** Adds a plant species the player made. Returns its index, or -1 if the glass is full. */
+export function addPlantSpecies(w: World, raw: unknown): number {
+  if (w.plantSpecies.length >= MAX_SPECIES) return -1;
+  w.plantSpecies.push(normalizePlantSpecies(raw));
+  return w.plantSpecies.length - 1;
+}
+
+/** Adds a creature species the player made. Returns its index, or -1 if the glass is full. */
+export function addCreatureSpecies(w: World, raw: unknown): number {
+  if (w.creatureSpecies.length >= MAX_SPECIES) return -1;
+  w.creatureSpecies.push(normalizeCreatureSpecies(raw));
+  return w.creatureSpecies.length - 1;
 }

@@ -423,3 +423,136 @@ body {
   font-size: 14px;
   opacity: 0.85;
 }
+
+.picker {
+  max-width: calc(100vw - 16px);
+  overflow-x: auto;
+}
+
+.pick .plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 40px;
+  font-size: 30px;
+  line-height: 1;
+  border: 2px dashed var(--edge);
+  border-radius: 10px;
+}
+
+.pick {
+  flex: none;
+}
+
+.creator {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  padding: 12px;
+  background: rgba(30, 24, 34, 0.96);
+  border: 2px solid var(--edge);
+  border-radius: 16px;
+  touch-action: pan-y;
+}
+
+.creator[hidden] {
+  display: none;
+}
+
+.creator-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.creator-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.creator-preview canvas {
+  width: 66px;
+  height: 60px;
+  image-rendering: pixelated;
+}
+
+.creator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  flex-wrap: wrap;
+}
+
+.creator-label {
+  font-size: 15px;
+}
+
+.creator-name {
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
+  min-height: 40px;
+  padding: 6px 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.creator-range {
+  flex: 1;
+  max-width: 200px;
+  accent-color: var(--accent);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.creator-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.creator-button {
+  min-width: 96px;
+  min-height: 44px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid var(--edge);
+  border-radius: 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.creator-button.primary {
+  background: var(--button-on);
+  border-color: var(--accent);
+}

@@ -1,7 +1,7 @@
 export * from "./cells";
 export * from "./world";
 export { createWorld } from "./scene";
-export { applyTool, type Tool } from "./tools";
+export { addCreatureSpecies, addPlantSpecies, applyTool, MAX_SPECIES, type Tool } from "./tools";
 export { hashWorld } from "./hash";
 export { GOLDEN } from "./golden";
 export * from "./species";
