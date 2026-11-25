@@ -1,6 +1,6 @@
 # Morphogen – regler for kodeassistenter
 
-Virtuelt terrarium sett fra siden (ren 2D), der spilleren designer cellebaserte organismer med et genom og steller et lukket kretsløp. Simuleringen må være **bit-for-bit deterministisk**, fordi glass lagres, spilles av og deles, og kamper senere kjøres på spillernes egne enheter. Se ROADMAP.md for planen og de tekniske hovedgrepene.
+Et lite terrarium i pikselgrafikk sett fra siden, der hver rute i et rutenett er én celle. Spilleren steller glasset med noen få verktøy og ser et lukket kretsløp leve. Simuleringen må være **bit-for-bit deterministisk**, fordi glass lagres, spoles fram når appen åpnes igjen, og senere deles. Se ROADMAP.md for planen.
 
 ## Kommandoer
 
@@ -9,23 +9,27 @@ Virtuelt terrarium sett fra siden (ren 2D), der spilleren designer cellebaserte 
 - `npm run typecheck` – typesjekk
 - `npm run build` – produksjonsbygg
 
+## Struktur
+
+- `src/sim/` – simuleringen. Ren TypeScript uten DOM.
+- `src/view/` – tegning og kamera. Leser verden, endrer den aldri.
+- `src/ui/` – knapper, velgere og meny. All tekst spilleren ser ligger i `src/ui/strings.ts` (norsk).
+- `src/main.ts` – starter appen og kjører løkka.
+
 ## Determinisme (viktigst)
 
-All kode i `src/engine/` må følge dette:
+All kode i `src/sim/` må følge dette:
 
-- Ingen `Math.random()`. Bruk `world.rng` (`src/engine/rng.ts`).
-- Ingen `Math.sin/cos/tan/atan2/exp/log/pow/hypot`. Bruk `src/engine/fmath.ts`, og legg til nye funksjoner der, bygget av `+ - * /`, `Math.sqrt`, `Math.floor/round/abs/min/max`.
-- Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg på `DT`.
-- Gå gjennom lister i fast rekkefølge. Fjern elementer ved å bygge ny liste i samme rekkefølge.
+- Bare heltall i alt som påvirker tilstanden. Ingen `Math.random()`, ingen `Math.sin` og liknende. Bruk `world.rng` (`src/sim/rng.ts`).
+- Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg.
+- Gå gjennom rutenettet og listene i fast rekkefølge. En rute som er flyttet i et steg, merkes så den ikke flyttes to ganger.
 - Ingen DOM eller nettleser-API-er i motoren.
-- Genomer kommer fra andre spillere og er upålitelige: kjør dem alltid gjennom `normalizeGenome()` (det gjør `createWorld`). Nye celletyper legges til sist i `CELL_TYPES`, aldri i midten.
-- Bindinger peker på celle-id, ikke indeks, fordi cellelisten bygges på nytt ved deling og død. Bruk `world.scratch.indexById` (bygges av `indexCells`) for oppslag.
-
-Endrer du simuleringsreglene med vilje: øk `ENGINE_VERSION` i `src/engine/world.ts` og oppdater gullhashen i `src/engine/golden.ts`. Endres gullhashen uten at du mente å endre reglene, er det en feil.
+- Nye rutetyper legges til sist i `src/sim/cells.ts`, aldri i midten: lagrede glass bruker tallene.
+- Endrer du reglene med vilje: øk `SIM_VERSION` og oppdater gullhashen. Endres gullhashen uten at du mente å endre reglene, er det en feil.
 
 ## Kode
 
 - TypeScript, strict. Kode og kommentarer på engelsk.
-- All tekst spilleren ser, ligger i `src/ui/strings.ts` (norsk foreløpig).
-- Renderer leser verden, men endrer den aldri.
-- Hold motoren rask: bruk rutenettet (`grid.ts`) til nabooppslag, unngå å lage nye objekter i hvert steg der det er lett å unngå.
+- Tilfeldighet i tegningen (støv, glitter) er greit, så lenge den ikke påvirker verden.
+- Hold motoren rask: hvert steg går gjennom alle ruter, så unngå å lage objekter per rute.
+- Minimalt grensesnitt: ingen tekst på knappene, verktøy som oppfører seg som ekte ting.

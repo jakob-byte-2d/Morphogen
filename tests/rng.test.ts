@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Rng } from "../src/engine/rng";
+import { Rng } from "../src/sim/rng";
 
 describe("Rng", () => {
   it("gives the same sequence for the same seed", () => {

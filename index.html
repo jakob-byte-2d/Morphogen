@@ -2,32 +2,18 @@
 <html lang="nb">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b1416" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#2a1f27" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%2314292d' stroke='%23a6ead0' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%237fd6b4'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23a8443c'/%3E%3Crect y='5' width='8' height='3' fill='%23352a33'/%3E%3Crect x='3' y='2' width='1' height='3' fill='%234f8a3a'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%234f8a3a'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%234f8a3a'/%3E%3C/svg%3E"
     />
     <title>Morphogen</title>
   </head>
   <body>
-    <main id="app">
-      <header class="hud">
-        <div class="title-row">
-          <h1>Morphogen</h1>
-          <select id="preset"></select>
-        </div>
-        <div id="stats" class="stats" aria-live="off"></div>
-      </header>
-      <canvas id="dish" aria-label="Petriskål med celler"></canvas>
-      <nav class="controls">
-        <button id="play" type="button"></button>
-        <button id="speed" type="button"></button>
-        <button id="reset" type="button"></button>
-        <button id="edit" type="button"></button>
-      </nav>
-    </main>
-    <section id="editor" class="editor" hidden></section>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
