@@ -96,11 +96,11 @@ describe("the closed glass", () => {
     }
   });
 
-  it("never creates or loses water", () => {
+  it("never creates or loses water, apart from what escapes", () => {
     const w = createWorld(43);
     const water = totalWater(w);
     stepWorldN(w, 3000);
-    expect(totalWater(w)).toBe(water);
+    expect(totalWater(w) + w.lostWater).toBe(water);
   });
 
   it("brings life to the start glass by itself", () => {

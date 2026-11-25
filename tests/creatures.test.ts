@@ -56,8 +56,8 @@ describe("bugs", () => {
 describe("slime", () => {
   it("creeps over to feed and eats it", () => {
     const w = floor();
-    setCell(w, at(50, H - 2), FEED);
-    w.food[at(50, H - 2)] = 2;
+    setCell(w, at(42, H - 2), FEED);
+    w.food[at(42, H - 2)] = 2;
     spawnCreature(w, 1, [at(30, H - 2), at(31, H - 2), at(32, H - 2), at(31, H - 3)], 320);
     stepWorldN(w, 600);
     expect(count(w, FEED)).toBe(0);

@@ -26,7 +26,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     branches: 2,
     leaves: 0,
     rootDepth: 6,
-    lifespan: 240,
+    lifespan: 420,
     colors: { leaf: "#4f8a3a", stem: "#3f6e32", flower: "#c9b46a", seed: "#a08c48" },
   },
   {
@@ -36,7 +36,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     branches: 0,
     leaves: 2,
     rootDepth: 10,
-    lifespan: 300,
+    lifespan: 540,
     colors: { leaf: "#4a7c3a", stem: "#3a6a32", flower: "#e7a0b0", seed: "#b8894a" },
   },
   {
@@ -46,7 +46,7 @@ export const PLANT_SPECIES: PlantSpecies[] = [
     branches: 2,
     leaves: 3,
     rootDepth: 14,
-    lifespan: 900,
+    lifespan: 1500,
     colors: { leaf: "#4f7c3e", stem: "#4a3428", flower: "#c97a8a", seed: "#8a5a3a" },
   },
 ];
@@ -87,9 +87,10 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
 
 /**
  * What a creature eats decides how it lives: plant eaters crawl about as
- * little specks, creature eaters creep along the ground as a soft mass.
+ * little specks, creature eaters creep along the ground as a soft mass, and
+ * waste eaters burrow through the soil as worms.
  */
-export type Diet = "plants" | "creatures";
+export type Diet = "plants" | "creatures" | "waste";
 
 export interface CreatureSpecies {
   name: string;
@@ -100,9 +101,10 @@ export interface CreatureSpecies {
 export const CREATURE_SPECIES: CreatureSpecies[] = [
   { name: "Bladlus", diet: "plants", color: "#b8d86a" },
   { name: "Slim", diet: "creatures", color: "#d8b040" },
+  { name: "Meitemark", diet: "waste", color: "#d6a8a4" },
 ];
 
-const DIETS: Diet[] = ["plants", "creatures"];
+const DIETS: Diet[] = ["plants", "creatures", "waste"];
 
 export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const d = CREATURE_SPECIES[0];

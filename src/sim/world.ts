@@ -1,4 +1,4 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, POROUS, POWDER, SOIL, WATER } from "./cells";
+import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SOIL, WATER } from "./cells";
 import { updateCreatures, type Creature } from "./creatures";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
@@ -12,7 +12,7 @@ export { H, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 3;
+export const SIM_VERSION = 4;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -62,6 +62,8 @@ export interface World {
    * under the lid and drips back down.
    */
   humidity: number;
+  /** Water that has escaped from the glass for good (it is not quite airtight). */
+  lostWater: number;
   /** Plant species in this glass. Cells refer to them by index (kind). */
   readonly plantSpecies: PlantSpecies[];
   /** Living plants, oldest first. */
@@ -95,6 +97,7 @@ export function emptyWorld(
     wakeNext: new Uint8Array(CHUNKS_X * CHUNKS_Y).fill(1),
     kind: new Uint8Array(SIZE),
     humidity: 0,
+    lostWater: 0,
     plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors } })),
     plants: [],
     creatureSpecies: creatureSpecies.map((c) => ({ ...c })),
@@ -135,6 +138,11 @@ export function clearCell(w: World, i: number): void {
   w.food[i] = 0;
   w.org[i] = 0;
   w.kind[i] = 0;
+}
+
+/** Swaps two cells with everything they carry, without marking them as moved. */
+export function swapCells(w: World, i: number, j: number): void {
+  move(w, i, j, 0);
 }
 
 /** Swaps two cells with everything they carry, and marks both as moved. */
@@ -200,6 +208,24 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       wet[b] += WATER_UNITS;
       clearCell(w, i);
       return;
+    }
+    // A drop on a plant: the plant drinks it, or it trickles down through the leaves.
+    if (PLANT_PART[tb] && tb !== ROOT) {
+      const p = w.orgs.get(w.org[b]);
+      if (p && p.kind === "plant" && p.water < 200) {
+        p.water += WATER_UNITS;
+        clearCell(w, i);
+        return;
+      }
+      for (let k = 2; k <= 6; k++) {
+        const j = i + k * W;
+        if (j >= SIZE) break;
+        if (type[j] === EMPTY) {
+          move(w, i, j, mark);
+          return;
+        }
+        if (!PLANT_PART[type[j]]) break;
+      }
     }
     const dl = x > 0 && type[b - 1] === EMPTY;
     const dr = x < W - 1 && type[b + 1] === EMPTY;
@@ -293,6 +319,11 @@ export function computeLight(w: World): void {
 
 /** Water in the air gathers under the lid and falls as a drop now and then. */
 function condense(w: World): void {
+  // A little water escapes all the time, so the glass needs watering now and then.
+  if (w.humidity > 0 && (w.rng.nextU32() & 1) === 0) {
+    w.humidity--;
+    w.lostWater++;
+  }
   if (w.humidity < WATER_UNITS * 4) return;
   // The more water in the air, the more often it drips.
   const drops = Math.min(3, (w.humidity / 800) | 0) + (w.rng.below(4) === 0 ? 1 : 0);

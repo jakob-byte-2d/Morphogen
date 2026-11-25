@@ -1,4 +1,4 @@
-import { EMPTY, FEED, SEED, SOIL, WATER } from "./cells";
+import { EMPTY, FEED, SAND, SEED, SOIL, WATER } from "./cells";
 import { spawnCreature } from "./creatures";
 import { clearCell, H, setCell, W, type World } from "./world";
 
@@ -99,6 +99,23 @@ function releaseCreature(w: World, cx: number, cy: number, species: number): voi
   let y = cy;
   while (y < H - 1 && w.type[(y + 1) * W + cx] === EMPTY) y++;
   if (w.type[y * W + cx] !== EMPTY) return;
+  if (sp.diet === "waste") {
+    // A worm digs straight in: three cells down into the ground.
+    const cells: number[] = [];
+    let store = 0;
+    for (let k = 1; k <= 3 && y + k < H; k++) {
+      const i = (y + k) * W + cx;
+      if (w.type[i] !== SOIL && w.type[i] !== SAND) break;
+      store += w.food[i];
+      w.food[i] = 0;
+      clearCell(w, i);
+      cells.push(i);
+    }
+    if (cells.length === 0) return;
+    const c = spawnCreature(w, k, cells, 300);
+    if (c) c.store = store;
+    return;
+  }
   if (sp.diet === "plants") {
     for (const dx of [0, -2, 2]) {
       const x = cx + dx;
