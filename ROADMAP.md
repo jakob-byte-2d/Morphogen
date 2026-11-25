@@ -53,8 +53,10 @@ Tekniske regler for determinisme står i [CLAUDE.md](CLAUDE.md).
 
 - [ ] Simuleringen i Web Worker
 - [ ] Zoom og panorering med fingrene
-- [ ] Genomeditor som viser oppskriftene som et tre
-- [ ] Forhåndsvisning av hvordan organismen vokser (kjøres med samme motor, så den stemmer)
+- [x] Genomeditor (knappen «Genom»): hver oppskrift er et kort med sammendrag («Spiser · → 2 + 3»), celletype, deling, døtrene og bindinger
+- [ ] Vis oppskriftene som et tre eller diagram i tillegg til listen
+- [x] Forhåndsvisning av hvordan én organisme vokser (kjøres med samme motor, så den stemmer)
+- [x] Egne organismer lagres på enheten og deles med lenke (`?genome=custom&g=…`)
 - [ ] PWA, så spillet kan legges på hjemskjermen
 - **Ferdig når:** sandkassen fungerer godt på telefonen
 
