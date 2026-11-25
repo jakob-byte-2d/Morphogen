@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, APHID, createWorld, MAX_SPECIES, SCALE, SEED, SLIME, stepWorldN } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, SLIME, stepWorldN } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -15,13 +15,14 @@ describe("species the player makes", () => {
 
   it("live the way their food decides", () => {
     const w = createWorld(32);
+    // A plant eater made before step 16 is a litter eater now.
     const bug = addCreatureSpecies(w, { name: "Lus", diet: "plants", color: "#aa8866" });
     const mass = addCreatureSpecies(w, { name: "Grøt", diet: "creatures", color: "#88aa66" });
     applyTool(w, "creature", 10 * SCALE, 20 * SCALE, bug);
     applyTool(w, "creature", 64 * SCALE, 20 * SCALE, mass);
     const b = w.creatures.find((x) => x.species === bug);
     const m = w.creatures.find((x) => x.species === mass);
-    expect(b!.cells.every((i) => w.type[i] === APHID)).toBe(true);
+    expect(b!.cells.every((i) => w.type[i] === ISOPOD)).toBe(true);
     expect(m!.cells.every((i) => w.type[i] === SLIME)).toBe(true);
     expect(m!.cells.length).toBeGreaterThan(1);
   });
@@ -29,9 +30,10 @@ describe("species the player makes", () => {
   it("are cleaned up and limited in number", () => {
     const w = createWorld(33);
     const k = addCreatureSpecies(w, { diet: "everything", color: "javascript:" });
-    expect(w.creatureSpecies[k].diet).toBe("plants");
-    // Worms are gone: an old waste eater becomes a plant eater.
-    expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "waste" })].diet).toBe("plants");
+    expect(w.creatureSpecies[k].diet).toBe("litter");
+    // Worms are gone, and plant eaters too: both become litter eaters.
+    expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "waste" })].diet).toBe("litter");
+    expect(w.creatureSpecies[addCreatureSpecies(w, { diet: "plants" })].diet).toBe("litter");
     expect(w.creatureSpecies[k].color).toMatch(/^#[0-9a-f]{6}$/);
     while (addPlantSpecies(w, {}) >= 0);
     expect(w.plantSpecies.length).toBe(MAX_SPECIES);

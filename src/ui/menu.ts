@@ -298,7 +298,6 @@ export class Menu {
       const now = averages(w.creatures.filter((c) => c.species === k), CREATURE_TRAITS);
       row(iconCanvas(creatureIcon(sp.diet, sp.color, this.host.light, this.host.dark)), sp.name, lines(t.about[sp.diet], traitLine(CREATURE_TRAITS, sp.traits, false), now));
     });
-    body.append(el("p", "note", t.about.fungus));
   }
 
   private showHelp(): void {

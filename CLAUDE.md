@@ -25,7 +25,7 @@ All kode i `src/sim/` må følge dette:
 - Gå gjennom rutenettet og listene i fast rekkefølge. En rute som er flyttet i et steg, merkes så den ikke flyttes to ganger.
 - Ingen DOM eller nettleser-API-er i motoren.
 - Nye rutetyper legges til sist i `src/sim/cells.ts`, aldri i midten: lagrede glass bruker tallene.
-- **Næring og vann er bevart.** Næring (`food`) og vann flyttes bare, de lages aldri og forsvinner aldri i reglene: `totalUnits` og `totalWater` skal være konstante når spilleren ikke gjør noe. Bare verktøyene (og senere fordampning) legger til eller fjerner. Pass på `Uint8Array`: et felt som går under 0 eller over 255 bryter regnskapet.
+- **Næring og vann føres som regnskap.** Næring (`food`) lages bare av plantene (fotosyntese, telles i `world.fixed`) og forsvinner bare når dyr og råte forbrenner den (telles i `world.burned`); ellers flyttes den bare. `unitLedger` (= `totalUnits - fixed + burned`) skal være konstant når spilleren ikke gjør noe. Vann flyttes bare, bortsett fra det som slipper ut av glasset (`lostWater`): `totalWater + lostWater` skal være konstant. Bare verktøyene legger til eller fjerner. Pass på `Uint8Array`: et felt som går under 0 eller over 255 bryter regnskapet. Blader og blomster bruker `wet` til alder, så sett `wet` til 0 når en slik rute blir til noe som holder vann.
 - Endrer du reglene med vilje: øk `SIM_VERSION` og oppdater gullhashen. Endres gullhashen uten at du mente å endre reglene, er det en feil.
 
 ## Kode

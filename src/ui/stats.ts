@@ -1,4 +1,4 @@
-import { FUNGUS, SIZE, SOIL, totalWater, WASTE, type World } from "../sim";
+import { SIZE, SOIL, totalWater, WASTE, type World } from "../sim";
 
 /** One look at the glass, taken every half minute of glass time. */
 export interface Sample {
@@ -57,7 +57,7 @@ export function sample(w: World): Sample {
   for (let i = 0; i < SIZE; i++) {
     const t = w.type[i];
     if (t === SOIL) soilFood += w.food[i];
-    else if (t === WASTE || t === FUNGUS) waste++;
+    else if (t === WASTE) waste++;
   }
   const plants = w.plantSpecies.map(() => 0);
   for (const p of w.plants) plants[p.species]++;

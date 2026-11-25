@@ -6,7 +6,7 @@ import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 /** Oldest engine version whose saved glasses can still be loaded. */
-const SAVES_FROM = 10;
+const SAVES_FROM = 12;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -49,7 +49,8 @@ export interface SavedGlass {
   lostWater: number;
   nextOrgId: number;
   arrivals?: unknown;
-  leaves?: number;
+  fixed?: number;
+  burned?: number;
   cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org" | "light", string>;
   /** Which parts of the glass are at rest; needed to carry on exactly. */
   chunks: string;
@@ -69,7 +70,8 @@ export function saveWorld(w: World): SavedGlass {
     lostWater: w.lostWater,
     nextOrgId: w.nextOrgId,
     arrivals: w.arrivals.map((a) => ({ ...a })),
-    leaves: w.leaves,
+    fixed: w.fixed,
+    burned: w.burned,
     cells: {
       type: toBase64(w.type),
       shade: toBase64(w.shade),
@@ -104,7 +106,7 @@ function cellList(v: unknown): number[] {
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Partial<SavedGlass>;
-  // Glasses saved from version 10 on (no worms) carry on under newer rules.
+  // Glasses saved from version 12 on (skrukketroll, no fungus) carry on under newer rules.
   if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
   const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
@@ -133,7 +135,8 @@ export function loadWorld(data: unknown): World | null {
   w.humidity = int(d.humidity, 0, 2 ** 31);
   w.lostWater = int(d.lostWater, 0, 2 ** 31);
   w.nextOrgId = int(d.nextOrgId, 1, MAX_ORG_ID);
-  w.leaves = int(d.leaves, 0, SIZE);
+  w.fixed = int(d.fixed, 0, 2 ** 52);
+  w.burned = int(d.burned, 0, 2 ** 52);
   w.arrivals = (Array.isArray(d.arrivals) ? d.arrivals : [])
     .slice(0, 64)
     .map((r: Record<string, unknown>) => ({ tick: int(r?.tick, 0, 1e9), species: int(r?.species, 0, w.creatureSpecies.length - 1), x: int(r?.x, 0, W - 1) }))

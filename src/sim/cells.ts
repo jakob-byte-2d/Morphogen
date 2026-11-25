@@ -47,8 +47,7 @@ POWDER[SEED] = 1;
 POWDER[WASTE] = 1;
 POROUS[ROOT] = 1;
 FIELD_CAPACITY[ROOT] = 140;
-POROUS[WASTE] = 1;
-FIELD_CAPACITY[WASTE] = 100;
+// Dead leaves (WASTE) hold no water: rain and dew run off them into the ground.
 ABSORB[SEED] = 60;
 ABSORB[ROOT] = 256;
 ABSORB[STEM] = 70;
@@ -65,21 +64,23 @@ PLANT_PART[FLOWER] = 1;
 
 // Feed and creatures.
 export const FEED = 11;
-export const APHID = 12;
+/** A skrukketroll (woodlouse). Was an aphid once; same number. */
+export const ISOPOD = 12;
 export const SLIME = 13;
 
 POWDER[FEED] = 1;
 ABSORB[FEED] = 99;
-ABSORB[APHID] = 60;
+ABSORB[ISOPOD] = 60;
 ABSORB[SLIME] = 69;
 
 /** Cells that belong to a creature. */
 export const CREATURE_PART = new Uint8Array(MAX_TYPES);
-CREATURE_PART[APHID] = 1;
+CREATURE_PART[ISOPOD] = 1;
 CREATURE_PART[SLIME] = 1;
 
-// Decomposers. WORM is no longer used (there are no worms), but keeps its
-// number so the ones after it keep theirs.
+// No longer used (there are no worms, and no fungus: skrukketroll and slime
+// turn dead leaves into soil), but they keep their numbers so the ones after
+// them keep theirs.
 export const WORM = 14;
 export const FUNGUS = 15;
 

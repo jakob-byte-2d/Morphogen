@@ -1,4 +1,4 @@
-import { FEED, FUNGUS, MAX_TYPES, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "../sim/cells";
+import { FEED, MAX_TYPES, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "../sim/cells";
 
 /** Colours per cell type. Each cell picks one by its shade, then varies it a little. */
 export const COLORS: Partial<Record<number, string[]>> = {
@@ -7,16 +7,15 @@ export const COLORS: Partial<Record<number, string[]>> = {
   [SOIL]: ["#2e2630", "#352a33", "#3d3036", "#2a2229", "#33282f"],
   [WATER]: ["#3f6f8a", "#4f84a0", "#46789a"],
   [ROOT]: ["#8a7458", "#7a6650", "#968062", "#6e5c48"],
-  [WASTE]: ["#3a2e26", "#463628", "#2e241e", "#4a3a2c", "#52402e"],
+  // Fallen leaves: brown litter.
+  [WASTE]: ["#6b4f2e", "#7d5d34", "#5c4428", "#8a6a3c", "#4e3a24"],
   [FEED]: ["#e0a060", "#c88850", "#d89a58", "#eab070"],
-  [FUNGUS]: ["#e2d4c4", "#d6c8b4", "#cbbca6", "#eadfd0"],
 };
-
-/** Mushroom caps: fungus cells with open air above. */
-export const CAPS = ["#c97a4e", "#b8693f", "#d98a5a", "#a85c38"];
 
 /** What a thirsty plant fades towards. */
 export const WILTED = "#a8924a";
+/** What an old leaf turns before it falls. */
+export const AUTUMN = "#b4782e";
 
 export const DRY_SOIL = ["#55484a", "#625455", "#4d4043"];
 export const SOIL_SPECKS = ["#5a5058", "#4a3a48", "#6b6270", "#4f4450"];

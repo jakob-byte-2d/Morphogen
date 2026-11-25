@@ -12,7 +12,7 @@ export interface PlantSpecies {
   leaves: number;
   /** How deep the roots go, in cells. */
   rootDepth: number;
-  /** Seconds a plant lives. */
+  /** Seconds a plant lives. (Plants now live on as long as they have water and light; kept for old species.) */
   lifespan: number;
   /** Base colours; the renderer varies them cell by cell. */
   colors: { leaf: string; stem: string; flower: string; seed: string };
@@ -101,12 +101,11 @@ export function normalizePlantSpecies(raw: unknown): PlantSpecies {
 }
 
 /**
- * What a creature eats decides how it lives: plant eaters crawl about as
- * little specks, and creature eaters creep along the ground as a soft mass.
- * (There were worms that ate waste; they are gone, and fungus and rot see to
- * what dies.)
+ * What a creature eats decides how it lives: litter eaters (skrukketroll)
+ * crawl about the ground as little specks eating fallen leaves, and creature
+ * eaters creep along the ground as a soft mass. Both leave soil behind.
  */
-export type Diet = "plants" | "creatures";
+export type Diet = "litter" | "creatures";
 
 export interface CreatureSpecies {
   name: string;
@@ -117,11 +116,11 @@ export interface CreatureSpecies {
 }
 
 export const CREATURE_SPECIES: CreatureSpecies[] = [
-  { name: "Bladlus", diet: "plants", color: "#b8d86a", traits: { ...CREATURE_TRAITS } },
+  { name: "Skrukketroll", diet: "litter", color: "#8c8e96", traits: { ...CREATURE_TRAITS } },
   { name: "Slim", diet: "creatures", color: "#d8b040", traits: { ...CREATURE_TRAITS } },
 ];
 
-const DIETS: Diet[] = ["plants", "creatures"];
+const DIETS: Diet[] = ["litter", "creatures"];
 
 export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const d = CREATURE_SPECIES[0];
@@ -129,6 +128,7 @@ export function normalizeCreatureSpecies(raw: unknown): CreatureSpecies {
   const tr = (o.traits && typeof o.traits === "object" ? o.traits : {}) as Record<string, unknown>;
   return {
     name: typeof o.name === "string" && o.name.trim() ? o.name.trim().slice(0, 24) : d.name,
+    // Plant eaters (and waste eaters before them) are litter eaters now.
     diet: DIETS.includes(o.diet as Diet) ? (o.diet as Diet) : d.diet,
     color: color(o.color, d.color),
     traits: {

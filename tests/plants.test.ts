@@ -14,6 +14,7 @@ import {
   stepWorldN,
   totalUnits,
   totalWater,
+  unitLedger,
   W,
   WASTE,
   normalizePlantSpecies,
@@ -73,7 +74,40 @@ describe("growth", () => {
     expect(H - 31 - top).toBeGreaterThan(10);
   });
 
-  it("dries out and turns to waste without water", () => {
+  it("lives on past its old lifespan, and sheds old leaves as litter", () => {
+    const w = bed(130);
+    const sp = w.plantSpecies[1];
+    // Keep the soil moist, as dew and watering would.
+    for (let k = 0; k < 13; k++) {
+      stepWorldN(w, sp.lifespan);
+      for (let i = 0; i < w.wet.length; i++) if (w.type[i] === SOIL) w.wet[i] = Math.max(w.wet[i], 120);
+    }
+    // The first plant is still there, and bigger than ever.
+    expect(w.plants.some((p) => p.age * 4 > sp.lifespan * 10)).toBe(true);
+    expect(count(w, WASTE)).toBeGreaterThan(5);
+  });
+
+  it("grows along the glass when it reaches the lid", () => {
+    // Soil almost to the top: a bush on it soon reaches the lid.
+    const w = emptyWorld(8);
+    for (let y = 14; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        setCell(w, at(x, y), SOIL);
+        w.wet[at(x, y)] = 130;
+        w.food[at(x, y)] = 6;
+      }
+    setCell(w, at(70, 13), SEED);
+    w.kind[at(70, 13)] = 2;
+    w.food[at(70, 13)] = 1;
+    stepWorldN(w, 3000);
+    const lid = w.plants.flatMap((p) => p.cells.filter((i) => i < 2 * W && w.type[i] === STEM));
+    expect(lid.length).toBeGreaterThan(3);
+    // Along the lid, not just up against it.
+    const xs = lid.map((i) => i % W);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(3);
+  });
+
+  it("dries out and turns to litter without water", () => {
     const w = bed(130);
     stepWorldN(w, 600);
     expect(w.plants.length).toBe(1);
@@ -85,20 +119,24 @@ describe("growth", () => {
     // The dew it breathes out keeps it going a little longer, but not for long.
     for (let k = 0; k < 90 && w.plants.length > 0; k++) stepWorldN(w, 10);
     expect(w.plants.length).toBe(0);
-    // The shoot becomes waste; the roots, which grew where there was soil, become soil again.
+    // The shoot becomes litter; the roots, which grew where there was soil, become soil again.
     expect(count(w, WASTE)).toBeGreaterThanOrEqual(shoot);
     for (const i of roots) expect(w.type[i]).toBe(SOIL);
   });
 });
 
 describe("the closed glass", () => {
-  it("never creates or loses nutrients", () => {
+  it("keeps a true nutrient ledger: plants add from light, the rest only moves or is burnt", () => {
     const w = createWorld(42);
+    const ledger = unitLedger(w);
     const units = totalUnits(w);
     for (let k = 0; k < 10; k++) {
       stepWorldN(w, 600);
-      expect(totalUnits(w)).toBe(units);
+      expect(unitLedger(w)).toBe(ledger);
     }
+    // Plants have made more than has been burnt: the glass has grown richer.
+    expect(w.fixed).toBeGreaterThan(w.burned);
+    expect(totalUnits(w)).toBeGreaterThan(units);
   });
 
   it("never creates or loses water, apart from what escapes", () => {
