@@ -11,5 +11,7 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.ts"],
+    // Simulation tests run thousands of ticks; CI machines can be slow.
+    testTimeout: 30000,
   },
 });

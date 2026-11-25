@@ -58,12 +58,10 @@ describe("normalizeGenome", () => {
 });
 
 describe("species", () => {
-  it("every preset organism survives and grows", () => {
-    for (const id of PRESET_IDS) {
-      const w = createWorld(3, { genomes: [PRESETS[id]] });
-      stepWorldN(w, 15000);
-      expect(w.cells.length, id).toBeGreaterThan(10);
-    }
+  it.each(PRESET_IDS)("the preset organism %s survives and grows", (id) => {
+    const w = createWorld(3, { genomes: [PRESETS[id]] });
+    stepWorldN(w, 15000);
+    expect(w.cells.length).toBeGreaterThan(10);
   });
 
   it("two species start mirrored, keep their own cells and never bond to each other", () => {
