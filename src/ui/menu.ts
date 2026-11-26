@@ -302,7 +302,7 @@ export class Menu {
 
   private showHelp(): void {
     const body = this.page(t.menu.help);
-    for (const id of ["water", "soil", "seed", "creature", "feed", "spade"]) {
+    for (const id of ["water", "soil", "seed", "creature", "feed", "spade", "look"]) {
       const r = el("div", "species");
       const words = el("div");
       words.append(el("strong", "", t.tool[id]), el("p", "", t.help[id]));

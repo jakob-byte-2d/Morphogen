@@ -13,7 +13,7 @@ export { AREA, H, LIFE_EVERY, LIFE_PER_DAY, SCALE, SIZE, TICKS_PER_SECOND, W } f
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 15;
+export const SIM_VERSION = 16;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where

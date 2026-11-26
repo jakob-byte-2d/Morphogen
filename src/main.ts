@@ -10,12 +10,15 @@ import {
   START_LIFE,
   stepWorld,
   TICKS_PER_SECOND,
+  SCALE,
+  type Creature,
   type Tool,
   totalUnits,
   totalWater,
   W,
   type World,
 } from "./sim";
+import { CreatureCard } from "./ui/card";
 import { Creator } from "./ui/creator";
 import { DevPanel, type DevState } from "./ui/dev";
 import { creatureIcon, plantIcon } from "./ui/icons";
@@ -91,9 +94,10 @@ catchUpLabel.className = "catchup";
 catchUpLabel.setAttribute("aria-live", "polite");
 glass.append(ring, catchUpLabel);
 
-/** Tools on the bar, in the order they appear. */
-const TOOLS: Tool[] = ["water", "soil", "seed", "creature", "feed", "spade"];
-let tool: Tool = "water";
+/** Tools on the bar, in the order they appear. The magnifying glass only looks. */
+type BarTool = Tool | "look";
+const TOOLS: BarTool[] = ["water", "soil", "seed", "creature", "feed", "spade", "look"];
+let tool: BarTool = "water";
 let plantSpecies = 1;
 let creatureSpecies = 0;
 const light = (c: string) => lighten(c, 0.25);
@@ -142,18 +146,43 @@ function fillPickers(): void {
 }
 fillPickers();
 /** Tools that come with a row for choosing what to use. */
-const pickers: Partial<Record<Tool, Picker>> = { seed: seedPicker, creature: creaturePicker };
+const pickers: Partial<Record<BarTool, Picker>> = { seed: seedPicker, creature: creaturePicker };
 const closePickers = () => Object.values(pickers).forEach((p) => p.close());
 
 const toolbar = new Toolbar(TOOLS, tool, (id, again) => {
-  tool = id as Tool;
+  tool = id as BarTool;
+  if (tool !== "look") card.hide();
   const picker = pickers[tool];
   const wasOpen = picker?.open ?? false;
   closePickers();
   // Choosing seeds or creatures opens their row; tapping the tool again closes it.
   if (picker && !(again && wasOpen)) picker.openAt(toolbar.centerOf(tool), toolbar.el.offsetHeight + 4);
 });
-app.append(toolbar.el, seedPicker.el, creaturePicker.el, creator.el);
+/** The magnifying glass's card, and how close to a creature a tap must be (in cells) to find it. */
+const card = new CreatureCard(light, dark, () => card.hide());
+const PICK_REACH = 8 * SCALE;
+function pick(x: number, y: number): void {
+  let best: Creature | null = null;
+  let bestD = PICK_REACH * PICK_REACH;
+  for (const c of world.creatures) {
+    const i = c.cells[0];
+    if (i === undefined) continue;
+    const dx = (i % W) - x;
+    const dy = ((i / W) | 0) - y;
+    if (dx * dx + dy * dy <= bestD) {
+      bestD = dx * dx + dy * dy;
+      best = c;
+    }
+  }
+  if (!best) {
+    card.hide();
+    return;
+  }
+  card.show(best, world);
+}
+let cardDrawn = 0;
+
+app.append(toolbar.el, seedPicker.el, creaturePicker.el, creator.el, card.el);
 
 /** What the tool uses: the chosen seed or creature. */
 const choice = () => (tool === "creature" ? creatureSpecies : plantSpecies);
@@ -230,6 +259,10 @@ attachInput(
       creator.close();
       if (menu.isOpen) menu.close();
       if (settings.vibration && navigator.vibrate) navigator.vibrate(8);
+      if (tool === "look") {
+        pick(x, y);
+        return;
+      }
       // A creature is let go once per tap; the other tools keep going while held.
       stroke = tool === "creature" ? null : { x, y };
       toolTimer = 0;
@@ -294,7 +327,7 @@ function frame(now: number): void {
 
   if (stroke) {
     toolTimer += dt;
-    while (toolTimer >= 0.1) {
+    while (toolTimer >= 0.1 && tool !== "look") {
       toolTimer -= 0.1;
       applyTool(world, tool, stroke.x, stroke.y, choice());
     }
@@ -340,6 +373,13 @@ function frame(now: number): void {
     }
   }
   stepMs += performance.now() - t0;
+
+  // The creature under the magnifying glass: a ring follows it, and its card is kept up to date.
+  renderer.selected = card.creature && card.alive(world) ? card.creature.cells[0] : -1;
+  if (card.creature && now - cardDrawn > 250) {
+    card.update(world);
+    cardDrawn = now;
+  }
 
   if (catchUp.left === 0 || now - lastDraw > CATCH_UP_DRAW_EVERY) {
     renderer.overlay = dev.overlay;

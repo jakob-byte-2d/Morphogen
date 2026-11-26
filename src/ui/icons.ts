@@ -27,6 +27,10 @@ export const ICONS: Record<string, Icon> = {
     c: { y: "#f5c24c", Y: "#d98f2b", o: "#9fc4dc", O: "#6f9cbc" },
     r: ["  y    y   ", "     Y   y ", "  Y  y     ", " yYyYyYyYy ", "OOOOOOOOOOO", " ooooooooo ", "  ooooooo  "],
   },
+  look: {
+    c: { f: "#d8d2c8", g: "#7fb8e0", h: "#e8f6ff", d: "#a06a3a" },
+    r: ["  fffff    ", " fhhgggf   ", " fhggggf   ", " fgggggf   ", " fgggggf   ", "  fffff    ", "      dd   ", "       dd  ", "        dd "],
+  },
   spade: {
     c: { h: "#a06a3a", m: "#d3dae0", M: "#8c96a0" },
     r: ["   hhhhh   ", "     h     ", "     h     ", "     h     ", "    MMM    ", "   mmmmM   ", "   mmmmM   ", "   mmmmM   ", "    mmM    ", "     m     "],

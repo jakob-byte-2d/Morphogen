@@ -81,6 +81,15 @@ describe("skrukketroll", () => {
     expect(count(w, WASTE)).toBe(1);
   });
 
+  it("know their mother, and mothers count their young", () => {
+    const w = litterBed();
+    const first = spawnCreature(w, 0, [at(30, H - 4)], 120)!;
+    stepLifeN(w, 3000);
+    const young = w.creatures.filter((c) => c.mother === first.id);
+    expect(young.length).toBeGreaterThan(0);
+    expect(first.young).toBeGreaterThanOrEqual(young.length);
+  });
+
   it("die of old age", () => {
     const w = floor();
     // Plenty of energy, but not forever young: about eight minutes.
@@ -105,12 +114,14 @@ describe("feed", () => {
 });
 
 describe("creature tool", () => {
-  it("lets creatures go on whatever is below the finger", () => {
+  it("lets one creature go at a time, on whatever is below the finger", () => {
     const w = floor();
     for (let x = 0; x < W; x++) setCell(w, at(x, H - 2), SOIL);
     applyTool(w, "creature", 20, 10, 0);
+    expect(w.creatures.length).toBe(1);
     applyTool(w, "creature", 50, 10, 0);
-    expect(w.creatures.length).toBeGreaterThanOrEqual(2);
+    expect(w.creatures.length).toBe(2);
+    expect(w.creatures.every((c) => c.mother === 0 && c.young === 0)).toBe(true);
     expect(w.creatures.every((c) => c.cells.every((i) => w.type[i] === ISOPOD))).toBe(true);
     // They land on the soil, nothing left hanging in the air.
     for (const c of w.creatures) for (const i of c.cells) expect((i / W) | 0).toBeGreaterThan(H - 4 - 2 * SCALE);
