@@ -63,7 +63,6 @@ export function applyTool(w: World, tool: Tool, cx: number, cy: number, species 
       around(cx, cy, SCALE, (i) => {
         if (w.type[i] !== EMPTY || w.rng.below(3) !== 0) return;
         setCell(w, i, SOIL);
-        w.wet[i] = 30;
         w.food[i] = 4;
       });
       break;

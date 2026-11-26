@@ -29,7 +29,7 @@ import {
   type CreatureGenes,
   type PlantGenes,
 } from "../src/sim";
-import { emptyWorld, type World } from "../src/sim/world";
+import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
 
@@ -38,9 +38,10 @@ function soilBed(): World {
   for (let y = H - 30; y < H; y++)
     for (let x = 0; x < W; x++) {
       setCell(w, at(x, y), SOIL);
-      w.wet[at(x, y)] = 140;
       w.food[at(x, y)] = 6;
     }
+  // Groundwater ten rows below the surface.
+  w.groundwater = 20 * W * WATER_UNITS;
   return w;
 }
 

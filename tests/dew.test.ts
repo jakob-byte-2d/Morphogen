@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { applyTool, EMPTY, FLOWER, H, LEAF, SEED, setCell, SOIL, STEM, stepWorld, stepWorldN, totalWater, W, WATER } from "../src/sim";
-import { emptyWorld, type World } from "../src/sim/world";
+import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
 
-function soilBed(wet: number): World {
+/** Soil 20 rows deep, with the water table ten rows down in it. */
+function soilBed(): World {
   const w = emptyWorld(5);
   for (let y = H - 20; y < H; y++)
     for (let x = 0; x < W; x++) {
       setCell(w, at(x, y), SOIL);
-      w.wet[at(x, y)] = wet;
       w.food[at(x, y)] = 6;
     }
+  w.groundwater = 10 * W * WATER_UNITS;
   return w;
 }
 
@@ -24,7 +25,7 @@ function falling(w: World): number {
 
 describe("dew", () => {
   it("settles into the ground without falling as drops", () => {
-    const w = soilBed(40);
+    const w = soilBed();
     w.humidity = 3000;
     const water = totalWater(w);
     for (let k = 0; k < 40; k++) {
@@ -35,20 +36,19 @@ describe("dew", () => {
     expect(totalWater(w) + w.lostWater).toBe(water);
   });
 
-  it("gathers into puddles only on soaked ground", () => {
-    const w = soilBed(255);
+  it("sinks into the groundwater, and makes no puddles", () => {
+    const w = soilBed();
+    const before = w.groundwater;
     w.humidity = 3000;
     stepWorldN(w, 400);
-    expect(falling(w)).toBe(0);
-    expect(w.type.filter((t) => t === WATER).length).toBeGreaterThan(0);
-    // The puddles lie on the ground, not up in the air.
-    for (let i = 0; i < W * H; i++) if (w.type[i] === WATER) expect((i / W) | 0).toBeGreaterThan(H - 30);
+    expect(w.groundwater).toBeGreaterThan(before + 1500);
+    expect(w.type.includes(WATER)).toBe(false);
   });
 });
 
 describe("water on plants", () => {
   it("never stays on the leaves of a plant that has drunk its fill", () => {
-    const w = soilBed(130);
+    const w = soilBed();
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
@@ -73,7 +73,7 @@ describe("water on plants", () => {
 
 describe("seeds on plants", () => {
   it("slip down between the leaves to the ground", () => {
-    const w = soilBed(130);
+    const w = soilBed();
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;

@@ -13,10 +13,6 @@ export const MAX_TYPES = 32;
 
 /** Types that fall and pile up like sand. */
 export const POWDER = new Uint8Array(MAX_TYPES);
-/** Types that hold moisture. */
-export const POROUS = new Uint8Array(MAX_TYPES);
-/** Moisture a porous type holds against gravity; more seeps down. */
-export const FIELD_CAPACITY = new Uint8Array(MAX_TYPES);
 /**
  * How much of the light reaching a cell it stops, out of 256. Above ground
  * only leaves (and a little, flowers) cast shade, so the shade under a
@@ -27,10 +23,6 @@ export const ABSORB = new Uint16Array(MAX_TYPES);
 
 POWDER[SAND] = 1;
 POWDER[SOIL] = 1;
-POROUS[SAND] = 1;
-POROUS[SOIL] = 1;
-FIELD_CAPACITY[SAND] = 50;
-FIELD_CAPACITY[SOIL] = 140;
 ABSORB[STONE] = 256;
 ABSORB[SAND] = 256;
 ABSORB[SOIL] = 256;
@@ -46,9 +38,6 @@ export const WASTE = 10;
 
 POWDER[SEED] = 1;
 POWDER[WASTE] = 1;
-POROUS[ROOT] = 1;
-FIELD_CAPACITY[ROOT] = 140;
-// Dead leaves (WASTE) hold no water: rain and dew run off them into the ground.
 ABSORB[ROOT] = 256;
 ABSORB[STEM] = 6;
 ABSORB[LEAF] = 59;
@@ -81,6 +70,4 @@ CREATURE_PART[SLIME] = 1;
 export const WORM = 14;
 export const FUNGUS = 15;
 
-POROUS[FUNGUS] = 1;
-FIELD_CAPACITY[FUNGUS] = 100;
 CREATURE_PART[WORM] = 1;

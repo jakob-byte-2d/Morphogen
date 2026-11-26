@@ -21,20 +21,26 @@ import {
   WASTE,
   normalizePlantSpecies,
 } from "../src/sim";
-import { emptyWorld, type World } from "../src/sim/world";
+import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
 const count = (w: World, t: number) => w.type.filter((v) => v === t).length;
 
-/** A flat bed of soil with the given moisture, and one seed on it. */
-function bed(wet: number, species = 1): World {
+/** Groundwater for a glass with its water table at row y. */
+const tableAt = (y: number) => (H - y) * W * WATER_UNITS;
+
+/**
+ * A flat bed of soil, 30 rows deep, with one seed on it: moist (the water
+ * table ten rows below the surface) or dry (no groundwater).
+ */
+function bed(moist: boolean, species = 1): World {
   const w = emptyWorld(7);
   for (let y = H - 30; y < H; y++)
     for (let x = 0; x < W; x++) {
       setCell(w, at(x, y), SOIL);
-      w.wet[at(x, y)] = wet;
       w.food[at(x, y)] = 6;
     }
+  w.groundwater = moist ? tableAt(H - 20) : 0;
   setCell(w, at(36, H - 31), SEED);
   w.kind[at(36, H - 31)] = species;
   w.food[at(36, H - 31)] = 1;
@@ -42,8 +48,8 @@ function bed(wet: number, species = 1): World {
 }
 
 describe("seeds", () => {
-  it("sprout on moist soil after a few seconds", () => {
-    const w = bed(120);
+  it("sprout on moist soil (near the water table) after a few seconds", () => {
+    const w = bed(true);
     stepWorldN(w, 60);
     expect(w.plants.length).toBe(0);
     stepWorldN(w, 120);
@@ -51,8 +57,8 @@ describe("seeds", () => {
     expect(w.type[at(36, H - 30)]).toBe(ROOT);
   });
 
-  it("do not sprout on dry soil, and in the end rot", () => {
-    const w = bed(10);
+  it("do not sprout on dry soil (far above the water table), and in the end rot", () => {
+    const w = bed(false);
     stepWorldN(w, 600);
     expect(w.plants.length).toBe(0);
     stepWorldN(w, 600);
@@ -63,7 +69,7 @@ describe("seeds", () => {
 
 describe("growth", () => {
   it("grows a flower with roots, leaves and a flower head", () => {
-    const w = bed(130);
+    const w = bed(true);
     stepWorldN(w, 1800);
     expect(w.plants.length).toBeGreaterThanOrEqual(1);
     const p = w.plants[0];
@@ -77,12 +83,12 @@ describe("growth", () => {
   });
 
   it("lives on past its old lifespan, and sheds old leaves as litter", () => {
-    const w = bed(130);
+    const w = bed(true);
     const sp = w.plantSpecies[1];
-    // Keep the soil moist, as dew and watering would.
+    // Keep the groundwater up, as watering would.
     for (let k = 0; k < 13; k++) {
       stepWorldN(w, sp.lifespan);
-      for (let i = 0; i < w.wet.length; i++) if (w.type[i] === SOIL) w.wet[i] = Math.max(w.wet[i], 120);
+      w.groundwater = Math.max(w.groundwater, tableAt(H - 20));
     }
     // The first plant is still there, and bigger than ever.
     expect(w.plants.some((p) => p.age * 4 > sp.lifespan * 10)).toBe(true);
@@ -95,9 +101,9 @@ describe("growth", () => {
     for (let y = 14; y < H; y++)
       for (let x = 0; x < W; x++) {
         setCell(w, at(x, y), SOIL);
-        w.wet[at(x, y)] = 130;
         w.food[at(x, y)] = 6;
       }
+    w.groundwater = tableAt(30);
     setCell(w, at(70, 13), SEED);
     w.kind[at(70, 13)] = 2;
     w.food[at(70, 13)] = 1;
@@ -110,16 +116,18 @@ describe("growth", () => {
   });
 
   it("dries out and turns to litter without water", () => {
-    const w = bed(130);
+    const w = bed(true);
     stepWorldN(w, 600);
     expect(w.plants.length).toBe(1);
     const p = w.plants[0];
     const roots = p.cells.filter((i) => w.type[i] === ROOT);
     const shoot = p.cells.length - roots.length;
-    for (let i = 0; i < w.wet.length; i++) w.wet[i] = 0;
-    w.humidity = 0;
-    // The dew it breathes out keeps it going a little longer, but not for long.
-    for (let k = 0; k < 90 && w.plants.length > 0; k++) stepWorldN(w, 10);
+    // All the water taken away, and kept away (what it breathes out too).
+    for (let k = 0; k < 90 && w.plants.length > 0; k++) {
+      w.groundwater = 0;
+      w.humidity = 0;
+      stepWorldN(w, 10);
+    }
     expect(w.plants.length).toBe(0);
     // The shoot becomes litter; the roots, which grew where there was soil, become soil again.
     expect(count(w, WASTE)).toBeGreaterThanOrEqual(shoot);

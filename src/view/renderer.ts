@@ -1,7 +1,7 @@
-import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, POROUS, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
 import { THIRST_LIMIT } from "../sim/plants";
-import { H, SATURATED, SCALE, SIZE, W, type World } from "../sim/world";
+import { H, REACH, SCALE, SIZE, W, waterTable, type World } from "../sim/world";
 import type { Camera } from "./camera";
 import {
   BACKDROP_BASE,
@@ -203,6 +203,7 @@ export class Renderer {
 
   private drawOverlay(w: World): void {
     const d = this.overlayImage.data;
+    const table = waterTable(w);
     for (let i = 0; i < SIZE; i++) {
       const o = i * 4;
       const t = w.type[i];
@@ -211,8 +212,8 @@ export class Renderer {
       let b = 0;
       let a = 0;
       if (this.overlay === "wet") {
-        if (POROUS[t]) [r, g, b, a] = [60, 140, 255, (w.wet[i] / 255) * 230];
-        else if (t === WATER) [r, g, b, a] = [60, 140, 255, 230];
+        // The groundwater: everything below the water table.
+        if (t !== EMPTY && i >= table * W) [r, g, b, a] = [60, 140, 255, 200];
       } else if (this.overlay === "food") {
         if (w.food[i] > 0) [r, g, b, a] = [190, 240, 80, Math.min(1, w.food[i] / 10) * 230];
       } else {
@@ -243,7 +244,12 @@ export class Renderer {
     const { type, shade, wet, light } = w;
     const d = this.cellImage.data;
     const top = this.top;
+    const table = waterTable(w);
     for (let y = 0; y < H; y++) {
+      // Ground near the water table is moist (darker, with moss on top);
+      // ground well above it is dry and lighter; below it, it is soaked.
+      const moist = Math.max(0, Math.min(1, 1 - (table - REACH - y) / REACH));
+      const soaked = y >= table;
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
         const t = type[i];
@@ -266,7 +272,7 @@ export class Renderer {
         let a = 255;
         if (t === SOIL) {
           if (top[i] && (s & 3) !== 0) {
-            const tab = wet[i] > 70 ? MOSS_TABLE : BARE_TABLE;
+            const tab = moist > 0.5 ? MOSS_TABLE : BARE_TABLE;
             r = tab[s * 3];
             g = tab[s * 3 + 1];
             b = tab[s * 3 + 2];
@@ -275,14 +281,14 @@ export class Renderer {
             g = SPECK_TABLE[s * 3 + 1];
             b = SPECK_TABLE[s * 3 + 2];
           } else {
-            // Dry soil is lighter; it darkens as it takes up water.
-            const m = Math.min(1, wet[i] / 150);
+            // Dry soil is lighter; it darkens near the groundwater.
+            const m = 0.25 + 0.75 * moist;
             const tab = TABLES[SOIL]!;
             r = DRY_TABLE[s * 3] * (1 - m) + tab[s * 3] * m;
             g = DRY_TABLE[s * 3 + 1] * (1 - m) + tab[s * 3 + 1] * m;
             b = DRY_TABLE[s * 3 + 2] * (1 - m) + tab[s * 3 + 2] * m;
           }
-          if (wet[i] >= SATURATED) {
+          if (soaked) {
             // Soaked through: the groundwater shows as darker, cooler ground.
             r *= SOAKED[0];
             g *= SOAKED[1];
@@ -352,11 +358,11 @@ export class Renderer {
           g = tab[s * 3 + 1];
           b = tab[s * 3 + 2];
           if (t === WATER) a = 215;
-          else if (t === SAND && wet[i] >= SATURATED) {
+          else if (t === SAND && soaked) {
             r *= SOAKED[0];
             g *= SOAKED[1];
             b *= SOAKED[2];
-          } else if (t === SAND && POROUS[t] && wet[i] > 120) {
+          } else if (t === SAND && moist > 0.5) {
             r *= 0.85;
             g *= 0.85;
             b *= 0.85;
