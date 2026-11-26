@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTool, EMPTY, FLOWER, H, LEAF, SEED, setCell, SOIL, STEM, stepWorld, stepWorldN, totalWater, W, WATER } from "../src/sim";
+import { applyTool, EMPTY, FLOWER, H, LEAF, SEED, setCell, SOIL, STEM, stepLifeN, stepWorld, stepWorldN, totalWater, W, WATER } from "../src/sim";
 import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -29,7 +29,7 @@ describe("dew", () => {
     w.humidity = 3000;
     const water = totalWater(w);
     for (let k = 0; k < 40; k++) {
-      stepWorldN(w, 10);
+      stepLifeN(w, 10);
       expect(falling(w)).toBe(0);
     }
     expect(w.humidity).toBeLessThan(1000);
@@ -40,7 +40,7 @@ describe("dew", () => {
     const w = soilBed();
     const before = w.groundwater;
     w.humidity = 3000;
-    stepWorldN(w, 400);
+    stepLifeN(w, 400);
     expect(w.groundwater).toBeGreaterThan(before + 1500);
     expect(w.type.includes(WATER)).toBe(false);
   });
@@ -52,7 +52,7 @@ describe("water on plants", () => {
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
-    stepWorldN(w, 1500);
+    stepLifeN(w, 1500);
     expect(w.plants.length).toBeGreaterThan(0);
     const p = w.plants[0];
     let resting = 0;
@@ -77,7 +77,7 @@ describe("seeds on plants", () => {
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
-    stepWorldN(w, 1500);
+    stepLifeN(w, 1500);
     const p = w.plants[0];
     const top = Math.min(...p.cells.filter((i) => w.type[i] === LEAF));
     // Drop a seed straight onto the top leaf.

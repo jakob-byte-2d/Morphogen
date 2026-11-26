@@ -16,8 +16,9 @@ import {
   setCell,
   ISOPOD,
   SOIL,
-  START_TICKS,
+  START_LIFE,
   STEM,
+  stepLifeN,
   stepWorldN,
   unitLedger,
   W,
@@ -40,7 +41,7 @@ function bushBed(): World {
   setCell(w, at(72, H - 31), SEED);
   w.kind[at(72, H - 31)] = 2;
   w.food[at(72, H - 31)] = 1;
-  stepWorldN(w, 1500);
+  stepLifeN(w, 1500);
   return w;
 }
 
@@ -87,7 +88,7 @@ describe("a new glass", () => {
     const w = createWorld(3);
     const ledger = unitLedger(w);
     expect(w.creatures.length).toBe(0);
-    stepWorldN(w, START_TICKS);
+    stepLifeN(w, START_LIFE);
     expect(w.plants.length).toBeGreaterThan(5);
     expect(w.creatures.some((c) => c.species === 0)).toBe(true);
     expect(unitLedger(w)).toBe(ledger);
@@ -95,11 +96,11 @@ describe("a new glass", () => {
 
   it("keeps animals still to come when it is saved", () => {
     const a = createWorld(4);
-    stepWorldN(a, 1000);
+    stepLifeN(a, 1000);
     const b = loadWorld(JSON.parse(JSON.stringify(saveWorld(a))))!;
     expect(b.arrivals).toEqual(a.arrivals);
-    stepWorldN(a, START_TICKS);
-    stepWorldN(b, START_TICKS);
+    stepLifeN(a, START_LIFE);
+    stepLifeN(b, START_LIFE);
     expect(hashWorld(b)).toBe(hashWorld(a));
   });
 });

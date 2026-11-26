@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { applyTool, createWorld, hashWorld, loadWorld, saveWorld, stepWorldN } from "../src/sim";
+import { applyTool, createWorld, hashWorld, loadWorld, saveWorld, stepLifeN, stepWorldN } from "../src/sim";
 
 describe("saving a glass", () => {
   it("carries on exactly as if it had never been saved", () => {
     const a = createWorld(5);
-    stepWorldN(a, 1500);
+    stepLifeN(a, 1500);
     applyTool(a, "creature", 22, 40, 0);
-    applyTool(a, "creature", 40, 60, 1);
-    stepWorldN(a, 1500);
+    applyTool(a, "creature", 40, 60, 0);
+    stepLifeN(a, 1500);
+    stepWorldN(a, 777);
     const b = loadWorld(JSON.parse(JSON.stringify(saveWorld(a))));
     expect(b).not.toBeNull();
     expect(hashWorld(b!)).toBe(hashWorld(a));
+    stepLifeN(a, 2000);
+    stepLifeN(b!, 2000);
     stepWorldN(a, 2000);
     stepWorldN(b!, 2000);
     expect(hashWorld(b!)).toBe(hashWorld(a));

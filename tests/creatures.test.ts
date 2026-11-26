@@ -11,7 +11,7 @@ import {
   setCell,
   SOIL,
   spawnCreature,
-  stepWorldN,
+  stepLifeN,
   STONE,
   unitLedger,
   W,
@@ -51,7 +51,7 @@ describe("skrukketroll", () => {
     const litter = count(w, WASTE);
     spawnCreature(w, 0, [at(30, H - 4)], 120);
     const ledger = unitLedger(w);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     expect(count(w, WASTE)).toBeLessThan(litter);
     expect(w.creatures.length).toBeGreaterThan(1);
     // Half of what they eat is burnt, the rest ends up in the soil.
@@ -69,14 +69,14 @@ describe("skrukketroll", () => {
     }
     const leaves = count(w, LEAF);
     spawnCreature(w, 0, [at(5, H - 2)], 400);
-    stepWorldN(w, 600);
+    stepLifeN(w, 600);
     expect(count(w, LEAF)).toBe(leaves);
   });
 
   it("starve to litter without food", () => {
     const w = floor();
     spawnCreature(w, 0, [at(30, H - 2)], 50);
-    stepWorldN(w, 1000);
+    stepLifeN(w, 1000);
     expect(w.creatures.length).toBe(0);
     expect(count(w, WASTE)).toBe(1);
   });
@@ -85,9 +85,9 @@ describe("skrukketroll", () => {
     const w = floor();
     // Plenty of energy, but not forever young: about eight minutes.
     spawnCreature(w, 0, [at(30, H - 2)], 50000);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     expect(w.creatures.length).toBe(1);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     expect(w.creatures.length).toBe(0);
   });
 });
@@ -98,7 +98,7 @@ describe("feed", () => {
     for (let k = 0; k < 30; k++) applyTool(w, "feed", 36, 40);
     const fed = count(w, FEED);
     expect(fed).toBeGreaterThan(3);
-    stepWorldN(w, 700);
+    stepLifeN(w, 700);
     expect(count(w, FEED)).toBe(0);
     expect(count(w, WASTE)).toBeGreaterThan(fed - 3);
   });
@@ -121,13 +121,13 @@ describe("creature tool", () => {
 describe("the closed glass with creatures", () => {
   it("keeps its nutrient ledger", () => {
     const w = createWorld(42);
-    stepWorldN(w, 900);
+    stepLifeN(w, 900);
     applyTool(w, "creature", 22, 40, 0);
     applyTool(w, "creature", 52, 40, 0);
     applyTool(w, "creature", 40, 60, 0);
     const ledger = unitLedger(w);
     for (let k = 0; k < 8; k++) {
-      stepWorldN(w, 600);
+      stepLifeN(w, 600);
       expect(unitLedger(w)).toBe(ledger);
     }
   });

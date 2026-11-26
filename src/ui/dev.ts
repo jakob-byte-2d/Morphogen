@@ -5,6 +5,8 @@ export interface DevState {
   max: boolean;
   paused: boolean;
   stepOnce: boolean;
+  /** Days to move the glass on (the quick way), asked for with the +1 dag / +1 uke buttons. */
+  skipDays: number;
   overlay: "none" | "wet" | "food" | "light";
 }
 
@@ -38,6 +40,10 @@ export class DevPanel {
       b.dataset.speed = String(s);
       this.el.append(b);
     }
+    this.el.append(
+      this.button(t.dev.day, () => (state.skipDays += 1)),
+      this.button(t.dev.week, () => (state.skipDays += 7)),
+    );
     for (const o of ["none", "wet", "food", "light"] as const) {
       const b = this.button(t.dev.overlays[o], () => {
         state.overlay = o;

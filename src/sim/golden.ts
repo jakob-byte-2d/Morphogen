@@ -1,10 +1,12 @@
 /**
- * The fingerprint of a known glass after a fixed number of steps. If a change
+ * The fingerprint of a known glass after a fixed number of life steps (the
+ * quick way), then fast steps. If a change
  * alters it without meaning to change the rules, it is a bug.
  */
-export const GOLDEN: { simVersion: number; seed: number; ticks: number; hash: string } = {
-  simVersion: 14,
+export const GOLDEN: { simVersion: number; seed: number; life: number; ticks: number; hash: string } = {
+  simVersion: 15,
   seed: 42,
-  ticks: 3000,
-  hash: "c337fadb",
+  life: 1500,
+  ticks: 600,
+  hash: "1fa1755e",
 };

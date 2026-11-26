@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWorld, H, ISOPOD, setCell, SOIL, stepWorldN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
+import { createWorld, H, ISOPOD, setCell, SOIL, stepLifeN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -32,7 +32,7 @@ describe("dead leaves", () => {
     const w = compost();
     const ledger = unitLedger(w);
     const litter = count(w, WASTE);
-    stepWorldN(w, 12000);
+    stepLifeN(w, 12000);
     expect(count(w, WASTE)).toBeLessThan(litter / 2);
     expect(soilFood(w)).toBeGreaterThan(30);
     expect(w.burned).toBeGreaterThan(30);
@@ -44,7 +44,7 @@ describe("water", () => {
   it("escapes slowly, and every drop is accounted for", () => {
     const w = createWorld(21);
     const water = totalWater(w);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     expect(w.lostWater).toBeGreaterThan(0);
     expect(totalWater(w)).toBeLessThan(water);
     expect(totalWater(w) + w.lostWater).toBe(water);
@@ -56,7 +56,7 @@ describe("the whole cycle", () => {
     const w = createWorld(42);
     const ledger = unitLedger(w);
     const units = totalUnits(w);
-    stepWorldN(w, 9000);
+    stepLifeN(w, 9000);
     expect(unitLedger(w)).toBe(ledger);
     expect(w.plants.length).toBeGreaterThan(5);
     // Plants have made more from light than animals and rot have burnt.

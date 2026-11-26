@@ -1,19 +1,19 @@
 import { ABSORB, EMPTY, PLANT_PART, POWDER, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "./cells";
-import { releaseCreature, updateCreatures, type Creature } from "./creatures";
+import { crawlCreatures, releaseCreature, updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
 import { CREATURE_SPECIES, PLANT_SPECIES, type CreatureSpecies, type PlantSpecies } from "./species";
 
-import { H, SCALE, SIZE, W } from "./dims";
+import { H, LIFE_EVERY, SCALE, SIZE, W } from "./dims";
 
-export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
+export { AREA, H, LIFE_EVERY, LIFE_PER_DAY, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
 
 /**
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 14;
+export const SIM_VERSION = 15;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -53,14 +53,18 @@ const PLANT_DRINKS_TO = 200 * SCALE;
 
 /** A creature of `species` let in at column x when the glass reaches `tick`. */
 export interface Arrival {
-  tick: number;
+  /** The life step it comes at. */
+  life: number;
   species: number;
   x: number;
 }
 
 export interface World {
   readonly seed: number;
+  /** Fast steps since the glass was made (TICKS_PER_SECOND a second). */
   tick: number;
+  /** Life steps since the glass was made (one every LIFE_EVERY fast steps). */
+  life: number;
   readonly rng: Rng;
   /** Cell type per cell (see cells.ts). */
   readonly type: Uint8Array;
@@ -134,6 +138,7 @@ export function emptyWorld(
   return {
     seed,
     tick: 0,
+    life: 0,
     rng: new Rng(seed),
     type: new Uint8Array(SIZE),
     shade: new Uint8Array(SIZE),
@@ -399,12 +404,11 @@ export function computeLight(w: World): void {
  * on the ground it sinks into the groundwater.
  */
 function condense(w: World): void {
-  // A little water escapes all the time (a unit every four steps: the water
-  // table sinks a couple of rows an hour), so the glass needs watering now and then.
-  if ((w.tick & 3) === 0 && w.humidity > 0) {
-    w.humidity--;
-    w.lostWater++;
-  }
+  // A little water escapes all the time, so the glass needs watering now
+  // and then: the water table sinks a few rows a week.
+  const leak = Math.min(LEAK, w.humidity);
+  w.humidity -= leak;
+  w.lostWater += leak;
   if (w.humidity < DEW * 4) return;
   // The more water in the air, the more dew.
   const events = Math.min(12 * SCALE, w.humidity >> 8) + (w.rng.below(4) === 0 ? 1 : 0);
@@ -443,8 +447,52 @@ function condense(w: World): void {
 }
 
 /** Advances the glass by one step. */
+/** Water escaping from the glass, in units per life step. */
+const LEAK = 9;
+
+/**
+ * One fast step: things fall and flow, the pond fills to the water table,
+ * creatures crawl. Every LIFE_EVERY fast steps, one step of life.
+ */
 export function stepWorld(w: World): void {
-  while (w.arrivals.length > 0 && w.arrivals[0].tick <= w.tick) {
+  // Things fall and flow SCALE cells per step, so they keep their speed
+  // in the glass.
+  for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);
+  if ((w.tick & 1) === 0) seep(w);
+  crawlCreatures(w);
+  w.tick++;
+  if (w.tick % LIFE_EVERY === 0) lifeStep(w);
+}
+
+/** Fast steps of falling and crawling in each life step while catching up. */
+const SETTLE = 4;
+
+/**
+ * Moves the glass on by n fast steps the quick way, for catching up while
+ * the app was closed: every life step runs, but only the last few fast steps
+ * before each (enough for what has come loose to fall), and the rest are
+ * skipped. It is the same on every device for the same glass and n.
+ */
+export function sleepWorld(w: World, n: number): void {
+  while (n > 0) {
+    const toLife = LIFE_EVERY - (w.tick % LIFE_EVERY);
+    const span = Math.min(n, toLife);
+    const skip = Math.max(0, span - SETTLE);
+    // Nothing moves in the skipped steps, so nothing needs waking.
+    w.tick += skip;
+    for (let k = skip; k < span; k++) stepWorld(w);
+    n -= span;
+  }
+}
+
+/** Moves the glass on by n life steps, the quick way (see sleepWorld). */
+export function stepLifeN(w: World, n: number): void {
+  sleepWorld(w, n * LIFE_EVERY - (w.tick % LIFE_EVERY));
+}
+
+/** One step of life: five minutes of growing, ageing, eating and rotting. */
+function lifeStep(w: World): void {
+  while (w.arrivals.length > 0 && w.arrivals[0].life <= w.life) {
     const a = w.arrivals.shift()!;
     const before = totalUnits(w);
     releaseCreature(w, a.x, 0, a.species);
@@ -458,17 +506,13 @@ export function stepWorld(w: World): void {
       }
     }
   }
-  // Things fall and flow SCALE cells per step, so they keep their speed
-  // in the glass.
-  for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);
-  if ((w.tick & 1) === 0) seep(w);
-  // Light changes slowly (as plants grow), so it is worked out every few steps.
-  if ((w.tick & 3) === 0) computeLight(w);
+  // Plants change slowly: the light is worked out every other life step.
+  if ((w.life & 1) === 0) computeLight(w);
   updatePlants(w);
   updateCreatures(w);
-  if ((w.tick & 3) === 2) slowPass(w);
+  if ((w.life & 3) === 2) slowPass(w);
   condense(w);
-  w.tick++;
+  w.life++;
 }
 
 /** Per band of chunks: is any chunk in it awake? (Scratch space for movePass.) */

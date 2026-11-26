@@ -29,14 +29,17 @@ const START_PLANTS: [number, number][] = [
   [70, 1],
 ];
 
-/** The animals let in once the plants have grown: when, which, and where (in units). */
+/** The animals let in once the plants have grown: at which life step, which, and where (in units). */
 const START_ANIMALS = [
-  { tick: 1800, species: 0, x: 12 },
-  { tick: 1800, species: 0, x: 63 },
+  { life: 1800, species: 0, x: 12 },
+  { life: 1800, species: 0, x: 63 },
 ];
 
-/** How far a new glass is run before the player sees it: the animals are in, and settled. */
-export const START_TICKS = 2700;
+/**
+ * How many life steps a new glass is run before the player sees it (about
+ * nine days): the plants are up, and the animals are in and settled.
+ */
+export const START_LIFE = 2700;
 
 /**
  * A fresh glass: moist soil in the bottom quarter, with a wide dip in it,
@@ -50,8 +53,12 @@ export function createWorld(seed: number): World {
   const surface = heights(w, 94 * S, 6 * S, 12 * S);
   const pondL = 20 * S;
   const pondR = 52 * S;
-  /** The water table: groundwater fills the glass up to here, and the pond with it. */
-  const table = 102 * S;
+  /**
+   * The water table: groundwater fills the glass up to here, and the pond
+   * with it. (A little higher than it will stand when the player first sees
+   * the glass: the young plants take up some, and some escapes.)
+   */
+  const table = 100 * S;
   w.groundwater = (H - table) * W * WATER_UNITS;
 
   for (let x = 0; x < W; x++) {
@@ -99,7 +106,7 @@ export function createWorld(seed: number): World {
     w.food[i - W] = 2;
   }
   // Once they have grown a little, the skrukketroll come.
-  for (const a of START_ANIMALS) w.arrivals.push({ tick: a.tick, species: a.species, x: a.x * S });
+  for (const a of START_ANIMALS) w.arrivals.push({ life: a.life, species: a.species, x: a.x * S });
   computeLight(w);
   return w;
 }

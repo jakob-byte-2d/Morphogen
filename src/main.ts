@@ -3,8 +3,11 @@ import {
   addPlantSpecies,
   applyTool,
   createWorld,
-  START_TICKS,
   H,
+  LIFE_EVERY,
+  LIFE_PER_DAY,
+  sleepWorld,
+  START_LIFE,
   stepWorld,
   TICKS_PER_SECOND,
   type Tool,
@@ -38,8 +41,8 @@ const seed = Number.isFinite(seedParam) && seedParam > 0 ? seedParam : (Math.ran
 const settings = loadSettings();
 if (params.has("dev")) settings.devMode = true;
 
-/** Time passes while the app is closed, but at most an hour is made up for. */
-const MAX_CATCH_UP = 3600 * TICKS_PER_SECOND;
+/** Time passes while the app is closed: up to three months are made up for. */
+const MAX_CATCH_UP = 90 * 24 * 3600 * TICKS_PER_SECOND;
 const ticksFor = (ms: number) =>
   settings.timeAway ? Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND * settings.speed))) : 0;
 
@@ -60,7 +63,7 @@ if (saved) {
   for (const sp of lib.creatures) addCreatureSpecies(world, sp);
   // A new glass is run on until its plants have grown and its animals are
   // in, before it is ready to be looked after.
-  catchUp = { left: START_TICKS, total: START_TICKS, starting: true };
+  catchUp = { left: START_LIFE * LIFE_EVERY, total: START_LIFE * LIFE_EVERY, starting: true };
 }
 let nextSample = Math.ceil((world.tick + 1) / SAMPLE_EVERY) * SAMPLE_EVERY;
 
@@ -155,7 +158,7 @@ app.append(toolbar.el, seedPicker.el, creaturePicker.el, creator.el);
 /** What the tool uses: the chosen seed or creature. */
 const choice = () => (tool === "creature" ? creatureSpecies : plantSpecies);
 
-const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false, overlay: "none" };
+const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false, skipDays: 0, overlay: "none" };
 const devPanel = new DevPanel(dev);
 app.append(devPanel.el);
 function showDev(): void {
@@ -253,10 +256,24 @@ attachInput(
 
 function step(): void {
   stepWorld(world);
-  if (world.tick >= nextSample) {
-    record(history, world);
-    nextSample += SAMPLE_EVERY;
-  }
+  sampleIfDue();
+}
+
+/**
+ * Catching up: moves the glass on the quick way (see sleepWorld), at most to
+ * the next life step at a time. Returns the fast steps it moved on.
+ */
+function catchUpStep(): number {
+  const n = Math.min(catchUp.left, LIFE_EVERY - (world.tick % LIFE_EVERY));
+  sleepWorld(world, n);
+  sampleIfDue();
+  return n;
+}
+
+function sampleIfDue(): void {
+  if (world.tick < nextSample) return;
+  record(history, world);
+  nextSample = (Math.floor(world.tick / SAMPLE_EVERY) + 1) * SAMPLE_EVERY;
 }
 
 let last = performance.now();
@@ -283,13 +300,18 @@ function frame(now: number): void {
     }
   }
 
+  if (dev.skipDays > 0) {
+    const n = dev.skipDays * LIFE_PER_DAY * LIFE_EVERY;
+    catchUp = { left: catchUp.left + n, total: catchUp.left + n, starting: catchUp.starting };
+    dev.skipDays = 0;
+  }
+
   const t0 = performance.now();
   if (catchUp.left > 0) {
     // Making up for the time the app was closed, as fast as the phone allows:
     // most of each frame goes to the glass, which is drawn only now and then.
     do {
-      step();
-      catchUp.left--;
+      catchUp.left -= catchUpStep();
     } while (catchUp.left > 0 && performance.now() - t0 < CATCH_UP_MS);
     const done = Math.round(100 * (1 - catchUp.left / catchUp.total));
     catchUpLabel.textContent = catchUp.starting ? t.starting(done) : t.catchUp(done);
