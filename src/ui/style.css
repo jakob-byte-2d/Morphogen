@@ -76,8 +76,8 @@ body {
 }
 
 .tool {
-  width: min(54px, calc((100vw - 56px) / 6));
-  height: min(54px, calc((100vw - 56px) / 6));
+  width: min(54px, calc((100vw - 64px) / 7));
+  height: min(54px, calc((100vw - 64px) / 7));
   padding: 0;
   display: flex;
   align-items: center;
@@ -582,4 +582,89 @@ body {
 .creator-button.primary {
   background: var(--button-on);
   border-color: var(--accent);
+}
+
+/* The magnifying glass's card about one creature, at the top, clear of the
+   ground where the creatures live. Tapping it closes it. */
+.card {
+  position: absolute;
+  top: calc(var(--safe-top) + 72px);
+  left: 12px;
+  right: 12px;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  background: rgba(30, 24, 34, 0.92);
+  border: 2px solid var(--edge);
+  border-radius: 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card.gone {
+  opacity: 0.75;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.card-head canvas {
+  width: 44px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+
+.card-head strong {
+  display: block;
+  font-size: 18px;
+}
+
+.card-sub {
+  opacity: 0.8;
+}
+
+.card-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 14px;
+  margin: 0;
+}
+
+.card-rows dt {
+  opacity: 0.75;
+}
+
+.card-rows dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.card-bar {
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.card-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.card-traits {
+  margin: 8px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
 }

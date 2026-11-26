@@ -6,6 +6,6 @@ export { hashWorld } from "./hash";
 export { GOLDEN } from "./golden";
 export * from "./species";
 export { GROW_COST, PLANT_EVERY, THIRST_LIMIT, type Plant, type Tip } from "./plants";
-export { CREATURE_EVERY, lifespanOf, spawnCreature, type Creature } from "./creatures";
+export { CREATURE_EVERY, fullness, grownUp, lifespanOf, spawnCreature, type Creature } from "./creatures";
 export { loadWorld, saveWorld, type SavedGlass } from "./save";
 export * from "./genes";

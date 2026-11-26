@@ -14,6 +14,10 @@ export interface Creature {
   age: number;
   cells: number[];
   genes: CreatureGenes;
+  /** The id of its mother (0 if it was let into the glass). Its name comes from its id. */
+  mother: number;
+  /** Young it has had. */
+  young: number;
   dead: boolean;
 }
 
@@ -120,12 +124,12 @@ function addCell(w: World, c: Creature, i: number, units: number): void {
  * Starts a new creature in the given empty cells; the units come with it.
  * Without genes it gets its species' own.
  */
-export function spawnCreature(w: World, species: number, at: number[], energy: number, genes?: CreatureGenes): Creature | null {
+export function spawnCreature(w: World, species: number, at: number[], energy: number, genes?: CreatureGenes, mother = 0): Creature | null {
   if (w.creatures.length >= MAX_CREATURES) return null;
   const id = newOrgId(w);
   if (id === 0) return null;
   const g = genes ?? creatureGenesOf(w.creatureSpecies[species]);
-  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], genes: g, dead: false };
+  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], genes: g, mother, young: 0, dead: false };
   for (const i of at) addCell(w, c, i, 1);
   w.creatures.push(c);
   w.orgs.set(id, c);
@@ -140,7 +144,7 @@ function landing(w: World, x: number, y: number): number {
   return y < H - 1 && w.type[i + W] === WATER ? -1 : i;
 }
 
-/** Lets creatures go at (cx, cy): a little group lands on the ground below. */
+/** Lets one creature go at (cx, cy): it lands on the ground below (or the nearest bare ground). */
 export function releaseCreature(w: World, cx: number, cy: number, species: number): void {
   if (cx < 0 || cx >= W || cy < 0 || cy >= H) return;
   const k = Math.min(species, w.creatureSpecies.length - 1);
@@ -150,16 +154,20 @@ export function releaseCreature(w: World, cx: number, cy: number, species: numbe
     if (x < 0 || x >= W) continue;
     const i = landing(w, x, cy);
     if (i >= 0 && !(i < W * (H - 1) && PLANT_PART[w.type[i + W]])) {
-      cx = x;
-      break;
+      spawnCreature(w, k, [i], BUG.start);
+      return;
     }
   }
-  for (const dx of [0, -2 * SCALE, 2 * SCALE]) {
-    const x = cx + dx;
-    if (x < 0 || x >= W) continue;
-    const i = landing(w, x, cy);
-    if (i >= 0 && !(i < W * (H - 1) && PLANT_PART[w.type[i + W]])) spawnCreature(w, k, [i], BUG.start);
-  }
+}
+
+/** How full a creature is, 0–1: below a half it is hungry. */
+export function fullness(c: Creature): number {
+  return Math.max(0, Math.min(1, c.energy / BUG.full));
+}
+
+/** Has it grown up (and can breed)? */
+export function grownUp(c: Creature): boolean {
+  return c.age >= lifespanOf(c) * BUG.grownAt;
 }
 
 /**
@@ -248,14 +256,15 @@ function updateBug(w: World, c: Creature): void {
   }
   if (c.age % BUG.dropEvery === 0) drop(w, c, i, BUG.dropUnits);
   // Breed, once grown up: a new one beside it, made from one unit of what it has eaten.
-  if (c.energy >= breedAt && c.store >= 1 && c.age >= lifespanOf(c) * BUG.grownAt) {
+  if (c.energy >= breedAt && c.store >= 1 && grownUp(c)) {
     for (const d of NEIGHBOURS) {
       const j = i + d;
       if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, 0)) continue;
       const young = bugYoung(g);
-      const child = spawnCreature(w, c.species, [], young, inheritCreature(w, g));
+      const child = spawnCreature(w, c.species, [], young, inheritCreature(w, g), c.id);
       if (!child) break;
       addCell(w, child, j, 1);
+      c.young++;
       c.store--;
       c.energy -= young + 40;
       break;

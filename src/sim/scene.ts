@@ -29,10 +29,14 @@ const START_PLANTS: [number, number][] = [
   [70, 1],
 ];
 
-/** The animals let in once the plants have grown: at which life step, which, and where (in units). */
+/** The animals let in once the plants have grown, one each: at which life step, which, and where (in units). */
 const START_ANIMALS = [
   { life: 1800, species: 0, x: 12 },
   { life: 1800, species: 0, x: 63 },
+  { life: 1850, species: 0, x: 8 },
+  { life: 1850, species: 0, x: 58 },
+  { life: 1900, species: 0, x: 16 },
+  { life: 1900, species: 0, x: 67 },
 ];
 
 /**
@@ -105,7 +109,7 @@ export function createWorld(seed: number): World {
     setCell(w, i - W, WASTE);
     w.food[i - W] = 2;
   }
-  // Once they have grown a little, the skrukketroll come.
+  // Once the plants have grown a little, the skrukketroll come, one at a time.
   for (const a of START_ANIMALS) w.arrivals.push({ life: a.life, species: a.species, x: a.x * S });
   computeLight(w);
   return w;

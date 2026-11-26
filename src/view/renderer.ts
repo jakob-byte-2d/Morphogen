@@ -150,6 +150,9 @@ export class Renderer {
     this.backdrop.style.filter = `blur(${(cam.width * 0.06).toFixed(1)}px)`;
   }
 
+  /** The cell of the creature under the magnifying glass, or -1. */
+  selected = -1;
+
   draw(w: World, time: number, dt: number): void {
     this.layout();
     this.drawCells(w, dt);
@@ -169,6 +172,18 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.cellCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);
     this.drawMist(ctx, w);
+    if (this.selected >= 0) {
+      // A soft ring round the creature under the magnifying glass.
+      const px = this.screen.width / sw;
+      const cx = ((this.selected % W) + 0.5 - sx) * px;
+      const cy = (((this.selected / W) | 0) + 0.5 - sy) * px;
+      const r = Math.max(10 * devicePixelRatio, 4 * px) * (1 + 0.08 * Math.sin(time * 4));
+      ctx.strokeStyle = "rgba(255, 240, 220, 0.9)";
+      ctx.lineWidth = 1.5 * devicePixelRatio;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (this.overlay !== "none") {
       this.drawOverlay(w);
       ctx.drawImage(this.overlayCanvas, sx, sy, sw, sh, 0, 0, this.screen.width, this.screen.height);

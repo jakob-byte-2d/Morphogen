@@ -190,6 +190,8 @@ export function loadWorld(data: unknown): World | null {
       age: int(r.age, 0, 2 ** 31),
       cells: cellList(r.cells),
       genes: creatureGenesOf(creatureSpecies[0]),
+      mother: int(r.mother, 0, MAX_ORG_ID),
+      young: int(r.young, 0, 100000),
       dead: false,
     };
     c.genes = cleanCreatureGenes(r.genes, creatureGenesOf(creatureSpecies[c.species]));
