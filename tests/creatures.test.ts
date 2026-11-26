@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { sownGlass } from "./helpers";
 import {
   ISOPOD,
   applyTool,
-  createWorld,
   EMPTY,
   FEED,
   H,
@@ -12,6 +12,7 @@ import {
   SOIL,
   spawnCreature,
   stepLifeN,
+  stepWorld,
   STONE,
   unitLedger,
   W,
@@ -90,6 +91,30 @@ describe("skrukketroll", () => {
     expect(first.young).toBeGreaterThanOrEqual(young.length);
   });
 
+  it("walk about where you can see it, and rest in between", () => {
+    const w = floor();
+    for (let x = 0; x < W; x++) setCell(w, at(x, H - 2), SOIL);
+    // Fed: it walks for a while, then rests for a while.
+    const c = spawnCreature(w, 0, [at(W >> 1, H - 3)], 500)!;
+    const seen = new Set<number>();
+    let still = 0;
+    for (let t = 0; t < 3 * 60 * 10; t++) {
+      const was = c.cells[0];
+      stepWorld(w);
+      seen.add(c.cells[0] % W);
+      if (c.cells[0] === was) still++;
+    }
+    // In three minutes it has gone a good way along the ground, and rested too.
+    expect(seen.size).toBeGreaterThan(30);
+    expect(still).toBeGreaterThan(3 * 60 * 10 * 0.3);
+  });
+
+  it("are as many as the food allows: there is no limit", () => {
+    const w = floor();
+    for (let k = 0; k < 200; k++) expect(spawnCreature(w, 0, [at(k % W, H - 2 - ((k / W) | 0))], 100)).not.toBeNull();
+    expect(w.creatures.length).toBe(200);
+  });
+
   it("die of old age", () => {
     const w = floor();
     // Plenty of energy, but not forever young: about eight minutes.
@@ -131,7 +156,7 @@ describe("creature tool", () => {
 
 describe("the closed glass with creatures", () => {
   it("keeps its nutrient ledger", () => {
-    const w = createWorld(42);
+    const w = sownGlass(42);
     stepLifeN(w, 900);
     applyTool(w, "creature", 22, 40, 0);
     applyTool(w, "creature", 52, 40, 0);

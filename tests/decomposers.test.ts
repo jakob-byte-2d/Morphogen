@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { letIn, sownGlass } from "./helpers";
 import { createWorld, H, ISOPOD, setCell, SOIL, stepLifeN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
@@ -52,11 +53,13 @@ describe("water", () => {
 });
 
 describe("the whole cycle", () => {
-  it("light, plants, dead leaves, skrukketroll and soil for a quarter of an hour", () => {
-    const w = createWorld(42);
+  it("light, plants, dead leaves, skrukketroll and soil for a month", () => {
+    const w = sownGlass(42);
+    stepLifeN(w, 1800);
+    letIn(w);
     const ledger = unitLedger(w);
     const units = totalUnits(w);
-    stepLifeN(w, 9000);
+    stepLifeN(w, 7200);
     expect(unitLedger(w)).toBe(ledger);
     expect(w.plants.length).toBeGreaterThan(5);
     // Plants have made more from light than animals and rot have burnt.

@@ -1,5 +1,5 @@
 import { CREATURE_PART, EMPTY, FEED, ISOPOD, PLANT_PART, ROOT, SAND, SOIL, WASTE, WATER } from "./cells";
-import { H, LIFE_PER_DAY, SCALE, W } from "./dims";
+import { H, LIFE_PER_DAY, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
 import { clearCell, newOrgId, setCell, type World } from "./world";
 
@@ -18,16 +18,22 @@ export interface Creature {
   mother: number;
   /** Young it has had. */
   young: number;
+  /** Which way it is walking: -1 (left) or 1 (right). */
+  heading: number;
+  /** The cell of the food it is heading for, or -1. */
+  target: number;
   dead: boolean;
 }
 
 /**
  * Creatures live (eat, age, breed) every CREATURE_EVERY life steps, spread
  * over the steps by id; they crawl in the fast steps, every CRAWL_EVERY.
+ * There is no limit to how many there can be: food sets it.
  */
 export const CREATURE_EVERY = 2;
-const CRAWL_EVERY = 4;
-const MAX_CREATURES = 60;
+const CRAWL_EVERY = 2;
+/** A hungry one with no food in mind looks around for some this often (fast steps). */
+const LOOK_EVERY = 32;
 
 /** Skrukketroll (litter eaters): one cell each, living on the ground. */
 const BUG = {
@@ -36,8 +42,12 @@ const BUG = {
   lifespanDays: 17,
   /** It is grown up, and can breed, when this share of its life is behind it. */
   grownAt: 1 / 3,
-  /** A fed one rests; one crawl in this many it takes a step anyway. */
-  restless: 200,
+  /**
+   * A fed one walks for a while, then rests for a while, over and over: walks
+   * of 10–40 seconds and rests of 30–90, different for each.
+   */
+  walk: 10,
+  rest: 30,
   /** How far a hungry one can sense fallen leaves. */
   sense: 6 * SCALE,
   /** Updates between droppings, and the units in one (a crumb of soil). */
@@ -125,11 +135,10 @@ function addCell(w: World, c: Creature, i: number, units: number): void {
  * Without genes it gets its species' own.
  */
 export function spawnCreature(w: World, species: number, at: number[], energy: number, genes?: CreatureGenes, mother = 0): Creature | null {
-  if (w.creatures.length >= MAX_CREATURES) return null;
   const id = newOrgId(w);
   if (id === 0) return null;
   const g = genes ?? creatureGenesOf(w.creatureSpecies[species]);
-  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], genes: g, mother, young: 0, dead: false };
+  const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], genes: g, mother, young: 0, heading: (id & 1) === 0 ? 1 : -1, target: -1, dead: false };
   for (const i of at) addCell(w, c, i, 1);
   w.creatures.push(c);
   w.orgs.set(id, c);
@@ -271,11 +280,18 @@ function updateBug(w: World, c: Creature): void {
     }
   }
   // Hungry, with nothing to eat right here: it goes looking. (While the
-  // glass is watched it has mostly crawled there already; see crawlCreatures.)
-  if (hungry(c) && !nextToFood(w, c.cells[0])) {
-    const target = nearestFood(w, c.cells[0]);
-    for (let k = 0; k < 3 * SCALE; k++) crawlBug(w, c, target);
+  // glass is watched it has mostly walked there already; see crawlCreatures.)
+  if (hungry(c) && (c.age & 1) === 0 && !nextToFood(w, c.cells[0])) {
+    if ((c.target < 0 || !edibleForBug(w.type[c.target])) && (c.age & 3) === 0) c.target = nearestFood(w, c.cells[0]);
+    if (c.target >= 0 && edibleForBug(w.type[c.target])) for (let k = 0; k < 2 * SCALE; k++) crawlBug(w, c, c.target);
   }
+}
+
+/** Is a fed creature walking (rather than resting) at fast step `tick`? */
+function walking(c: Creature, tick: number): boolean {
+  const walk = (BUG.walk + (c.id % 31)) * TICKS_PER_SECOND;
+  const rest = (BUG.rest + ((c.id * 7) % 61)) * TICKS_PER_SECOND;
+  return (tick + c.id * 977) % (walk + rest) < walk;
 }
 
 function hungry(c: Creature): boolean {
@@ -289,11 +305,11 @@ function nextToFood(w: World, i: number): boolean {
 
 /**
  * The fast steps: creatures crawl. One with nothing to hold on to falls
- * (straight through any plant). A hungry one crawls towards the nearest
- * fallen leaves it can sense and sits there eating; a fed one rests, and
- * takes a step now and then.
+ * (straight through any plant). A hungry one walks to the food it has in
+ * mind (looking around now and then for the nearest it can sense) and sits
+ * there eating; a fed one walks about for a while, then rests for a while.
  */
-export function crawlCreatures(w: World): void {
+export function crawlCreatures(w: World, walk: boolean): void {
   for (const c of w.creatures) {
     if (c.dead || (c.id + w.tick) % CRAWL_EVERY !== 0) continue;
     const i = c.cells[0];
@@ -307,37 +323,50 @@ export function crawlCreatures(w: World): void {
       }
       continue;
     }
-    if (hungry(c)) {
+    if (!walk) continue;
+    const hunting = hungry(c);
+    if (hunting) {
       if (nextToFood(w, i)) continue;
-      if (w.rng.below(5) < c.genes.speed) crawlBug(w, c, nearestFood(w, i));
-    } else if (w.rng.below(BUG.restless) === 0) crawlBug(w, c, -1);
+      if ((c.target < 0 || !edibleForBug(w.type[c.target])) && (c.id + w.tick) % LOOK_EVERY === 0) c.target = nearestFood(w, i);
+      if (c.target >= 0 && !edibleForBug(w.type[c.target])) c.target = -1;
+    } else if (!walking(c, w.tick)) continue;
+    if (w.rng.below(5) < c.genes.speed) crawlBug(w, c, hunting ? c.target : -1);
   }
-}
-
-/** The nearest fallen leaf (or feed) a skrukketroll can sense from i, or -1. */
-function nearestFood(w: World, i: number): number {
-  const r = BUG.sense;
-  const x0 = i % W;
-  const y0 = (i / W) | 0;
-  let best = -1;
-  let bestD = 1e9;
-  for (let y = Math.max(0, y0 - r); y <= Math.min(H - 1, y0 + r); y++) {
-    for (let x = Math.max(0, x0 - r); x <= Math.min(W - 1, x0 + r); x++) {
-      if (!edibleForBug(w.type[y * W + x])) continue;
-      const d = (x - x0) * (x - x0) + (y - y0) * (y - y0);
-      if (d < bestD) {
-        bestD = d;
-        best = y * W + x;
-      }
-    }
-  }
-  return best;
 }
 
 /**
- * Crawl to a neighbouring cell with something to hold on to: next to food
- * if it can, towards the nearest food it can sense if not,
- * and a little away from others of its kind, so they spread out.
+ * The nearest fallen leaf (or feed) a skrukketroll can sense from i, or -1.
+ * It looks in widening rings, and stops at the first ring with food in it.
+ */
+function nearestFood(w: World, i: number): number {
+  const x0 = i % W;
+  const y0 = (i / W) | 0;
+  for (let r = 1; r <= BUG.sense; r++) {
+    let best = -1;
+    let bestD = 1e9;
+    for (let y = y0 - r; y <= y0 + r; y++) {
+      if (y < 0 || y >= H) continue;
+      // Along the top and bottom of the ring every cell; along the sides only the ends.
+      const edge = y === y0 - r || y === y0 + r;
+      for (let x = x0 - r; x <= x0 + r; x += edge ? 1 : 2 * r) {
+        if (x < 0 || x >= W || !edibleForBug(w.type[y * W + x])) continue;
+        const d = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+        if (d < bestD) {
+          bestD = d;
+          best = y * W + x;
+        }
+      }
+    }
+    if (best >= 0) return best;
+  }
+  return -1;
+}
+
+/**
+ * Crawl to a neighbouring cell with something to hold on to: towards the
+ * food it has in mind if it has some; otherwise on the way it is heading
+ * (turning back when it cannot go on), and gladly next to dead leaves. It
+ * keeps a little away from others of its kind, so they spread out.
  */
 function crawlBug(w: World, c: Creature, target: number): void {
   const i = c.cells[0];
@@ -365,13 +394,21 @@ function crawlBug(w: World, c: Creature, target: number): void {
       const x = j % W;
       const y = (j / W) | 0;
       score -= ((x - tx) * (x - tx) + (y - ty) * (y - ty)) >> 2;
-    }
+    } else score += Math.sign((j % W) - (i % W)) * c.heading * 6;
     if (score > bestScore) {
       bestScore = score;
       best = j;
     }
   }
-  if (best >= 0) moveCell(w, c, 0, best);
+  if (best < 0) {
+    c.heading = -c.heading;
+    return;
+  }
+  const dx = Math.sign((best % W) - (i % W));
+  if (target >= 0) {
+    if (dx !== 0) c.heading = dx;
+  } else if (dx === -c.heading) c.heading = dx;
+  moveCell(w, c, 0, best);
 }
 
 /** Moves creature cell number k to the empty cell j, with what it carries. */

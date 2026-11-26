@@ -7,7 +7,6 @@ import {
   LIFE_EVERY,
   LIFE_PER_DAY,
   sleepWorld,
-  START_LIFE,
   stepWorld,
   TICKS_PER_SECOND,
   SCALE,
@@ -51,22 +50,20 @@ const ticksFor = (ms: number) =>
 
 // The glass from last time, if there is one (?seed=… or ?fresh starts a new one).
 let world: World;
-let catchUp = { left: 0, total: 0, starting: false };
+let catchUp = { left: 0, total: 0 };
 const saved = params.has("seed") || params.has("fresh") ? null : restoreGlass();
 const history = saved ? loadHistory() : (forgetHistory(), loadHistory());
 if (saved) {
   world = saved.world;
   const n = ticksFor(Date.now() - saved.savedAt);
-  catchUp = { left: n, total: n, starting: false };
+  catchUp = { left: n, total: n };
 } else {
   world = createWorld(seed);
   // Species the player has made before come along into a new glass.
   const lib = loadLibrary();
   for (const sp of lib.plants) addPlantSpecies(world, sp);
   for (const sp of lib.creatures) addCreatureSpecies(world, sp);
-  // A new glass is run on until its plants have grown and its animals are
-  // in, before it is ready to be looked after.
-  catchUp = { left: START_LIFE * LIFE_EVERY, total: START_LIFE * LIFE_EVERY, starting: true };
+  // A new glass has soil and water, and nothing living: it is ready at once.
 }
 let nextSample = Math.ceil((world.tick + 1) / SAMPLE_EVERY) * SAMPLE_EVERY;
 
@@ -335,7 +332,7 @@ function frame(now: number): void {
 
   if (dev.skipDays > 0) {
     const n = dev.skipDays * LIFE_PER_DAY * LIFE_EVERY;
-    catchUp = { left: catchUp.left + n, total: catchUp.left + n, starting: catchUp.starting };
+    catchUp = { left: catchUp.left + n, total: catchUp.left + n };
     dev.skipDays = 0;
   }
 
@@ -347,7 +344,7 @@ function frame(now: number): void {
       catchUp.left -= catchUpStep();
     } while (catchUp.left > 0 && performance.now() - t0 < CATCH_UP_MS);
     const done = Math.round(100 * (1 - catchUp.left / catchUp.total));
-    catchUpLabel.textContent = catchUp.starting ? t.starting(done) : t.catchUp(done);
+    catchUpLabel.textContent = t.catchUp(done);
     catchUpLabel.classList.toggle("on", catchUp.left > 0);
     if (catchUp.left === 0) keep();
   } else if (dev.stepOnce) {
@@ -410,7 +407,7 @@ document.addEventListener("visibilitychange", () => {
     keep();
   } else if (hiddenAt > 0) {
     const n = ticksFor(Date.now() - hiddenAt);
-    catchUp = { left: catchUp.left + n, total: catchUp.left + n, starting: catchUp.starting };
+    catchUp = { left: catchUp.left + n, total: catchUp.left + n };
     last = performance.now();
   }
 });

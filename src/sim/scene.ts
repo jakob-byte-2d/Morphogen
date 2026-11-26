@@ -1,5 +1,4 @@
-import { EMPTY, SEED, SOIL, WASTE, WATER } from "./cells";
-import { packSeed, plantGenesOf } from "./genes";
+import { SOIL, WATER } from "./cells";
 import { computeLight, emptyWorld, H, SCALE, setCell, W, WATER_UNITS, type World } from "./world";
 
 /** Integer interpolation between random heights every `step` columns. */
@@ -16,39 +15,11 @@ function heights(w: World, base: number, spread: number, step: number): Int16Arr
   return out;
 }
 
-/** The plants a new glass is sown with: [column in units, species]. */
-const START_PLANTS: [number, number][] = [
-  [4, 0],
-  [8, 1],
-  [12, 2],
-  [16, 0],
-  [55, 0],
-  [59, 1],
-  [63, 2],
-  [67, 0],
-  [70, 1],
-];
-
-/** The animals let in once the plants have grown, one each: at which life step, which, and where (in units). */
-const START_ANIMALS = [
-  { life: 1800, species: 0, x: 12 },
-  { life: 1800, species: 0, x: 63 },
-  { life: 1850, species: 0, x: 8 },
-  { life: 1850, species: 0, x: 58 },
-  { life: 1900, species: 0, x: 16 },
-  { life: 1900, species: 0, x: 67 },
-];
-
 /**
- * How many life steps a new glass is run before the player sees it (about
- * nine days): the plants are up, and the animals are in and settled.
- */
-export const START_LIFE = 2700;
-
-/**
- * A fresh glass: moist soil in the bottom quarter, with a wide dip in it,
- * and air above. The groundwater stands a little below the surface; where
- * the ground dips below it, there is open water: the pond.
+ * A fresh glass: soil in the bottom quarter, with a wide dip in it, and air
+ * above. The groundwater stands a little below the surface; where the ground
+ * dips below it, there is open water: the pond. Nothing lives in it yet: the
+ * player sows it and lets the animals in.
  */
 export function createWorld(seed: number): World {
   const w = emptyWorld(seed);
@@ -57,12 +28,8 @@ export function createWorld(seed: number): World {
   const surface = heights(w, 94 * S, 6 * S, 12 * S);
   const pondL = 20 * S;
   const pondR = 52 * S;
-  /**
-   * The water table: groundwater fills the glass up to here, and the pond
-   * with it. (A little higher than it will stand when the player first sees
-   * the glass: the young plants take up some, and some escapes.)
-   */
-  const table = 100 * S;
+  /** The water table: groundwater fills the glass up to here, and the pond with it. */
+  const table = 102 * S;
   w.groundwater = (H - table) * W * WATER_UNITS;
 
   for (let x = 0; x < W; x++) {
@@ -86,31 +53,6 @@ export function createWorld(seed: number): World {
       } else if (y >= table) setCell(w, i, WATER);
     }
   }
-  // Plants on both sides of the pond, so the glass comes to life by itself.
-  for (const [x, species] of START_PLANTS) {
-    for (let y = 1; y < H; y++) {
-      const i = y * W + x * S;
-      if (w.type[i] === EMPTY) continue;
-      const j = i - W;
-      setCell(w, j, SEED);
-      w.kind[j] = species;
-      w.food[j] = 1;
-      w.org[j] = packSeed(plantGenesOf(w.plantSpecies[species]));
-      break;
-    }
-  }
-  // A thin layer of dead leaves on the ground, as in a real terrarium: food
-  // for the skrukketroll until the plants shed leaves of their own.
-  for (let x = 0; x < W; x++) {
-    if (w.rng.below(3) !== 0) continue;
-    let i = x;
-    while (i < H * W && w.type[i] === EMPTY) i += W;
-    if (i >= H * W || w.type[i] !== SOIL || i < W) continue;
-    setCell(w, i - W, WASTE);
-    w.food[i - W] = 2;
-  }
-  // Once the plants have grown a little, the skrukketroll come, one at a time.
-  for (const a of START_ANIMALS) w.arrivals.push({ life: a.life, species: a.species, x: a.x * S });
   computeLight(w);
   return w;
 }

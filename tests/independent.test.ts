@@ -5,23 +5,19 @@ import {
   FEED,
   FLOWER,
   H,
-  hashWorld,
   LEAF,
-  loadWorld,
   PLANT_PART,
   ROOT,
-  saveWorld,
   SAND,
   SEED,
   setCell,
   ISOPOD,
   SOIL,
-  START_LIFE,
   STEM,
   stepLifeN,
   stepWorldN,
-  unitLedger,
   W,
+  WASTE,
   WATER,
 } from "../src/sim";
 import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
@@ -84,23 +80,15 @@ describe("plants are independent", () => {
 });
 
 describe("a new glass", () => {
-  it("gets its skrukketroll once the plants have grown, made from its own nutrients", () => {
+  it("has soil and water, and nothing living in it until the player brings it", () => {
     const w = createWorld(3);
-    const ledger = unitLedger(w);
+    expect(w.plants.length).toBe(0);
     expect(w.creatures.length).toBe(0);
-    stepLifeN(w, START_LIFE);
-    expect(w.plants.length).toBeGreaterThan(5);
-    expect(w.creatures.some((c) => c.species === 0)).toBe(true);
-    expect(unitLedger(w)).toBe(ledger);
-  });
-
-  it("keeps animals still to come when it is saved", () => {
-    const a = createWorld(4);
-    stepLifeN(a, 1000);
-    const b = loadWorld(JSON.parse(JSON.stringify(saveWorld(a))))!;
-    expect(b.arrivals).toEqual(a.arrivals);
-    stepLifeN(a, START_LIFE);
-    stepLifeN(b, START_LIFE);
-    expect(hashWorld(b)).toBe(hashWorld(a));
+    for (const t of [SEED, WASTE, ISOPOD]) expect(w.type.includes(t)).toBe(false);
+    expect(w.type.includes(SOIL)).toBe(true);
+    expect(w.type.includes(WATER)).toBe(true);
+    stepLifeN(w, 1000);
+    expect(w.plants.length).toBe(0);
+    expect(w.creatures.length).toBe(0);
   });
 });

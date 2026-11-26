@@ -1,5 +1,5 @@
 import { ABSORB, EMPTY, PLANT_PART, POWDER, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "./cells";
-import { crawlCreatures, releaseCreature, updateCreatures, type Creature } from "./creatures";
+import { crawlCreatures, updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
 import { Rng } from "./rng";
@@ -13,7 +13,7 @@ export { AREA, H, LIFE_EVERY, LIFE_PER_DAY, SCALE, SIZE, TICKS_PER_SECOND, W } f
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 16;
+export const SIM_VERSION = 17;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -50,14 +50,6 @@ export function waterTable(w: World): number {
 const DEW = 8 * SCALE;
 /** Plants drink dew and drops until they hold this much water. */
 const PLANT_DRINKS_TO = 200 * SCALE;
-
-/** A creature of `species` let in at column x when the glass reaches `tick`. */
-export interface Arrival {
-  /** The life step it comes at. */
-  life: number;
-  species: number;
-  x: number;
-}
 
 export interface World {
   readonly seed: number;
@@ -117,11 +109,6 @@ export interface World {
   readonly orgs: Map<number, Plant | Creature>;
   nextOrgId: number;
   /**
-   * Creatures still to come, soonest first: a new glass is planted first,
-   * and its animals are let in once the plants have grown a little.
-   */
-  arrivals: Arrival[];
-  /**
    * Nutrient units made by plants from light and air, and units burnt (by
    * animals, and by dead leaves rotting). totalUnits - fixed + burned stays
    * the same unless the player adds or takes something.
@@ -159,7 +146,6 @@ export function emptyWorld(
     creatures: [],
     orgs: new Map(),
     nextOrgId: 1,
-    arrivals: [],
     fixed: 0,
     burned: 0,
   };
@@ -455,11 +441,16 @@ const LEAK = 9;
  * creatures crawl. Every LIFE_EVERY fast steps, one step of life.
  */
 export function stepWorld(w: World): void {
+  fastStep(w, true);
+}
+
+/** One fast step; creatures walk about only if `walk` (not while catching up). */
+function fastStep(w: World, walk: boolean): void {
   // Things fall and flow SCALE cells per step, so they keep their speed
   // in the glass.
   for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);
   if ((w.tick & 1) === 0) seep(w);
-  crawlCreatures(w);
+  crawlCreatures(w, walk);
   w.tick++;
   if (w.tick % LIFE_EVERY === 0) lifeStep(w);
 }
@@ -470,7 +461,8 @@ const SETTLE = 4;
 /**
  * Moves the glass on by n fast steps the quick way, for catching up while
  * the app was closed: every life step runs, but only the last few fast steps
- * before each (enough for what has come loose to fall), and the rest are
+ * before each (enough for what has come loose to fall; creatures do not
+ * walk about in them, but go to food in their life steps), and the rest are
  * skipped. It is the same on every device for the same glass and n.
  */
 export function sleepWorld(w: World, n: number): void {
@@ -480,7 +472,7 @@ export function sleepWorld(w: World, n: number): void {
     const skip = Math.max(0, span - SETTLE);
     // Nothing moves in the skipped steps, so nothing needs waking.
     w.tick += skip;
-    for (let k = skip; k < span; k++) stepWorld(w);
+    for (let k = skip; k < span; k++) fastStep(w, false);
     n -= span;
   }
 }
@@ -492,20 +484,6 @@ export function stepLifeN(w: World, n: number): void {
 
 /** One step of life: five minutes of growing, ageing, eating and rotting. */
 function lifeStep(w: World): void {
-  while (w.arrivals.length > 0 && w.arrivals[0].life <= w.life) {
-    const a = w.arrivals.shift()!;
-    const before = totalUnits(w);
-    releaseCreature(w, a.x, 0, a.species);
-    // Newcomers are made of what is already in the glass: their units are
-    // taken from the soil, deepest first, so nothing is created.
-    let extra = totalUnits(w) - before;
-    for (let i = SIZE - 1; i >= 0 && extra > 0; i--) {
-      if (w.type[i] === SOIL && w.food[i] > 0) {
-        w.food[i]--;
-        extra--;
-      }
-    }
-  }
   // Plants change slowly: the light is worked out every other life step.
   if ((w.life & 1) === 0) computeLight(w);
   updatePlants(w);

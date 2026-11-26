@@ -1,5 +1,5 @@
 import type { Creature } from "./creatures";
-import { SIZE, W } from "./dims";
+import { SIZE } from "./dims";
 import type { Plant, Tip } from "./plants";
 import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
@@ -50,7 +50,6 @@ export interface SavedGlass {
   groundwater: number;
   lostWater: number;
   nextOrgId: number;
-  arrivals?: unknown;
   fixed?: number;
   burned?: number;
   cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org" | "light", string>;
@@ -73,7 +72,6 @@ export function saveWorld(w: World): SavedGlass {
     groundwater: w.groundwater,
     lostWater: w.lostWater,
     nextOrgId: w.nextOrgId,
-    arrivals: w.arrivals.map((a) => ({ ...a })),
     fixed: w.fixed,
     burned: w.burned,
     cells: {
@@ -143,10 +141,6 @@ export function loadWorld(data: unknown): World | null {
   w.nextOrgId = int(d.nextOrgId, 1, MAX_ORG_ID);
   w.fixed = int(d.fixed, 0, 2 ** 52);
   w.burned = int(d.burned, 0, 2 ** 52);
-  w.arrivals = (Array.isArray(d.arrivals) ? d.arrivals : [])
-    .slice(0, 64)
-    .map((r: Record<string, unknown>) => ({ life: int(r?.life, 0, 1e9), species: int(r?.species, 0, w.creatureSpecies.length - 1), x: int(r?.x, 0, W - 1) }))
-    .sort((a: { life: number }, b: { life: number }) => a.life - b.life);
 
   for (const raw of Array.isArray(d.plants) ? d.plants : []) {
     const r = (raw ?? {}) as Record<string, unknown>;
@@ -192,6 +186,8 @@ export function loadWorld(data: unknown): World | null {
       genes: creatureGenesOf(creatureSpecies[0]),
       mother: int(r.mother, 0, MAX_ORG_ID),
       young: int(r.young, 0, 100000),
+      heading: int(r.heading, -1, 1) || 1,
+      target: int(r.target, -1, SIZE - 1),
       dead: false,
     };
     c.genes = cleanCreatureGenes(r.genes, creatureGenesOf(creatureSpecies[c.species]));
