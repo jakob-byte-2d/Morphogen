@@ -87,7 +87,7 @@ export class CreatureCard {
     const words = el("div");
     words.append(
       el("strong", "", creatureName(c.id)),
-      el("span", "card-sub", alive ? `${sp.name} · ${t.card.stage(grownUp(c), c.age > lifespanOf(c) * 0.8)}` : t.card.died(age)),
+      el("span", "card-sub", alive ? `${sp.name} · ${t.card.stage(grownUp(c), c.age > lifespanOf(c) * 0.8)}` : c.energy <= 0 ? t.card.starved(age) : t.card.died(age)),
     );
     head.append(iconCanvas(creatureIcon(sp.diet, sp.color, this.light, this.dark)), words);
 

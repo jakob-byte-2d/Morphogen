@@ -28,6 +28,7 @@ export const t = {
     fromOutside: "Sluppet inn i glasset",
     stage: (grown: boolean, old: boolean) => (old ? "gammel" : grown ? "voksen" : "ung"),
     died: (age: string) => `Døde, ${age} gammel`,
+    starved: (age: string) => `Sultet i hjel, ${age} gammel`,
     days: (d: number) => (d < 1 ? "under en dag" : `${Math.floor(d)} ${Math.floor(d) === 1 ? "dag" : "dager"}`),
   },
   /** Every creature has a name; which one comes from its number, so it is the same on every phone. */
@@ -89,13 +90,13 @@ export const t = {
   about: {
     grass: "Lavt og tett. Brer seg utover.",
     flower: "Stengler med blomster som slipper frø.",
-    bush: "Vokser seg stor og greinete.",
-    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Blir voksen etter knapt en uke og lever i to–tre uker.",
+    bush: "Flere stengler fra roten og en rund, tett krone med bær.",
+    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Går rett gjennom gress og busker. Blir voksen etter knapt en uke og lever i to–tre uker, men sulter i hjel på noen dager uten mat.",
   } as Record<string, string>,
   help: {
     water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
     soil: "Dra for å strø jord.",
-    seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer bare der grunnvannet er nær, som rundt dammen. Er det tørt, må du vanne først.",
+    seed: "Trykk på frøet for å velge art, og dra for å så. Gress kan du strø rett på bakken. Busker og blomster må ned i en liten grop: grav en med spaden, og slipp frøet oppi. Frø spirer bare der grunnvannet er nær, som rundt dammen. Et frø som har det det trenger, blinker grønt til det spirer.",
     creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe ut ett om gangen.",
     look: "Trykk på et dyr med lupen for å se hvem det er: navn, alder, vekt, hvor mett det er og hvem som er mor.",
     feed: "Dryss fôr som krypene kan spise. Fôr som ikke blir spist, råtner.",

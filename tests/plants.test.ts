@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { sownGlass } from "./helpers";
+import { pit, sownGlass } from "./helpers";
 import {
   applyTool,
+  seedCanSprout,
   computeLight,
   createWorld,
   EMPTY,
   FLOWER,
   H,
-  ISOPOD,
   LEAF,
   ROOT,
   SEED,
@@ -31,10 +31,11 @@ const count = (w: World, t: number) => w.type.filter((v) => v === t).length;
 const tableAt = (y: number) => (H - y) * W * WATER_UNITS;
 
 /**
- * A flat bed of soil, 30 rows deep, with one seed on it: moist (the water
- * table ten rows below the surface) or dry (no groundwater).
+ * A flat bed of soil, 30 rows deep, with one seed on it (in a little pit,
+ * unless it is grass): moist (the water table ten rows below the surface) or
+ * dry (no groundwater).
  */
-function bed(moist: boolean, species = 1): World {
+function bed(moist: boolean, species = 1, inPit = species !== 0): World {
   const w = emptyWorld(7);
   for (let y = H - 30; y < H; y++)
     for (let x = 0; x < W; x++) {
@@ -45,6 +46,7 @@ function bed(moist: boolean, species = 1): World {
   setCell(w, at(36, H - 31), SEED);
   w.kind[at(36, H - 31)] = species;
   w.food[at(36, H - 31)] = 1;
+  if (inPit) pit(w, at(36, H - 31));
   return w;
 }
 
@@ -56,6 +58,42 @@ describe("seeds", () => {
     stepLifeN(w, 120);
     expect(w.plants.length).toBe(1);
     expect(w.type[at(36, H - 30)]).toBe(ROOT);
+  });
+
+  it("of bushes and flowers sprout only in a little pit; grass on open ground", () => {
+    for (const species of [1, 2]) {
+      const open = bed(true, species, false);
+      stepLifeN(open, 300);
+      expect(open.plants.length).toBe(0);
+      const sheltered = bed(true, species);
+      stepLifeN(sheltered, 300);
+      expect(sheltered.plants.length).toBe(1);
+    }
+    const grass = bed(true, 0, false);
+    stepLifeN(grass, 300);
+    expect(grass.plants.length).toBe(1);
+  });
+
+  it("also sprout between dead leaves, as fallen seeds do", () => {
+    const w = bed(true, 1, false);
+    for (const x of [33, 39]) {
+      setCell(w, at(x, H - 31), WASTE);
+      w.food[at(x, H - 31)] = 2;
+    }
+    stepLifeN(w, 300);
+    expect(w.plants.length).toBe(1);
+  });
+
+  it("show when they can sprout (the view makes those blink)", () => {
+    const i = at(36, H - 31);
+    expect(seedCanSprout(bed(true), i)).toBe(true);
+    expect(seedCanSprout(bed(true, 1, false), i)).toBe(false);
+    expect(seedCanSprout(bed(false), i)).toBe(false);
+    expect(seedCanSprout(bed(true, 0, false), i)).toBe(true);
+    // Not with something on top of it.
+    const covered = bed(true);
+    setCell(covered, i - W, SOIL);
+    expect(seedCanSprout(covered, i)).toBe(false);
   });
 
   it("do not sprout on dry soil (far above the water table), and in the end rot", () => {
@@ -96,6 +134,28 @@ describe("growth", () => {
     expect(count(w, WASTE)).toBeGreaterThan(5);
   });
 
+  it("grows a bush: stems fanning out from its foot, under a round crown wider than it is tall", () => {
+    const w = bed(true, 2);
+    for (let k = 0; k < 10; k++) {
+      stepLifeN(w, 288);
+      w.groundwater = Math.max(w.groundwater, tableAt(H - 20));
+    }
+    expect(w.plants.length).toBeGreaterThanOrEqual(1);
+    const p = w.plants[0];
+    const shoot = p.cells.filter((i) => w.type[i] !== ROOT);
+    const xs = shoot.map((i) => i % W);
+    const width = Math.max(...xs) - Math.min(...xs) + 1;
+    const height = H - 30 - Math.min(...shoot.map((i) => (i / W) | 0));
+    expect(width).toBeGreaterThan(height);
+    expect(height).toBeGreaterThan(20);
+    // Several stems a little above the foot, spreading apart higher up.
+    const stemsAt = (y: number) => p.cells.filter((i) => w.type[i] === STEM && ((i / W) | 0) === y).length;
+    expect(stemsAt(H - 36)).toBeGreaterThanOrEqual(3);
+    // Leafy all over its crown, with a berry or two.
+    expect(shoot.filter((i) => w.type[i] === LEAF).length).toBeGreaterThan(200);
+    expect(shoot.some((i) => w.type[i] === FLOWER)).toBe(true);
+  });
+
   it("grows along the glass when it reaches the lid", () => {
     // Soil almost to the top: a bush on it soon reaches the lid.
     const w = emptyWorld(8);
@@ -108,6 +168,7 @@ describe("growth", () => {
     setCell(w, at(70, 13), SEED);
     w.kind[at(70, 13)] = 2;
     w.food[at(70, 13)] = 1;
+    pit(w, at(70, 13));
     stepLifeN(w, 3000);
     const lid = w.plants.flatMap((p) => p.cells.filter((i) => i < 2 * W && w.type[i] === STEM));
     expect(lid.length).toBeGreaterThan(3);
@@ -150,7 +211,7 @@ describe("shade", () => {
     expect(below(LEAF, 6)).toBeLessThan(below(LEAF, 2));
     // Stems, seeds, dead leaves and animals hardly shade at all.
     expect(below(STEM, 6)).toBeGreaterThan(200);
-    for (const t of [SEED, WASTE, ISOPOD]) expect(below(t, 6)).toBe(255);
+    for (const t of [SEED, WASTE]) expect(below(t, 6)).toBe(255);
   });
 });
 

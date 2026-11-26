@@ -5,9 +5,9 @@
  * alters it without meaning to change the rules, it is a bug.
  */
 export const GOLDEN: { simVersion: number; seed: number; life: number; ticks: number; hash: string } = {
-  simVersion: 17,
+  simVersion: 18,
   seed: 42,
   life: 1500,
   ticks: 600,
-  hash: "20e0233a",
+  hash: "b654e099",
 };

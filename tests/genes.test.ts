@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { letIn, sownGlass } from "./helpers";
+import { letIn, pit, sownGlass } from "./helpers";
 import {
   addPlantSpecies,
   applyTool,
@@ -53,6 +53,7 @@ function sow(w: World, x: number, species: number, genes: PlantGenes): void {
   w.kind[i] = species;
   w.food[i] = 1;
   w.org[i] = packSeed(genes);
+  if (species !== 0) pit(w, i);
 }
 
 describe("species traits", () => {

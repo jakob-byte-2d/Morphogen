@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyTool, EMPTY, FLOWER, H, LEAF, SEED, setCell, SOIL, STEM, stepLifeN, stepWorld, stepWorldN, totalWater, W, WATER } from "../src/sim";
 import { emptyWorld, WATER_UNITS, type World } from "../src/sim/world";
+import { pit } from "./helpers";
 
 const at = (x: number, y: number) => y * W + x;
 
@@ -52,6 +53,7 @@ describe("water on plants", () => {
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
+    pit(w, at(36, H - 21));
     stepLifeN(w, 1500);
     expect(w.plants.length).toBeGreaterThan(0);
     const p = w.plants[0];
@@ -77,6 +79,7 @@ describe("seeds on plants", () => {
     setCell(w, at(36, H - 21), SEED);
     w.kind[at(36, H - 21)] = 2;
     w.food[at(36, H - 21)] = 1;
+    pit(w, at(36, H - 21));
     stepLifeN(w, 1500);
     const p = w.plants[0];
     const top = Math.min(...p.cells.filter((i) => w.type[i] === LEAF));

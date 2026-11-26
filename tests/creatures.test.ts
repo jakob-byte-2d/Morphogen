@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sownGlass } from "./helpers";
 import {
-  ISOPOD,
   applyTool,
   EMPTY,
   FEED,
@@ -11,6 +10,7 @@ import {
   setCell,
   SOIL,
   spawnCreature,
+  STEM,
   stepLifeN,
   stepWorld,
   STONE,
@@ -39,7 +39,7 @@ function litterBed(): World {
   }
   for (let x = 10; x < 60; x++) {
     setCell(w, at(x, H - 3), WASTE);
-    w.food[at(x, H - 3)] = 2;
+    w.food[at(x, H - 3)] = 6;
   }
   return w;
 }
@@ -82,6 +82,24 @@ describe("skrukketroll", () => {
     expect(count(w, WASTE)).toBe(1);
   });
 
+  it("starve in three or four days when fed, in a day or two when hungry", () => {
+    const day = 288;
+    const fed = floor();
+    const a = spawnCreature(fed, 0, [at(30, H - 2)], 600)!;
+    stepLifeN(fed, (day * 5) >> 1);
+    expect(a.dead).toBe(false);
+    stepLifeN(fed, 2 * day);
+    expect(a.dead).toBe(true);
+    // It starved: its energy is all gone (the card says so).
+    expect(a.energy).toBeLessThanOrEqual(0);
+    const hungry = floor();
+    const b = spawnCreature(hungry, 0, [at(30, H - 2)], 299)!;
+    stepLifeN(hungry, day);
+    expect(b.dead).toBe(false);
+    stepLifeN(hungry, day);
+    expect(b.dead).toBe(true);
+  });
+
   it("know their mother, and mothers count their young", () => {
     const w = litterBed();
     const first = spawnCreature(w, 0, [at(30, H - 4)], 120)!;
@@ -107,6 +125,24 @@ describe("skrukketroll", () => {
     // In three minutes it has gone a good way along the ground, and rested too.
     expect(seen.size).toBeGreaterThan(30);
     expect(still).toBeGreaterThan(3 * 60 * 10 * 0.3);
+  });
+
+  it("walk through plants on the ground, but do not climb them", () => {
+    const w = floor();
+    for (let x = 0; x < W; x++) setCell(w, at(x, H - 2), SOIL);
+    // A thicket of leaves and stems, standing on the soil.
+    for (let x = 60; x < 72; x++) for (let y = H - 9; y < H - 2; y++) setCell(w, at(x, y), (x + y) % 3 === 0 ? STEM : LEAF);
+    const c = spawnCreature(w, 0, [at(40, H - 3)], 500)!;
+    c.heading = 1;
+    const xs = new Set<number>();
+    for (let t = 0; t < 4 * 60 * 10; t++) {
+      stepWorld(w);
+      xs.add(c.cells[0] % W);
+      // Always on the ground, inside the thicket too.
+      expect((c.cells[0] / W) | 0).toBe(H - 3);
+    }
+    // Right through it.
+    for (let x = 58; x < 75; x++) expect(xs.has(x)).toBe(true);
   });
 
   it("are as many as the food allows: there is no limit", () => {
@@ -147,7 +183,8 @@ describe("creature tool", () => {
     applyTool(w, "creature", 50, 10, 0);
     expect(w.creatures.length).toBe(2);
     expect(w.creatures.every((c) => c.mother === 0 && c.young === 0)).toBe(true);
-    expect(w.creatures.every((c) => c.cells.every((i) => w.type[i] === ISOPOD))).toBe(true);
+    // On their own layer, over the cells: one cell each.
+    expect(w.creatures.every((c) => c.cells.length === 1 && w.critter[c.cells[0]] === c.id && w.type[c.cells[0]] === EMPTY)).toBe(true);
     // They land on the soil, nothing left hanging in the air.
     for (const c of w.creatures) for (const i of c.cells) expect((i / W) | 0).toBeGreaterThan(H - 4 - 2 * SCALE);
     expect(w.type[at(20, 10)]).toBe(EMPTY);

@@ -1,4 +1,4 @@
-import { applyTool, createWorld, EMPTY, SCALE, SEED, setCell, W, type World } from "../src/sim";
+import { applyTool, createWorld, EMPTY, SCALE, SEED, setCell, SOIL, W, type World } from "../src/sim";
 import { packSeed, plantGenesOf } from "../src/sim/genes";
 import { H } from "../src/sim/world";
 
@@ -15,17 +15,30 @@ const SOWN: [number, number][] = [
   [70, 1],
 ];
 
-/** Sows seeds on the ground of a glass, as a player would. */
+/**
+ * Makes a little pit for a seed in cell i, as a player digs one: ground on
+ * both sides of it. Bushes and flowers sprout only in a pit.
+ */
+export function pit(w: World, i: number): void {
+  for (const j of [i - 1, i + 1]) if (w.type[j] === EMPTY) setCell(w, j, SOIL);
+}
+
+/** Puts a seed of `species` into cell i (in a pit, unless it is grass). */
+export function seedAt(w: World, i: number, species: number): void {
+  setCell(w, i, SEED);
+  w.kind[i] = species;
+  w.food[i] = 1;
+  w.org[i] = packSeed(plantGenesOf(w.plantSpecies[species]));
+  if (w.plantSpecies[species].form !== "grass") pit(w, i);
+}
+
+/** Sows seeds on the ground of a glass, as a player would (bushes and flowers in a pit). */
 export function sow(w: World): World {
   for (const [x, species] of SOWN) {
     for (let y = 1; y < H; y++) {
       const i = y * W + x * SCALE;
       if (w.type[i] === EMPTY) continue;
-      const j = i - W;
-      setCell(w, j, SEED);
-      w.kind[j] = species;
-      w.food[j] = 1;
-      w.org[j] = packSeed(plantGenesOf(w.plantSpecies[species]));
+      seedAt(w, i - W, species);
       break;
     }
   }

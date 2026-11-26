@@ -1,4 +1,4 @@
-import { CREATURE_PART, EMPTY, FEED, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, WASTE, WATER } from "./cells";
+import { EMPTY, FEED, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, STONE, WASTE, WATER } from "./cells";
 import type { PlantSpecies } from "./species";
 import { H, SCALE, W } from "./dims";
 import { inheritPlant, packSeed, plantGenesOf, unpackSeed, type PlantGenes } from "./genes";
@@ -72,6 +72,8 @@ const MAX_STORE = 20 * SCALE;
 const STARVES_AT = -500;
 /** Most growing tips a flower or bush has at once. */
 const MAX_TIPS = 6;
+/** A bush grows on more branches at once. */
+const BUSH_TIPS = 10;
 /**
  * Leaves and flowers count their age in the moisture slot (they hold no
  * water) and fall off when it reaches 255. A leaf in the light gains one
@@ -91,6 +93,37 @@ function isBed(t: number): boolean {
   return t === SOIL || t === SAND || t === WASTE;
 }
 
+/** How near a seed the sides of its pit must be. */
+const PIT = 3 * SCALE;
+
+/** Is there ground (or dead leaves, or the glass) beside cell i, within PIT cells on side d? */
+function sheltered(type: Uint8Array, i: number, d: number): boolean {
+  const x = i % W;
+  for (let k = 1; k <= PIT; k++) {
+    const nx = x + d * k;
+    if (nx < 0 || nx >= W) return true;
+    const t = type[i + d * k];
+    if (isBed(t) || t === ROOT || t === STONE) return true;
+  }
+  return false;
+}
+
+/**
+ * Can the seed in cell i sprout where it lies? It needs a bed under it,
+ * groundwater near enough, and open air above. Grass sprouts on the surface;
+ * bushes and flowers need shelter too: ground (or dead leaves) close by on
+ * both sides of it, as at the bottom of a little pit the player has dug. The
+ * view asks this too, to make a seed that is going to sprout blink.
+ */
+export function seedCanSprout(w: World, i: number, table = waterTable(w)): boolean {
+  const { type } = w;
+  const below = i + W;
+  if (i < W || below >= W * H || !isBed(type[below]) || ((below / W) | 0) < table - REACH || type[i - W] !== EMPTY) return false;
+  const sp = w.plantSpecies[w.kind[i]];
+  if (!sp || sp.form === "grass") return true;
+  return sheltered(type, i, -1) && sheltered(type, i, 1);
+}
+
 function cellCost(p: Plant): number {
   return CELL_COST[p.genes.growth - 1];
 }
@@ -106,9 +139,11 @@ function place(w: World, p: Plant, i: number, type: number): boolean {
   if (!root && p.store < 1) return false;
   setCell(w, i, type);
   // Leaves and flowers start at a slightly different age each, so they do
-  // not all fall at once. Grass blades never fall.
-  const ages = type === FLOWER || (type === LEAF && w.plantSpecies[p.species].form !== "grass");
-  w.wet[i] = ages ? 1 + (w.shade[i] & 31) : 0;
+  // not all fall at once (on a bush, which keeps them long, very different
+  // ages). Grass blades never fall.
+  const form = w.plantSpecies[p.species].form;
+  const ages = type === FLOWER || (type === LEAF && form !== "grass");
+  w.wet[i] = ages ? 1 + (form === "bush" ? (w.shade[i] * 3) >> 2 : w.shade[i] & 31) : 0;
   w.org[i] = p.id;
   w.kind[i] = p.species;
   w.food[i] = root ? 1 : 3;
@@ -160,7 +195,17 @@ function germinate(w: World, i: number): void {
   clearCell(w, i);
   place(w, p, i, sp.form === "grass" ? LEAF : STEM);
   rootInto(w, p, i + W);
-  p.tips.push({ i, dx: 0, len: 1, max: sp.height * SCALE, main: true, done: false });
+  if (sp.form === "bush") {
+    // A bush: seven stems fanning out from its foot, one up the middle, and
+    // on each side three, from slanting up to spreading out low.
+    const h = 2 * crownHeight(sp);
+    p.tips.push({ i, dx: 0, len: 1, max: h, main: true, done: false });
+    for (const s of [-1, 1]) {
+      const j = i - W + s;
+      if (j < W || w.type[j] !== EMPTY || !place(w, p, j, STEM)) continue;
+      for (const lean of [3, 6, 10]) p.tips.push({ i: j, dx: s * (lean + w.rng.below(2)), len: 1, max: h, main: false, done: false });
+    }
+  } else p.tips.push({ i, dx: 0, len: 1, max: sp.height * SCALE, main: true, done: false });
   w.plants.push(p);
   w.orgs.set(id, p);
 }
@@ -262,6 +307,15 @@ function finishTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): void {
         if (place(w, p, j, FLOWER)) p.energy -= cellCost(p);
       }
     }
+  } else if (sp.form === "bush") {
+    // A bush branch ends in a round, dense cluster of leaves, now and then
+    // with a berry in it.
+    for (const [dx, dy] of CLUSTER) {
+      const j = tip.i + dy * W + dx;
+      if (x + dx < 0 || x + dx >= W || j < W || w.type[j] !== EMPTY || p.energy < cellCost(p)) continue;
+      const berry = dx === 0 && dy === 0 ? false : w.rng.below(12) === 0;
+      if (place(w, p, j, berry ? FLOWER : LEAF)) p.energy -= cellCost(p);
+    }
   } else if (w.rng.below(sp.form === "grass" ? 2 : 3) === 0) {
     // A small seed head.
     for (let k = 1; k <= SCALE; k++) {
@@ -272,20 +326,133 @@ function finishTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): void {
   }
 }
 
+/** The leaf cluster at the end of a bush branch: a disc round the tip. */
+const CLUSTER: [number, number][] = [];
+for (let dy = -SCALE - 1; dy <= SCALE; dy++)
+  for (let dx = -SCALE - 1; dx <= SCALE + 1; dx++) if (dx * dx + dy * dy <= (SCALE + 1) * (SCALE + 1) && (dx !== 0 || dy !== 0)) CLUSTER.push([dx, dy]);
+
+/**
+ * A bush's crown is a dome on the ground: half an ellipse round its foot, a
+ * little wider than it is tall. Its branches grow until they reach the edge
+ * of it, and its leaves fill the outer part of it.
+ */
+function crownHeight(sp: PlantSpecies): number {
+  return ((sp.height * SCALE * 3) / 5) | 0;
+}
+function crownHalfWidth(sp: PlantSpecies): number {
+  return ((sp.height * SCALE * 5) / 8) | 0;
+}
+/** Where a cell is in a bush's crown: 0 at its foot, 100 at the edge (both squared, in hundredths). */
+function inCrownAt(p: Plant, sp: PlantSpecies, x: number, y: number): number {
+  const rx = crownHalfWidth(sp);
+  const ry = crownHeight(sp);
+  const dx = x - (p.base % W);
+  const dy = ((p.base / W) | 0) - y;
+  return (((dx * dx * ry * ry + dy * dy * rx * rx) * 100) / (rx * rx * ry * ry)) | 0;
+}
+function inCrown(p: Plant, sp: PlantSpecies, x: number, y: number): boolean {
+  return inCrownAt(p, sp, x, y) <= 100;
+}
+/** Out in the crown, where the leaves are and it branches; nearer the foot, bare stems. */
+function outerCrown(p: Plant, sp: PlantSpecies, x: number, y: number): boolean {
+  return inCrownAt(p, sp, x, y) >= 16;
+}
+
+/**
+ * How a bush branch leans: tip.dx is its slant in eighths, from 0 (straight
+ * up) through 8 (up and out at 45 degrees) to 12 (out, and a little up),
+ * and its sign the side it leans to.
+ */
+const LEAN = 8;
+const MAX_LEAN = 12;
+
+/** Steps to the side (or up) on step `len` of a line that takes `a` eighths of one each step. */
+function slant(len: number, a: number): number {
+  return (((len + 1) * a + 4) >> 3) - ((len * a + 4) >> 3);
+}
+
+/** Leaves round a new piece of bush stem: a disc, but never in the way ahead. */
+const BUSH_LEAVES: [number, number][] = [];
+for (let dy = -SCALE; dy <= SCALE; dy++)
+  for (let dx = -SCALE; dx <= SCALE; dx++) if ((dx !== 0 || dy !== 0) && dx * dx + dy * dy <= SCALE * SCALE + 1) BUSH_LEAVES.push([dx, dy]);
+
+/** A bush stem can grow into empty space, or through its own leaves. */
+function roomForStem(w: World, p: Plant, c: number): boolean {
+  return w.type[c] === EMPTY || (w.type[c] === LEAF && w.org[c] === p.id);
+}
+function growStem(w: World, p: Plant, c: number): boolean {
+  if (w.type[c] === EMPTY) return place(w, p, c, STEM);
+  // A leaf becomes stem: what it is made of stays.
+  w.type[c] = STEM;
+  w.wet[c] = 0;
+  return true;
+}
+
+/** A bush branch grows one cell along its slant, to the edge of the crown. */
+function extendBushTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
+  if (tip.len >= tip.max) {
+    finishTip(w, p, sp, tip);
+    return true;
+  }
+  const x = tip.i % W;
+  const y = (tip.i / W) | 0;
+  const side = Math.sign(tip.dx);
+  const a = Math.abs(tip.dx);
+  let sx = a <= LEAN ? side * slant(tip.len, a) : side;
+  const sy = a <= LEAN ? -1 : -slant(tip.len, 2 * LEAN - a);
+  // Now and then a little kink.
+  if (sx === 0 && w.rng.below(6) === 0) sx = w.rng.below(2) === 0 ? -1 : 1;
+  if (!inCrown(p, sp, x + sx, y + sy)) {
+    finishTip(w, p, sp, tip);
+    return true;
+  }
+  // Straight on if there is room, else round whatever is in the way; up
+  // against the lid, along it.
+  const way = side || (w.rng.below(2) === 0 ? -1 : 1);
+  const tries: [number, number][] = [[sx, sy], sy < 0 ? [sx === 0 ? way : 0, -1] : [sx, -1], [way, 0]];
+  let j = -1;
+  for (const [dx, dy] of tries) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || nx >= W || ny < 1 || !roomForStem(w, p, ny * W + nx) || !inCrown(p, sp, nx, ny)) continue;
+    j = ny * W + nx;
+    break;
+  }
+  if (j < 0 || !growStem(w, p, j)) return false;
+  const from = tip.i;
+  tip.i = j;
+  tip.len++;
+  const nx = j % W;
+  const ny = (j / W) | 0;
+  // Leaves all round the stem out in the crown (not in the way it grows).
+  if (tip.len > SCALE && outerCrown(p, sp, x, y)) {
+    const ax = nx - x;
+    const ay = ny - y;
+    for (const [dx, dy] of BUSH_LEAVES) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > 1 && dx * ax + dy * ay > 0) continue;
+      const c = from + dy * W + dx;
+      if (x + dx < 0 || x + dx >= W || c < W || w.type[c] !== EMPTY || !inCrown(p, sp, x + dx, y + dy)) continue;
+      if (!place(w, p, c, LEAF)) break;
+    }
+  }
+  // It branches out in the crown. An upright branch sends one out to the
+  // side; one slanting far out sends one up, so the crown fills.
+  if (sp.branches > 0 && p.tips.length < BUSH_TIPS && tip.len >= 2 * SCALE && outerCrown(p, sp, nx, ny) && w.rng.below(6 * SCALE) < sp.branches) {
+    const out = side || way;
+    const lean = a >= 6 ? tip.dx - out * (3 + w.rng.below(3)) : out * Math.min(MAX_LEAN, a + 3 + w.rng.below(4));
+    p.tips.push({ i: j, dx: lean, len: 0, max: 2 * crownHeight(sp), main: false, done: false });
+  }
+  return true;
+}
+
 /** A leaf on a flower stem, pointing out and up to the side s = 1. */
 const LEAF_SHAPE: [number, number][] = (
   [[1, 0], [2, 0], [2, -1], [3, -1], [4, -2], [3, -2]] as [number, number][]
 ).slice(0, 2 * SCALE + 2);
 
-/**
- * Where a bush puts leaves around a new piece of stem: beside and below it,
- * never above, where the tip has to grow on.
- */
-const BUSH_LEAVES: [number, number][] = [];
-for (let dy = 0; dy <= 1; dy++)
-  for (let dx = -SCALE; dx <= SCALE; dx++) if (dx !== 0 || dy !== 0) BUSH_LEAVES.push([dx, dy]);
 
 function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
+  if (sp.form === "bush") return extendBushTip(w, p, sp, tip);
   if (tip.len >= tip.max) {
     finishTip(w, p, sp, tip);
     return true;
@@ -325,7 +492,7 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
   if (!place(w, p, j, sp.form === "grass" ? LEAF : STEM)) return false;
   tip.i = j;
   tip.len++;
-  // Leaves: on alternate sides of a flower stem, in clumps along a bush.
+  // Leaves: on alternate sides of a flower stem.
   const every = (5 - sp.leaves) * SCALE;
   if (sp.form === "flower" && tip.main && sp.leaves > 0 && tip.len % every === 0) {
     const s = ((tip.len / every) | 0) % 2 === 0 ? 1 : -1;
@@ -333,18 +500,13 @@ function extendTip(w: World, p: Plant, sp: PlantSpecies, tip: Tip): boolean {
       const k = j + dx * s + dy * W;
       if (Math.abs((k % W) - nx) <= 2 * SCALE && k > W && w.type[k] === EMPTY) place(w, p, k, LEAF);
     }
-  } else if (sp.form === "bush" && tip.len > 2 * SCALE) {
-    for (let k = 0; k < sp.leaves * SCALE; k++) {
-      const [dx, dy] = BUSH_LEAVES[w.rng.below(BUSH_LEAVES.length)];
-      const c = j + dy * W + dx;
-      if (Math.abs((c % W) - nx) <= SCALE + 1 && c > W && w.type[c] === EMPTY) place(w, p, c, LEAF);
-    }
   }
   // Branching.
-  if (sp.form !== "grass" && sp.branches > 0 && p.tips.length < MAX_TIPS && tip.len >= 4 * SCALE && w.rng.below(12 * SCALE) < sp.branches * (sp.form === "bush" ? 2 : 1)) {
+  if (sp.form !== "grass" && sp.branches > 0 && p.tips.length < MAX_TIPS && tip.len >= 4 * SCALE && w.rng.below(12 * SCALE) < sp.branches) {
     const remaining = tip.max - tip.len;
     if (remaining > 3 * SCALE) {
-      p.tips.push({ i: j, dx: w.rng.below(2) === 0 ? -1 : 1, len: 0, max: Math.max(3 * SCALE, ((remaining * 7) / 10) | 0), main: false, done: false });
+      const dx = w.rng.below(2) === 0 ? -1 : 1;
+      p.tips.push({ i: j, dx, len: 0, max: Math.max(3 * SCALE, ((remaining * 7) / 10) | 0), main: false, done: false });
     }
   }
   return true;
@@ -400,6 +562,7 @@ function newBlade(w: World, p: Plant, sp: PlantSpecies): boolean {
  */
 function newShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boolean {
   if (stems.length === 0) return false;
+  if (sp.form === "bush") return newBushShoot(w, p, sp, stems);
   const h = sp.height * SCALE;
   for (let attempt = 0; attempt < 3; attempt++) {
     let s = stems[w.rng.below(stems.length)];
@@ -412,6 +575,59 @@ function newShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boolea
       if (!place(w, p, j, STEM)) return false;
       const main = sp.form === "flower" || w.rng.below(2) === 0;
       p.tips.push({ i: j, dx: side, len: 1, max: (h >> 1) + w.rng.below((h >> 1) + 1), main, done: false });
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A bush that has nowhere left to grow fills out its crown: a new branch
+ * from a stem out in it, to the edge; now and then a new stem from its foot,
+ * fanning out; or a thicker foot. Not too thick with branches, though.
+ */
+function newBushShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boolean {
+  const bx = p.base % W;
+  const by = (p.base / W) | 0;
+  if (stems.length >= (crownHalfWidth(sp) * crownHeight(sp)) >> 3) return false;
+  const roll = w.rng.below(6);
+  if (roll === 0) {
+    // A thicker foot: a stem beside one low down near the middle.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const s = stems[w.rng.below(stems.length)];
+      if (by - ((s / W) | 0) > crownHeight(sp) >> 3 || Math.abs((s % W) - bx) > SCALE) continue;
+      for (const j of [s - 1, s + 1]) {
+        if (Math.abs((j % W) - (s % W)) > 1 || !roomForStem(w, p, j)) continue;
+        return growStem(w, p, j);
+      }
+    }
+  }
+  // How many stems it has just above its foot.
+  let foot = 0;
+  const fy = by - 2 * SCALE;
+  for (let x = bx - 2 * SCALE; x <= bx + 2 * SCALE; x++) if (x >= 0 && x < W && fy >= 0 && w.org[fy * W + x] === p.id) foot++;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let s: number;
+    let lean: number;
+    if (roll === 1) {
+      // A new stem from the foot, low and spreading; up to five of them.
+      if (foot >= 5) return false;
+      s = p.base;
+      lean = 6 + w.rng.below(MAX_LEAN - 5);
+    } else {
+      // A branch from a stem out in the crown, the one further out of two.
+      s = stems[w.rng.below(stems.length)];
+      const s2 = stems[w.rng.below(stems.length)];
+      if (Math.abs((s2 % W) - bx) > Math.abs((s % W) - bx)) s = s2;
+      if (!outerCrown(p, sp, s % W, (s / W) | 0)) continue;
+      lean = 2 + w.rng.below(MAX_LEAN - 1);
+    }
+    const x = s % W;
+    const out = x === bx ? (w.rng.below(2) === 0 ? -1 : 1) : x > bx ? 1 : -1;
+    for (const j of [s - W + out, s + out, s - W]) {
+      if (j < W || Math.abs((j % W) - x) > 1 || !roomForStem(w, p, j) || !inCrown(p, sp, j % W, (j / W) | 0)) continue;
+      if (!growStem(w, p, j)) return false;
+      p.tips.push({ i: j, dx: out * lean, len: 1, max: 2 * crownHeight(sp), main: false, done: false });
       return true;
     }
   }
@@ -441,7 +657,7 @@ function growShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boole
   }
   // Nothing could grow: now and then a blocked tip is given up, and the
   // plant grows a new shoot somewhere else.
-  if (n >= MAX_TIPS) {
+  if (n >= (sp.form === "bush" ? BUSH_TIPS : MAX_TIPS)) {
     if (w.rng.below(4) !== 0) return false;
     p.tips.shift();
   }
@@ -471,6 +687,27 @@ function regrowLeaf(w: World, p: Plant, lit: number[]): boolean {
       if (j < W || Math.abs((j % W) - (s % W)) > 1 || w.type[j] !== EMPTY) continue;
       return place(w, p, j, LEAF);
     }
+  }
+  return false;
+}
+
+/**
+ * A bush fills its crown with leaves: a new one near a stem out in the
+ * crown (`outer`), wherever there is room inside it.
+ */
+const BUSH_FILL: [number, number][] = [];
+for (let dy = -2 * SCALE; dy <= 2 * SCALE; dy++)
+  for (let dx = -2 * SCALE; dx <= 2 * SCALE; dx++) if ((dx !== 0 || dy !== 0) && dx * dx + dy * dy <= 4 * SCALE * SCALE) BUSH_FILL.push([dx, dy]);
+
+function regrowBushLeaf(w: World, p: Plant, sp: PlantSpecies, outer: number[]): boolean {
+  for (let attempt = 0; attempt < 8 && outer.length > 0; attempt++) {
+    const s = outer[w.rng.below(outer.length)];
+    const [dx, dy] = BUSH_FILL[w.rng.below(BUSH_FILL.length)];
+    const x = (s % W) + dx;
+    const y = ((s / W) | 0) + dy;
+    if (x < 0 || x >= W || y < 1 || !inCrown(p, sp, x, y)) continue;
+    const c = y * W + x;
+    if (w.type[c] === EMPTY) return place(w, p, c, LEAF);
   }
   return false;
 }
@@ -505,16 +742,21 @@ function updatePlant(w: World, p: Plant): void {
   const lit: number[] = [];
   const flowers: number[] = [];
   const cells = p.cells;
-  // Old leaves and flowers fall: sooner in the shade, or when the plant is thirsty.
+  // Old leaves and flowers fall: sooner in the shade, or when the plant is
+  // thirsty. A bush keeps its leaves about four times as long, in the shade
+  // too, and grows new ones all over the outside of its crown.
+  const bush = sp.form === "bush";
   const extra = p.thirst > 0 ? 2 : 0;
+  const slow = bush ? 2 : 0;
+  const dark = bush ? 0 : SHADE;
   let deepest = -1;
   let n = 0;
   for (let k = 0; k < cells.length; k++) {
     const i = cells[k];
     const t = type[i];
     if (!PLANT_PART[t] || org[i] !== p.id) continue;
-    if ((t === LEAF || t === FLOWER) && wet[i] > 0) {
-      const age = wet[i] + ((p.age + i) & 1) + (light[i] < SHADE ? 2 : 0) + extra;
+    if ((t === LEAF || t === FLOWER) && wet[i] > 0 && ((p.age + i) & ((1 << slow) - 1)) === 0) {
+      const age = wet[i] + (((p.age + i) >> slow) & 1) + (light[i] < dark ? 2 : 0) + extra;
       if (age >= 255) {
         shed(w, i);
         continue;
@@ -529,7 +771,7 @@ function updatePlant(w: World, p: Plant): void {
     } else if (t === STEM) {
       green++;
       stems.push(i);
-      if (light[i] >= SHADE) lit.push(i);
+      if (bush ? outerCrown(p, sp, i % W, (i / W) | 0) : light[i] >= SHADE) lit.push(i);
       income += light[i] >> 7;
     } else if (t === ROOT) {
       roots.push(i);
@@ -606,14 +848,20 @@ function updatePlant(w: World, p: Plant): void {
       continue;
     }
     if (p.store < 1) return;
-    // New leaves where old ones fell first; then grow on.
-    if (leaves < p.maxLeaves && regrowLeaf(w, p, lit)) {
+    // New leaves where old ones fell first; then grow on. A bush grows on
+    // and fills its crown with leaves by turns.
+    if (bush ? (g & 1) === 1 && regrowBushLeaf(w, p, sp, lit) : leaves < p.maxLeaves && regrowLeaf(w, p, lit)) {
       p.energy -= cost;
       leaves++;
       continue;
     }
     if (growShoot(w, p, sp, stems)) {
       p.energy -= cost;
+      continue;
+    }
+    if (bush && (g & 1) === 0 && regrowBushLeaf(w, p, sp, lit)) {
+      p.energy -= cost;
+      leaves++;
       continue;
     }
     if (flowers.length < p.maxFlowers && regrowFlower(w, p, stems.length > 0 ? stems : cells)) {
@@ -666,13 +914,9 @@ export function slowPass(w: World): void {
       }
     }
     if (t === SEED) {
-      const below = i + W;
-      // A seed counts its age in its moisture slot. Lying on a creature it
-      // just waits for it to move on.
-      if (CREATURE_PART[type[below]]) continue;
+      // A seed counts its age in its moisture slot.
       if (wet[i] < 255) wet[i]++;
-      const good = isBed(type[below]) && ((below / W) | 0) >= table - REACH && type[i - W] === EMPTY;
-      if (good && wet[i] >= SPROUT_AFTER) germinate(w, i);
+      if (wet[i] >= SPROUT_AFTER && seedCanSprout(w, i, table)) germinate(w, i);
       else if (wet[i] >= SEED_ROTS_AFTER) {
         type[i] = WASTE;
         wet[i] = 0;
