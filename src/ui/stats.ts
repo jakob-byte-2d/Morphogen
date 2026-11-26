@@ -1,6 +1,6 @@
-import { SIZE, SOIL, totalWater, WASTE, type World } from "../sim";
+import { SIZE, SOIL, TICKS_PER_SECOND, totalWater, WASTE, type World } from "../sim";
 
-/** One look at the glass, taken every half minute of glass time. */
+/** One look at the glass, taken every hour of glass time. */
 export interface Sample {
   tick: number;
   plants: number[];
@@ -18,8 +18,9 @@ export interface History {
 }
 
 const KEY = "morphogen.history";
-const MAX_SAMPLES = 120;
-export const SAMPLE_EVERY = 300;
+/** A week of hourly samples. */
+const MAX_SAMPLES = 168;
+export const SAMPLE_EVERY = 3600 * TICKS_PER_SECOND;
 
 export function emptyHistory(): History {
   return { samples: [], oldestPlant: 0, biggestPopulation: 0 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, stepWorldN } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, stepLifeN } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -9,7 +9,7 @@ describe("species the player makes", () => {
     expect(w.plantSpecies[k].colors.leaf).toBe("#3366aa");
     for (let n = 0; n < 40; n++) applyTool(w, "seed", 22, 30, k);
     expect([...w.type.keys()].some((i) => w.type[i] === SEED && w.kind[i] === k)).toBe(true);
-    stepWorldN(w, 900);
+    stepLifeN(w, 900);
     expect(w.plants.some((p) => p.species === k)).toBe(true);
   });
 

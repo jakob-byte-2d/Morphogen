@@ -21,7 +21,7 @@ Et lite terrarium i pikselgrafikk sett fra siden, der hver rute i et rutenett er
 All kode i `src/sim/` må følge dette:
 
 - Bare heltall i alt som påvirker tilstanden. Ingen `Math.random()`, ingen `Math.sin` og liknende. Bruk `world.rng` (`src/sim/rng.ts`).
-- Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg.
+- Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg, med to klokker: raske steg (`TICKS_PER_SECOND`) for det som faller, flyter og kryper, og et livssteg hvert femte minutt (`LIFE_EVERY`) for alt som lever, gror, eldes og råtner. Livsregler planlegges etter `world.life`, ikke `world.tick`. Når appen har vært lukket, spoles glasset fram med `sleepWorld` (alle livssteg, bare noen få raske steg før hvert).
 - Gå gjennom rutenettet og listene i fast rekkefølge. En rute som er flyttet i et steg, merkes så den ikke flyttes to ganger.
 - Ingen DOM eller nettleser-API-er i motoren.
 - Nye rutetyper legges til sist i `src/sim/cells.ts`, aldri i midten: lagrede glass bruker tallene.

@@ -17,5 +17,17 @@ export const W = 72 * SCALE;
 export const H = 128 * SCALE;
 export const SIZE = W * H;
 
-/** Simulation steps per second at normal speed. */
+/**
+ * Simulation steps per second at normal speed. These fast steps are for what
+ * moves: things falling, water flowing, creatures crawling.
+ */
 export const TICKS_PER_SECOND = 10;
+
+/**
+ * Life (plants growing, leaves ageing, creatures eating, ageing and
+ * breeding, rot, dew) goes one step every five minutes, so the glass lives
+ * at the pace of a real one: a skrukketroll lives two to three weeks.
+ */
+export const LIFE_EVERY = 5 * 60 * TICKS_PER_SECOND;
+/** Life steps in a day. */
+export const LIFE_PER_DAY = (24 * 60) / 5;

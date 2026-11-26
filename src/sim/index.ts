@@ -1,11 +1,11 @@
 export * from "./cells";
 export * from "./world";
-export { createWorld, START_TICKS } from "./scene";
+export { createWorld, START_LIFE } from "./scene";
 export { addCreatureSpecies, addPlantSpecies, applyTool, MAX_SPECIES, type Tool } from "./tools";
 export { hashWorld } from "./hash";
 export { GOLDEN } from "./golden";
 export * from "./species";
 export { GROW_COST, PLANT_EVERY, THIRST_LIMIT, type Plant, type Tip } from "./plants";
-export { CREATURE_EVERY, spawnCreature, type Creature } from "./creatures";
+export { CREATURE_EVERY, lifespanOf, spawnCreature, type Creature } from "./creatures";
 export { loadWorld, saveWorld, type SavedGlass } from "./save";
 export * from "./genes";

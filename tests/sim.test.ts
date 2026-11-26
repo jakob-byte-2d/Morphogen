@@ -12,6 +12,14 @@ import {
   SIM_VERSION,
   SOIL,
   stepWorld,
+  stepLifeN,
+  sleepWorld,
+  LIFE_EVERY,
+  LIFE_PER_DAY,
+  TICKS_PER_SECOND,
+  lifespanOf,
+  spawnCreature,
+  CREATURE_EVERY,
   stepWorldN,
   STONE,
   W,
@@ -39,7 +47,9 @@ describe("falling and flowing", () => {
   it("lets water spread out over a stone floor", () => {
     const w = emptyWorld(2);
     for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
-    for (let y = 0; y < 8; y++) setCell(w, at(36, y), WATER);
+    // A row of drops, side by side (a drop that comes to rest on another
+    // above the water table would sink in).
+    for (let x = 32; x < 40; x++) setCell(w, at(x, 0), WATER);
     stepWorldN(w, 400);
     // A drop may have evaporated into the air, or (resting on another drop,
     // above the water table) sunk into the groundwater; nothing is lost.
@@ -138,6 +148,7 @@ describe("determinism", () => {
   it("matches the golden fingerprint", () => {
     expect(GOLDEN.simVersion).toBe(SIM_VERSION);
     const w = createWorld(GOLDEN.seed);
+    stepLifeN(w, GOLDEN.life);
     stepWorldN(w, GOLDEN.ticks);
     expect(hashWorld(w)).toBe(GOLDEN.hash);
   });
@@ -152,8 +163,39 @@ describe("start scene", () => {
     expect(count(w, STONE)).toBe(0);
     const water = count(w, WATER);
     expect(water).toBeGreaterThan(20);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 1000);
     // The plants take up some of the groundwater as they grow, so it sinks a little.
     expect(count(w, WATER)).toBeGreaterThan(water * 0.5);
+  });
+});
+
+describe("the two clocks", () => {
+  it("moves things ten times a second, and life on every five minutes", () => {
+    const w = createWorld(3);
+    stepWorldN(w, LIFE_EVERY - 1);
+    expect(w.life).toBe(0);
+    stepWorldN(w, 1);
+    expect(w.life).toBe(1);
+    expect(LIFE_EVERY / TICKS_PER_SECOND).toBe(300);
+  });
+
+  it("catches up the quick way to exactly the same time, the same on every device", () => {
+    const a = createWorld(4);
+    const b = createWorld(4);
+    sleepWorld(a, 7 * LIFE_PER_DAY * LIFE_EVERY + 123);
+    sleepWorld(b, 7 * LIFE_PER_DAY * LIFE_EVERY + 123);
+    expect(a.tick).toBe(7 * LIFE_PER_DAY * LIFE_EVERY + 123);
+    expect(a.life).toBe(7 * LIFE_PER_DAY);
+    expect(hashWorld(a)).toBe(hashWorld(b));
+  });
+
+  it("lets a skrukketroll live two to three weeks", () => {
+    const w = createWorld(5);
+    for (let k = 0; k < 40; k++) spawnCreature(w, 0, [k], 100);
+    for (const c of w.creatures) {
+      const days = (lifespanOf(c) * CREATURE_EVERY) / LIFE_PER_DAY;
+      expect(days).toBeGreaterThanOrEqual(13);
+      expect(days).toBeLessThanOrEqual(21);
+    }
   });
 });

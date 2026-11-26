@@ -43,7 +43,7 @@ export interface Plant {
   dead: boolean;
 }
 
-/** Plants are updated every PLANT_EVERY steps, spread over the steps by id. */
+/** Plants are updated every PLANT_EVERY life steps, spread over the steps by id. */
 export const PLANT_EVERY = 4;
 export const GROW_COST = 30;
 /**
@@ -633,7 +633,7 @@ export function updatePlants(w: World): void {
   let anyDead = false;
   for (let k = 0; k < plants.length; k++) {
     const p = plants[k];
-    if ((p.id + w.tick) % PLANT_EVERY !== 0) continue;
+    if ((p.id + w.life) % PLANT_EVERY !== 0) continue;
     updatePlant(w, p);
     if (p.dead) anyDead = true;
   }
@@ -650,8 +650,8 @@ export function slowPass(w: World): void {
   // Nutrients spread slowly through the ground with the water in it, from
   // richer soil to poorer: each cell evens out with the one below it or
   // beside it, one cell in eight at a time.
-  const phase = (w.tick >> 2) & 7;
-  const down = (w.tick & 32) === 0;
+  const phase = (w.life >> 2) & 7;
+  const down = (w.life & 32) === 0;
   for (let i = W; i < W * (H - 1); i++) {
     const t = type[i];
     if ((i & 7) === phase && isGround(t)) {

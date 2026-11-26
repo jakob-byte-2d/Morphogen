@@ -1,5 +1,5 @@
 import { CREATURE_PART, EMPTY, FEED, ISOPOD, PLANT_PART, ROOT, SAND, SOIL, WASTE, WATER } from "./cells";
-import { H, SCALE, TICKS_PER_SECOND, W } from "./dims";
+import { H, LIFE_PER_DAY, SCALE, W } from "./dims";
 import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
 import { clearCell, newOrgId, setCell, type World } from "./world";
 
@@ -10,22 +10,30 @@ export interface Creature {
   energy: number;
   /** Nutrient units eaten and not yet passed on as droppings or offspring. */
   store: number;
-  /** Creature updates since it was born. */
+  /** Creature updates (one every CREATURE_EVERY life steps) since it was born. */
   age: number;
   cells: number[];
   genes: CreatureGenes;
   dead: boolean;
 }
 
-/** Creatures are updated every CREATURE_EVERY steps, spread over the steps by id. */
+/**
+ * Creatures live (eat, age, breed) every CREATURE_EVERY life steps, spread
+ * over the steps by id; they crawl in the fast steps, every CRAWL_EVERY.
+ */
 export const CREATURE_EVERY = 2;
-const MAX_CREATURES = 250;
+const CRAWL_EVERY = 4;
+const MAX_CREATURES = 60;
 
 /** Skrukketroll (litter eaters): one cell each, living on the ground. */
 const BUG = {
   start: 120,
-  /** About how long one lives, in seconds (give or take a fifth). */
-  lifespan: 480,
+  /** About how long one lives, in days (give or take a fifth): two to three weeks. */
+  lifespanDays: 17,
+  /** It is grown up, and can breed, when this share of its life is behind it. */
+  grownAt: 1 / 3,
+  /** A fed one rests; one crawl in this many it takes a step anyway. */
+  restless: 200,
   /** How far a hungry one can sense fallen leaves. */
   sense: 6 * SCALE,
   /** Updates between droppings, and the units in one (a crumb of soil). */
@@ -49,16 +57,6 @@ function bugBreedAt(g: CreatureGenes): number {
 }
 function bugYoung(g: CreatureGenes): number {
   return 40 + 20 * g.size;
-}
-
-/**
- * Speed: tries per update to move, each coming off one time in three. Speed
- * 3 moves about as far as a creature always did; it costs energy (see upkeep).
- */
-function moves(w: World, g: CreatureGenes): number {
-  let n = 0;
-  for (let k = 0; k < g.speed; k++) if (w.rng.below(3) === 0) n++;
-  return n;
 }
 
 const NEIGHBOURS = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
@@ -103,9 +101,9 @@ function pastPlant(w: World, i: number, d: number): number {
   return -1;
 }
 
-/** About how long a creature lives, in updates: give or take a fifth, so they do not all die at once. */
-function lifespanOf(c: Creature, seconds: number): number {
-  return ((seconds * TICKS_PER_SECOND * (80 + (c.id % 41))) / 100 / CREATURE_EVERY) | 0;
+/** About how long a creature lives, in creature updates: give or take a fifth, so they do not all die at once. */
+export function lifespanOf(c: Creature): number {
+  return ((BUG.lifespanDays * LIFE_PER_DAY * (80 + (c.id % 41))) / 100 / CREATURE_EVERY) | 0;
 }
 
 
@@ -231,7 +229,7 @@ function updateBug(w: World, c: Creature): void {
   const g = c.genes;
   // It lives frugally: a quarter of a unit of energy per update, at speed 3.
   c.energy -= upkeep((c.age & 3) === 0 ? 1 : 0, g.speed, c.age >> 2);
-  if (c.energy <= 0 || c.age > lifespanOf(c, BUG.lifespan)) {
+  if (c.energy <= 0 || c.age > lifespanOf(c)) {
     killCreature(w, c);
     return;
   }
@@ -249,8 +247,8 @@ function updateBug(w: World, c: Creature): void {
     }
   }
   if (c.age % BUG.dropEvery === 0) drop(w, c, i, BUG.dropUnits);
-  // Breed: a new one beside it, made from one unit of what it has eaten.
-  if (c.energy >= breedAt && c.store >= 1) {
+  // Breed, once grown up: a new one beside it, made from one unit of what it has eaten.
+  if (c.energy >= breedAt && c.store >= 1 && c.age >= lifespanOf(c) * BUG.grownAt) {
     for (const d of NEIGHBOURS) {
       const j = i + d;
       if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, 0)) continue;
@@ -263,26 +261,48 @@ function updateBug(w: World, c: Creature): void {
       break;
     }
   }
-  // Fall if there is nothing to hold on to, straight through any plant.
-  if (!supported(w, i, c.id)) {
-    for (let k = 0; k < SCALE; k++) {
-      const at = c.cells[0];
-      let j = at + W;
-      while (j < W * H && PLANT_PART[w.type[j]] && w.type[j] !== ROOT) j += W;
-      if (j >= W * H || w.type[j] !== EMPTY) break;
-      moveCell(w, c, 0, j);
+  // Hungry, with nothing to eat right here: it goes looking. (While the
+  // glass is watched it has mostly crawled there already; see crawlCreatures.)
+  if (hungry(c) && !nextToFood(w, c.cells[0])) {
+    const target = nearestFood(w, c.cells[0]);
+    for (let k = 0; k < 3 * SCALE; k++) crawlBug(w, c, target);
+  }
+}
+
+function hungry(c: Creature): boolean {
+  return c.energy < BUG.full >> 1;
+}
+
+function nextToFood(w: World, i: number): boolean {
+  for (const d of NEIGHBOURS) if (inGlass(i + d, i) && edibleForBug(w.type[i + d])) return true;
+  return false;
+}
+
+/**
+ * The fast steps: creatures crawl. One with nothing to hold on to falls
+ * (straight through any plant). A hungry one crawls towards the nearest
+ * fallen leaves it can sense and sits there eating; a fed one rests, and
+ * takes a step now and then.
+ */
+export function crawlCreatures(w: World): void {
+  for (const c of w.creatures) {
+    if (c.dead || (c.id + w.tick) % CRAWL_EVERY !== 0) continue;
+    const i = c.cells[0];
+    if (i === undefined || w.org[i] !== c.id) continue;
+    if (!supported(w, i, c.id)) {
+      for (let k = 0; k < SCALE; k++) {
+        let j = c.cells[0] + W;
+        while (j < W * H && PLANT_PART[w.type[j]] && w.type[j] !== ROOT) j += W;
+        if (j >= W * H || w.type[j] !== EMPTY) break;
+        moveCell(w, c, 0, j);
+      }
+      continue;
     }
-    return;
+    if (hungry(c)) {
+      if (nextToFood(w, i)) continue;
+      if (w.rng.below(5) < c.genes.speed) crawlBug(w, c, nearestFood(w, i));
+    } else if (w.rng.below(BUG.restless) === 0) crawlBug(w, c, -1);
   }
-  // Hungry, with nothing to eat right here: now and then it sniffs out the
-  // nearest fallen leaves and heads that way. Otherwise it wanders.
-  let target = -1;
-  if (c.energy < BUG.full >> 1 && (c.age & 3) === 0) {
-    let here = false;
-    for (const d of NEIGHBOURS) if (inGlass(i + d, i) && edibleForBug(w.type[i + d])) here = true;
-    if (!here) target = nearestFood(w, i);
-  }
-  for (let k = moves(w, g); k > 0; k--) crawlBug(w, c, target);
 }
 
 /** The nearest fallen leaf (or feed) a skrukketroll can sense from i, or -1. */
@@ -364,7 +384,7 @@ export function updateCreatures(w: World): void {
       anyDead = true;
       continue;
     }
-    if ((c.id + w.tick) % CREATURE_EVERY !== 0) continue;
+    if ((c.id + w.life) % CREATURE_EVERY !== 0) continue;
     // Drop cells that are gone (eaten, dug away).
     c.cells = c.cells.filter((i) => w.org[i] === c.id && CREATURE_PART[w.type[i]] === 1);
     if (c.cells.length === 0) {

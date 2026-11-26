@@ -48,11 +48,13 @@ export const t = {
     waste: "Visne blader",
     records: "Rekorder",
     glass: "Glasset",
-    oldestPlant: (min: number) => `Eldste plante: ${min} min`,
+    oldestPlant: (text: string) => `Eldste plante: ${text}`,
     mostCreatures: (n: number) => `Flest kryp på en gang: ${n}`,
     duration: (seconds: number) => {
-      const h = Math.floor(seconds / 3600);
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
       const m = Math.floor((seconds % 3600) / 60);
+      if (d > 0) return `${d} ${d === 1 ? "dag" : "dager"} ${h} t`;
       return h > 0 ? `${h} t ${m} min` : `${m} min`;
     },
   },
@@ -64,7 +66,7 @@ export const t = {
     grass: "Lavt og tett. Brer seg utover.",
     flower: "Stengler med blomster som slipper frø.",
     bush: "Vokser seg stor og greinete.",
-    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Lever i omtrent åtte minutter.",
+    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Blir voksen etter knapt en uke og lever i to–tre uker.",
   } as Record<string, string>,
   help: {
     water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
@@ -114,6 +116,8 @@ export const t = {
     play: "Spill",
     step: "Ett steg",
     max: "maks",
+    day: "+1 dag",
+    week: "+1 uke",
     info: (tick: number, fps: number, ms: number, tps: number) =>
       `steg ${tick} · ${fps} fps · ${ms.toFixed(2)} ms/steg · ${tps} steg/s`,
     overlays: { none: "Ingen", wet: "Fukt", food: "Næring", light: "Lys" } as Record<string, string>,

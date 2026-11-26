@@ -6,7 +6,7 @@ import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
 
 /** Oldest engine version whose saved glasses can still be loaded. */
-const SAVES_FROM = 14;
+const SAVES_FROM = 15;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -44,6 +44,7 @@ export interface SavedGlass {
   v: number;
   seed: number;
   tick: number;
+  life: number;
   rng: number[];
   humidity: number;
   groundwater: number;
@@ -66,6 +67,7 @@ export function saveWorld(w: World): SavedGlass {
     v: SIM_VERSION,
     seed: w.seed,
     tick: w.tick,
+    life: w.life,
     rng: [...w.rng.getState()],
     humidity: w.humidity,
     groundwater: w.groundwater,
@@ -108,7 +110,7 @@ function cellList(v: unknown): number[] {
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Partial<SavedGlass>;
-  // Glasses saved from version 14 on (one groundwater for the glass) carry on under newer rules.
+  // Glasses saved from version 15 on (life at the pace of a real glass) carry on under newer rules.
   if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
   const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
@@ -132,7 +134,8 @@ export function loadWorld(data: unknown): World | null {
   w.kind.set(arrays.kind!);
   new Uint8Array(w.org.buffer).set(arrays.org!);
   w.light.set(arrays.light!);
-  w.tick = int(d.tick, 0, 2 ** 31);
+  w.tick = int(d.tick, 0, 2 ** 52);
+  w.life = int(d.life, 0, 2 ** 31);
   w.rng.setState(d.rng.map((v) => int(v, -(2 ** 31), 2 ** 32) | 0) as [number, number, number, number]);
   w.humidity = int(d.humidity, 0, 2 ** 31);
   w.groundwater = int(d.groundwater, 0, 2 ** 31);
@@ -142,8 +145,8 @@ export function loadWorld(data: unknown): World | null {
   w.burned = int(d.burned, 0, 2 ** 52);
   w.arrivals = (Array.isArray(d.arrivals) ? d.arrivals : [])
     .slice(0, 64)
-    .map((r: Record<string, unknown>) => ({ tick: int(r?.tick, 0, 1e9), species: int(r?.species, 0, w.creatureSpecies.length - 1), x: int(r?.x, 0, W - 1) }))
-    .sort((a: { tick: number }, b: { tick: number }) => a.tick - b.tick);
+    .map((r: Record<string, unknown>) => ({ life: int(r?.life, 0, 1e9), species: int(r?.species, 0, w.creatureSpecies.length - 1), x: int(r?.x, 0, W - 1) }))
+    .sort((a: { life: number }, b: { life: number }) => a.life - b.life);
 
   for (const raw of Array.isArray(d.plants) ? d.plants : []) {
     const r = (raw ?? {}) as Record<string, unknown>;

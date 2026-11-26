@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTool, createWorld, EMPTY, H, SEED, setCell, SOIL, stepWorldN, STONE, totalWater, W, WATER, waterTable } from "../src/sim";
+import { applyTool, createWorld, EMPTY, H, SEED, setCell, SOIL, stepLifeN, stepWorldN, STONE, totalWater, W, WATER, waterTable } from "../src/sim";
 import { emptyWorld, REACH, WATER_UNITS, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -71,7 +71,7 @@ describe("groundwater", () => {
       setCell(w, at(70, H - 61), SEED);
       w.kind[at(70, H - 61)] = 0;
       w.food[at(70, H - 61)] = 1;
-      stepWorldN(w, 400);
+      stepLifeN(w, 400);
       return w.plants.length;
     };
     expect(sprouts(H - 60 + REACH - 2)).toBe(1);

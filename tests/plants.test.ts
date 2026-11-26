@@ -13,7 +13,7 @@ import {
   setCell,
   SOIL,
   STEM,
-  stepWorldN,
+  stepLifeN,
   totalUnits,
   totalWater,
   unitLedger,
@@ -50,18 +50,18 @@ function bed(moist: boolean, species = 1): World {
 describe("seeds", () => {
   it("sprout on moist soil (near the water table) after a few seconds", () => {
     const w = bed(true);
-    stepWorldN(w, 60);
+    stepLifeN(w, 60);
     expect(w.plants.length).toBe(0);
-    stepWorldN(w, 120);
+    stepLifeN(w, 120);
     expect(w.plants.length).toBe(1);
     expect(w.type[at(36, H - 30)]).toBe(ROOT);
   });
 
   it("do not sprout on dry soil (far above the water table), and in the end rot", () => {
     const w = bed(false);
-    stepWorldN(w, 600);
+    stepLifeN(w, 600);
     expect(w.plants.length).toBe(0);
-    stepWorldN(w, 600);
+    stepLifeN(w, 600);
     expect(count(w, SEED)).toBe(0);
     expect(count(w, WASTE)).toBe(1);
   });
@@ -70,7 +70,7 @@ describe("seeds", () => {
 describe("growth", () => {
   it("grows a flower with roots, leaves and a flower head", () => {
     const w = bed(true);
-    stepWorldN(w, 1800);
+    stepLifeN(w, 1800);
     expect(w.plants.length).toBeGreaterThanOrEqual(1);
     const p = w.plants[0];
     const types = p.cells.map((i) => w.type[i]);
@@ -87,7 +87,7 @@ describe("growth", () => {
     const sp = w.plantSpecies[1];
     // Keep the groundwater up, as watering would.
     for (let k = 0; k < 13; k++) {
-      stepWorldN(w, sp.lifespan);
+      stepLifeN(w, sp.lifespan);
       w.groundwater = Math.max(w.groundwater, tableAt(H - 20));
     }
     // The first plant is still there, and bigger than ever.
@@ -107,7 +107,7 @@ describe("growth", () => {
     setCell(w, at(70, 13), SEED);
     w.kind[at(70, 13)] = 2;
     w.food[at(70, 13)] = 1;
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     const lid = w.plants.flatMap((p) => p.cells.filter((i) => i < 2 * W && w.type[i] === STEM));
     expect(lid.length).toBeGreaterThan(3);
     // Along the lid, not just up against it.
@@ -117,7 +117,7 @@ describe("growth", () => {
 
   it("dries out and turns to litter without water", () => {
     const w = bed(true);
-    stepWorldN(w, 600);
+    stepLifeN(w, 600);
     expect(w.plants.length).toBe(1);
     const p = w.plants[0];
     const roots = p.cells.filter((i) => w.type[i] === ROOT);
@@ -126,7 +126,7 @@ describe("growth", () => {
     for (let k = 0; k < 90 && w.plants.length > 0; k++) {
       w.groundwater = 0;
       w.humidity = 0;
-      stepWorldN(w, 10);
+      stepLifeN(w, 10);
     }
     expect(w.plants.length).toBe(0);
     // The shoot becomes litter; the roots, which grew where there was soil, become soil again.
@@ -159,7 +159,7 @@ describe("the closed glass", () => {
     const ledger = unitLedger(w);
     const units = totalUnits(w);
     for (let k = 0; k < 10; k++) {
-      stepWorldN(w, 600);
+      stepLifeN(w, 600);
       expect(unitLedger(w)).toBe(ledger);
     }
     // Plants have made more than has been burnt: the glass has grown richer.
@@ -170,13 +170,13 @@ describe("the closed glass", () => {
   it("never creates or loses water, apart from what escapes", () => {
     const w = createWorld(43);
     const water = totalWater(w);
-    stepWorldN(w, 3000);
+    stepLifeN(w, 3000);
     expect(totalWater(w) + w.lostWater).toBe(water);
   });
 
   it("brings life to the start glass by itself", () => {
     const w = createWorld(44);
-    stepWorldN(w, 1200);
+    stepLifeN(w, 1200);
     expect(w.plants.length).toBeGreaterThanOrEqual(3);
   });
 });

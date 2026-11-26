@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWorld, EMPTY, H, loadWorld, ROOT, SAND, saveWorld, setCell, SOIL, stepWorldN, STONE, W } from "../src/sim";
+import { createWorld, EMPTY, H, loadWorld, ROOT, SAND, saveWorld, setCell, SOIL, stepLifeN, stepWorldN, STONE, W } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -18,7 +18,7 @@ describe("the ground", () => {
   it("does not wear away as plants live and die in it", () => {
     const w = createWorld(7);
     const start = ground(w);
-    stepWorldN(w, 4000);
+    stepLifeN(w, 4000);
     const now = ground(w);
     expect(now).toBeGreaterThanOrEqual(start);
     // It may build up a little (humus), but slowly.

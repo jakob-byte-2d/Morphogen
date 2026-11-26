@@ -1,4 +1,4 @@
-import { SIM_VERSION, TICKS_PER_SECOND, type World } from "../sim";
+import { LIFE_EVERY, SIM_VERSION, TICKS_PER_SECOND, type World } from "../sim";
 import { PLANT_EVERY } from "../sim/plants";
 import { creatureIcon, iconCanvas, ICONS, plantIcon } from "./icons";
 import type { Settings } from "./settings";
@@ -274,8 +274,8 @@ export class Menu {
     series(t.stats.soilFood, s.map((x) => x.soilFood), now.soilFood);
     series(t.stats.waste, s.map((x) => x.waste), now.waste);
     body.append(el("h3", "", t.stats.records));
-    const oldest = Math.round((h.oldestPlant * PLANT_EVERY) / TICKS_PER_SECOND / 60);
-    body.append(el("p", "", t.stats.oldestPlant(oldest)), el("p", "", t.stats.mostCreatures(h.biggestPopulation)));
+    const oldest = (h.oldestPlant * PLANT_EVERY * LIFE_EVERY) / TICKS_PER_SECOND;
+    body.append(el("p", "", t.stats.oldestPlant(t.stats.duration(oldest))), el("p", "", t.stats.mostCreatures(h.biggestPopulation)));
   }
 
   private showSpecies(): void {
