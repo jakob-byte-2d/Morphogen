@@ -1,4 +1,4 @@
-import { CREATURE_PART, EMPTY, FEED, ISOPOD, PLANT_PART, ROOT, SAND, SOIL, WASTE, WATER } from "./cells";
+import { EMPTY, FEED, PLANT_PART, ROOT, SAND, SEED, SOIL, STONE, WASTE, WATER } from "./cells";
 import { H, LIFE_PER_DAY, SCALE, TICKS_PER_SECOND, W } from "./dims";
 import { creatureGenesOf, inheritCreature, upkeep, type CreatureGenes } from "./genes";
 import { clearCell, newOrgId, setCell, type World } from "./world";
@@ -37,7 +37,8 @@ const LOOK_EVERY = 32;
 
 /** Skrukketroll (litter eaters): one cell each, living on the ground. */
 const BUG = {
-  start: 120,
+  /** A new one arrives fed. */
+  start: 600,
   /** About how long one lives, in days (give or take a fifth): two to three weeks. */
   lifespanDays: 17,
   /** It is grown up, and can breed, when this share of its life is behind it. */
@@ -80,39 +81,38 @@ function inGlass(i: number, from: number): boolean {
 }
 
 /**
- * Something to stand or hang on next to cell i (not counting `self`): the
- * ground, a heap of leaves, another animal. Not a plant: plants are not
- * something animals live on.
+ * Creatures live on a layer of their own over the cells (World.critter), so
+ * a skrukketroll can be in the same cell as a leaf or a stem, or a dead
+ * leaf: it walks through grass and bushes and burrows in leaf litter. Ground,
+ * stone and water it cannot go into.
  */
-function supported(w: World, i: number, self: number): boolean {
-  if (i >= W * (H - 1)) return true;
-  for (const d of NEIGHBOURS) {
-    const j = i + d;
-    if (!inGlass(j, i) || (w.org[j] === self && self !== 0)) continue;
-    const t = w.type[j];
-    if (t !== EMPTY && t !== WATER && !PLANT_PART[t]) return true;
-  }
-  return false;
+function passable(t: number): boolean {
+  return t === EMPTY || t === WASTE || t === FEED || t === SEED || (PLANT_PART[t] === 1 && t !== ROOT);
 }
 
-/** How many cells of plant a creature can slip past at once. */
-const PAST = 2 * SCALE;
+/** Something to stand or hang on: ground, stone, dead leaves, feed, a seed. Not a plant, not water. */
+function footing(t: number): boolean {
+  return t === SOIL || t === SAND || t === STONE || t === ROOT || t === WASTE || t === FEED || t === SEED;
+}
+
+/** Can a creature go into cell j: room for it, and no other creature there? */
+function canEnter(w: World, j: number): boolean {
+  return passable(w.type[j]) && w.critter[j] === 0;
+}
 
 /**
- * Plants are no wall: going sideways (d = -1 or 1) from i, a creature slips
- * between the stems to the first open cell beyond them. Returns that cell,
- * or -1 if there is no plant there, or no room beyond it.
+ * Something to stand or hang on at cell i (not counting the creature
+ * `self`): footing next to it, or another creature, or the dead leaves it is
+ * in. Plants it walks through, but does not climb.
  */
-function pastPlant(w: World, i: number, d: number): number {
-  const x = i % W;
-  for (let k = 1; k <= PAST + 1; k++) {
-    const nx = x + d * k;
-    if (nx < 0 || nx >= W) return -1;
-    const t = w.type[i + d * k];
-    if (t === EMPTY) return k > 1 ? i + d * k : -1;
-    if (!PLANT_PART[t] || t === ROOT) return -1;
+function supported(w: World, i: number, self: number): boolean {
+  if (i >= W * (H - 1) || w.type[i] === WASTE) return true;
+  for (const d of NEIGHBOURS) {
+    const j = i + d;
+    if (!inGlass(j, i)) continue;
+    if (footing(w.type[j]) || (w.critter[j] !== 0 && w.critter[j] !== self)) return true;
   }
-  return -1;
+  return false;
 }
 
 /** About how long a creature lives, in creature updates: give or take a fifth, so they do not all die at once. */
@@ -121,35 +121,42 @@ export function lifespanOf(c: Creature): number {
 }
 
 
-/** Puts a creature cell made of `units` units into an empty cell. */
-function addCell(w: World, c: Creature, i: number, units: number): void {
-  setCell(w, i, ISOPOD);
-  w.org[i] = c.id;
-  w.kind[i] = c.species;
-  w.food[i] = units;
-  c.cells.push(i);
+/** Moves a creature to cell j. */
+function moveTo(w: World, c: Creature, j: number): void {
+  const i = c.cells[0];
+  if (i !== undefined && w.critter[i] === c.id) w.critter[i] = 0;
+  w.critter[j] = c.id;
+  c.cells[0] = j;
 }
 
 /**
- * Starts a new creature in the given empty cells; the units come with it.
- * Without genes it gets its species' own.
+ * Starts a new creature in the first of the given cells, with a unit of
+ * nutrients for its body (kept in its store). Without genes it gets its
+ * species' own.
  */
 export function spawnCreature(w: World, species: number, at: number[], energy: number, genes?: CreatureGenes, mother = 0): Creature | null {
   const id = newOrgId(w);
   if (id === 0) return null;
   const g = genes ?? creatureGenesOf(w.creatureSpecies[species]);
   const c: Creature = { kind: "creature", id, species, energy, store: 0, age: 0, cells: [], genes: g, mother, young: 0, heading: (id & 1) === 0 ? 1 : -1, target: -1, dead: false };
-  for (const i of at) addCell(w, c, i, 1);
+  if (at.length > 0) {
+    c.store = 1;
+    moveTo(w, c, at[0]);
+  }
   w.creatures.push(c);
   w.orgs.set(id, c);
   return c;
 }
 
-/** The empty cell where something dropped at (x, y) comes to rest, or -1 over water. */
+/**
+ * Where a creature dropped at (x, y) comes to rest: it falls through air and
+ * plants onto the ground, or onto dead leaves. -1 over water.
+ */
 function landing(w: World, x: number, y: number): number {
-  while (y < H - 1 && w.type[(y + 1) * W + x] === EMPTY) y++;
+  if (!canEnter(w, y * W + x)) return -1;
+  while (y < H - 1 && canEnter(w, (y + 1) * W + x) && !footing(w.type[(y + 1) * W + x])) y++;
+  if (y < H - 1 && canEnter(w, (y + 1) * W + x) && w.type[(y + 1) * W + x] === WASTE) y++;
   const i = y * W + x;
-  if (w.type[i] !== EMPTY) return -1;
   return y < H - 1 && w.type[i + W] === WATER ? -1 : i;
 }
 
@@ -157,12 +164,12 @@ function landing(w: World, x: number, y: number): number {
 export function releaseCreature(w: World, cx: number, cy: number, species: number): void {
   if (cx < 0 || cx >= W || cy < 0 || cy >= H) return;
   const k = Math.min(species, w.creatureSpecies.length - 1);
-  // Over water, or over a plant? Let it go on the nearest bare ground instead.
+  // Over water? Let it go on the nearest ground instead.
   for (let d = 0; d < W; d++) {
     const x = cx + (d % 2 === 0 ? d >> 1 : -((d + 1) >> 1));
     if (x < 0 || x >= W) continue;
     const i = landing(w, x, cy);
-    if (i >= 0 && !(i < W * (H - 1) && PLANT_PART[w.type[i + W]])) {
+    if (i >= 0) {
       spawnCreature(w, k, [i], BUG.start);
       return;
     }
@@ -185,7 +192,8 @@ export function grownUp(c: Creature): boolean {
  * gets richer, not higher. Away from the ground it waits.
  */
 function drop(w: World, c: Creature, i: number, units: number): void {
-  if (c.store < units) return;
+  // One unit is its own body.
+  if (c.store < units + 1) return;
   for (let j = i + W, k = 0; j < W * H && k < 4 * SCALE; j += W, k++) {
     const t = w.type[j];
     if (t === SOIL || t === SAND) {
@@ -194,25 +202,32 @@ function drop(w: World, c: Creature, i: number, units: number): void {
       c.store -= units;
       return;
     }
-    if (t !== WASTE && t !== FEED && !CREATURE_PART[t]) return;
+    if (t === EMPTY || !passable(t)) return;
   }
 }
 
-/** A dead creature becomes dead matter (litter); what it had eaten goes with it. */
+/**
+ * A dead creature becomes dead matter (litter) where it lies, with what it
+ * is made of and had eaten; in a plant or the like, it is breathed out.
+ */
 function killCreature(w: World, c: Creature): void {
   c.dead = true;
   w.orgs.delete(c.id);
   let left = c.store;
-  for (const i of c.cells) {
-    if (w.org[i] !== c.id || !CREATURE_PART[w.type[i]]) continue;
-    w.type[i] = WASTE;
-    w.kind[i] = 0;
-    w.org[i] = 0;
-    const add = Math.min(left, 255 - w.food[i]);
-    w.food[i] += add;
-    left -= add;
+  const i = c.cells[0];
+  if (i !== undefined) {
+    if (w.critter[i] === c.id) w.critter[i] = 0;
+    if (w.type[i] === EMPTY) {
+      setCell(w, i, WASTE);
+      w.food[i] = 0;
+    }
+    if (w.type[i] === WASTE) {
+      const add = Math.min(left, 255 - w.food[i]);
+      w.food[i] += add;
+      left -= add;
+    }
   }
-  // Anything that did not fit (rare) is breathed out with its last breath.
+  // Anything that did not fit is breathed out with its last breath.
   w.burned += left;
   c.store = 0;
 }
@@ -244,18 +259,21 @@ function edibleForBug(t: number): boolean {
 function updateBug(w: World, c: Creature): void {
   const i = c.cells[0];
   const g = c.genes;
-  // It lives frugally: a quarter of a unit of energy per update, at speed 3.
-  c.energy -= upkeep((c.age & 3) === 0 ? 1 : 0, g.speed, c.age >> 2);
+  // Living costs about a unit of energy per update (at speed 3), and half as
+  // much again while it is out walking or looking for food: fed, it can go
+  // three or four days without food; hungry, a day or two.
+  const out = hungry(c) || walking(c, w.tick);
+  c.energy -= upkeep(1, g.speed, c.age) + (out && (c.age & 1) === 0 ? upkeep(1, g.speed, c.age >> 1) : 0);
   if (c.energy <= 0 || c.age > lifespanOf(c)) {
     killCreature(w, c);
     return;
   }
   const breedAt = bugBreedAt(g);
-  // It nibbles at whatever dead leaves are next to it, now and then.
+  // It nibbles at whatever dead leaves it is in or next to, now and then.
   if (w.rng.below(BUG_BITE_EVERY[g.growth - 1]) === 0) {
     const start = w.rng.below(8);
-    for (let k = 0; k < 8; k++) {
-      const j = i + NEIGHBOURS[(start + k) & 7];
+    for (let k = 0; k < 9; k++) {
+      const j = k === 8 ? i : i + NEIGHBOURS[(start + k) & 7];
       if (inGlass(j, i) && edibleForBug(w.type[j])) {
         eat(w, c, j, BUG_PER_UNIT[g.growth - 1]);
         if (c.energy > BUG.full) c.energy = BUG.full;
@@ -264,15 +282,15 @@ function updateBug(w: World, c: Creature): void {
     }
   }
   if (c.age % BUG.dropEvery === 0) drop(w, c, i, BUG.dropUnits);
-  // Breed, once grown up: a new one beside it, made from one unit of what it has eaten.
-  if (c.energy >= breedAt && c.store >= 1 && grownUp(c)) {
+  // Breed, once grown up: a new one beside it, made from one unit of what it
+  // has eaten (not from its own body).
+  if (c.energy >= breedAt && c.store >= 2 && grownUp(c)) {
     for (const d of NEIGHBOURS) {
       const j = i + d;
-      if (!inGlass(j, i) || w.type[j] !== EMPTY || !supported(w, j, 0)) continue;
+      if (!inGlass(j, i) || !canEnter(w, j) || !supported(w, j, 0)) continue;
       const young = bugYoung(g);
-      const child = spawnCreature(w, c.species, [], young, inheritCreature(w, g), c.id);
+      const child = spawnCreature(w, c.species, [j], young, inheritCreature(w, g), c.id);
       if (!child) break;
-      addCell(w, child, j, 1);
       c.young++;
       c.store--;
       c.energy -= young + 40;
@@ -283,7 +301,9 @@ function updateBug(w: World, c: Creature): void {
   // glass is watched it has mostly walked there already; see crawlCreatures.)
   if (hungry(c) && (c.age & 1) === 0 && !nextToFood(w, c.cells[0])) {
     if ((c.target < 0 || !edibleForBug(w.type[c.target])) && (c.age & 3) === 0) c.target = nearestFood(w, c.cells[0]);
-    if (c.target >= 0 && edibleForBug(w.type[c.target])) for (let k = 0; k < 2 * SCALE; k++) crawlBug(w, c, c.target);
+    // To the food it has in mind; with none in mind, on along its way, looking.
+    const target = c.target >= 0 && edibleForBug(w.type[c.target]) ? c.target : -1;
+    for (let k = 0; k < 2 * SCALE; k++) crawlBug(w, c, target);
   }
 }
 
@@ -299,27 +319,49 @@ function hungry(c: Creature): boolean {
 }
 
 function nextToFood(w: World, i: number): boolean {
+  if (edibleForBug(w.type[i])) return true;
   for (const d of NEIGHBOURS) if (inGlass(i + d, i) && edibleForBug(w.type[i + d])) return true;
   return false;
 }
 
+/** Buried (soil fell on it) or swamped: it climbs up out of it, if it can. */
+function escape(w: World, c: Creature): boolean {
+  const i = c.cells[0];
+  for (let k = 1; k <= 4 * SCALE; k++) {
+    const j = i - k * W;
+    if (j < 0) break;
+    if (canEnter(w, j)) {
+      moveTo(w, c, j);
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * The fast steps: creatures crawl. One with nothing to hold on to falls
- * (straight through any plant). A hungry one walks to the food it has in
- * mind (looking around now and then for the nearest it can sense) and sits
- * there eating; a fed one walks about for a while, then rests for a while.
+ * The fast steps: creatures crawl. One that something has fallen on climbs
+ * out (deep under, it drowns); one with nothing to hold on to falls, through
+ * plants, and floats if it lands on water. A hungry one walks to the food it
+ * has in mind (looking around now and then for the nearest it can sense) and
+ * sits there eating; a fed one walks about for a while, then rests for a
+ * while.
  */
 export function crawlCreatures(w: World, walk: boolean): void {
   for (const c of w.creatures) {
     if (c.dead || (c.id + w.tick) % CRAWL_EVERY !== 0) continue;
+    if (c.cells[0] === undefined) continue;
+    if (!passable(w.type[c.cells[0]]) && !escape(w, c)) {
+      killCreature(w, c);
+      continue;
+    }
     const i = c.cells[0];
-    if (i === undefined || w.org[i] !== c.id) continue;
     if (!supported(w, i, c.id)) {
       for (let k = 0; k < SCALE; k++) {
-        let j = c.cells[0] + W;
-        while (j < W * H && PLANT_PART[w.type[j]] && w.type[j] !== ROOT) j += W;
-        if (j >= W * H || w.type[j] !== EMPTY) break;
-        moveCell(w, c, 0, j);
+        const j = c.cells[0] + W;
+        if (j >= W * H) break;
+        if (!canEnter(w, j)) break;
+        moveTo(w, c, j);
+        if (supported(w, j, c.id)) break;
       }
       continue;
     }
@@ -378,17 +420,14 @@ function crawlBug(w: World, c: Creature, target: number): void {
   const start = w.rng.below(8);
   for (let k = 0; k < 8; k++) {
     const d = NEIGHBOURS[(start + k) & 7];
-    let j = i + d;
-    if (!inGlass(j, i)) continue;
-    if ((d === -1 || d === 1) && PLANT_PART[w.type[j]]) j = pastPlant(w, i, d);
-    if (j < 0 || w.type[j] !== EMPTY || !supported(w, j, c.id)) continue;
-    let score = 0;
+    const j = i + d;
+    if (!inGlass(j, i) || !canEnter(w, j) || !supported(w, j, c.id)) continue;
+    let score = edibleForBug(w.type[j]) ? 3 : 0;
     for (const d of NEIGHBOURS) {
       const n = j + d;
       if (!inGlass(n, j)) continue;
-      const t = w.type[n];
-      if (edibleForBug(t)) score += 3;
-      else if (t === ISOPOD && w.org[n] !== c.id) score -= 2;
+      if (edibleForBug(w.type[n])) score += 3;
+      else if (w.critter[n] !== 0 && w.critter[n] !== c.id) score -= 2;
     }
     if (target >= 0) {
       const x = j % W;
@@ -408,17 +447,7 @@ function crawlBug(w: World, c: Creature, target: number): void {
   if (target >= 0) {
     if (dx !== 0) c.heading = dx;
   } else if (dx === -c.heading) c.heading = dx;
-  moveCell(w, c, 0, best);
-}
-
-/** Moves creature cell number k to the empty cell j, with what it carries. */
-function moveCell(w: World, c: Creature, k: number, j: number): void {
-  const i = c.cells[k];
-  const units = w.food[i];
-  clearCell(w, i);
-  addCell(w, c, j, units);
-  c.cells.pop();
-  c.cells[k] = j;
+  moveTo(w, c, best);
 }
 
 export function updateCreatures(w: World): void {
@@ -431,9 +460,8 @@ export function updateCreatures(w: World): void {
       continue;
     }
     if ((c.id + w.life) % CREATURE_EVERY !== 0) continue;
-    // Drop cells that are gone (eaten, dug away).
-    c.cells = c.cells.filter((i) => w.org[i] === c.id && CREATURE_PART[w.type[i]] === 1);
-    if (c.cells.length === 0) {
+    // Gone from its cell (it should not be): then it is gone.
+    if (c.cells.length === 0 || w.critter[c.cells[0]] !== c.id) {
       c.dead = true;
       w.orgs.delete(c.id);
       anyDead = true;

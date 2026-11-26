@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCreatureSpecies, addPlantSpecies, applyTool, ISOPOD, createWorld, MAX_SPECIES, SCALE, SEED, stepLifeN } from "../src/sim";
+import { addCreatureSpecies, addPlantSpecies, applyTool, createWorld, EMPTY, MAX_SPECIES, SCALE, SEED, stepLifeN, W } from "../src/sim";
 
 describe("species the player makes", () => {
   it("can be sown and grow", () => {
@@ -7,7 +7,11 @@ describe("species the player makes", () => {
     const k = addPlantSpecies(w, { name: "Kjempe", form: "flower", height: 30, colors: { leaf: "#3366aa", flower: "#ffcc00" } });
     expect(k).toBe(3);
     expect(w.plantSpecies[k].colors.leaf).toBe("#3366aa");
-    for (let n = 0; n < 40; n++) applyTool(w, "seed", 22, 30, k);
+    // A flower: a little pit first, then the seeds into it.
+    let y = 0;
+    while (w.type[y * W + 22] === EMPTY) y++;
+    applyTool(w, "spade", 22, y);
+    for (let n = 0; n < 40 && !w.type.includes(SEED); n++) applyTool(w, "seed", 22, 30, k);
     expect([...w.type.keys()].some((i) => w.type[i] === SEED && w.kind[i] === k)).toBe(true);
     stepLifeN(w, 900);
     expect(w.plants.some((p) => p.species === k)).toBe(true);
@@ -23,7 +27,7 @@ describe("species the player makes", () => {
     for (const k of [bug, mass]) {
       const c = w.creatures.filter((x) => x.species === k);
       expect(c.length).toBeGreaterThan(0);
-      expect(c.every((x) => x.cells.length === 1 && w.type[x.cells[0]] === ISOPOD)).toBe(true);
+      expect(c.every((x) => x.cells.length === 1 && w.critter[x.cells[0]] === x.id)).toBe(true);
     }
   });
 

@@ -13,7 +13,7 @@ export { AREA, H, LIFE_EVERY, LIFE_PER_DAY, SCALE, SIZE, TICKS_PER_SECOND, W } f
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 17;
+export const SIM_VERSION = 18;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -81,6 +81,12 @@ export interface World {
    * its slot holds the seed's genes instead (see packSeed in genes.ts).
    */
   readonly org: Uint16Array;
+  /**
+   * Creatures, on a layer of their own over the cells: the id of the creature
+   * in each cell (0 = none). A creature can be in the same cell as a leaf, a
+   * stem or a dead leaf. Rebuilt from the creature list when a glass is loaded.
+   */
+  readonly critter: Uint16Array;
   /** Light reaching each cell, 0–255. Recomputed every four steps. */
   readonly light: Uint8Array;
   /** Step in which a cell last moved, so nothing moves twice in one step. */
@@ -132,6 +138,7 @@ export function emptyWorld(
     wet: new Uint8Array(SIZE),
     food: new Uint8Array(SIZE),
     org: new Uint16Array(SIZE),
+    critter: new Uint16Array(SIZE),
     light: new Uint8Array(SIZE),
     stamp: new Uint32Array(SIZE),
     awake: new Uint8Array(CHUNKS_X * CHUNKS_Y).fill(1),

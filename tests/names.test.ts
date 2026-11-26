@@ -10,3 +10,10 @@ describe("creature names", () => {
     expect(names.size).toBeGreaterThan(25);
   });
 });
+
+describe("the card of a dead creature", () => {
+  it("says when it starved", () => {
+    expect(t.card.starved(t.card.days(3))).toMatch(/^Sultet i hjel/);
+    expect(t.card.died(t.card.days(18))).toMatch(/^Døde/);
+  });
+});

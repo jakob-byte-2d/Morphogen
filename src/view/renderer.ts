@@ -1,6 +1,6 @@
-import { EMPTY, FLOWER, ISOPOD, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
+import { EMPTY, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED, SOIL, STEM, STONE, WATER } from "../sim/cells";
 import { SEED_GENES } from "../sim/genes";
-import { THIRST_LIMIT } from "../sim/plants";
+import { seedCanSprout, THIRST_LIMIT } from "../sim/plants";
 import { H, REACH, SCALE, SIZE, W, waterTable, type World } from "../sim/world";
 import type { Camera } from "./camera";
 import {
@@ -152,8 +152,11 @@ export class Renderer {
 
   /** The cell of the creature under the magnifying glass, or -1. */
   selected = -1;
+  /** Seconds, for things that blink. */
+  private time = 0;
 
   draw(w: World, time: number, dt: number): void {
+    this.time = time;
     this.layout();
     this.drawCells(w, dt);
     this.drawLight(w, time);
@@ -321,12 +324,35 @@ export class Renderer {
               r += tint * TINT;
               b -= tint * TINT;
             }
+            // A seed that has what it needs to sprout blinks softly green.
+            if (seedCanSprout(w, i, table)) {
+              const f = 0.35 + 0.35 * Math.sin(this.time * 4);
+              r += (150 - r) * f;
+              g += (255 - g) * f;
+              b += (120 - b) * f;
+            }
           } else {
             const p = w.orgs.get(w.org[i]);
             if (p && p.kind === "plant") {
               // Each line of descent drifts a little in colour.
               r += p.genes.tint * TINT;
               b -= p.genes.tint * TINT;
+              // A bush's stems are woody and dark at its foot; out in the
+              // crown its twigs are green, half hidden among the leaves.
+              if (t === STEM && w.plantSpecies[p.species]?.form === "bush") {
+                const u = Math.min(1, Math.max(0, (((p.base / W) | 0) - y) / ((w.plantSpecies[p.species].height * SCALE * 3) / 5)));
+                const f = 0.6 + 0.4 * u;
+                r *= f;
+                g *= f;
+                b *= f;
+                if (u > 0.3) {
+                  const leaf = this.speciesTable(w, w.kind[i], LEAF);
+                  const k = ((u - 0.3) / 0.7) * 0.7;
+                  r += (leaf[s * 3] * 0.6 - r) * k;
+                  g += (leaf[s * 3 + 1] * 0.6 - g) * k;
+                  b += (leaf[s * 3 + 2] * 0.6 - b) * k;
+                }
+              }
               // Old leaves (their age is in the moisture slot) turn brown before they fall.
               if (t === LEAF && wet[i] > 170) {
                 const f = ((wet[i] - 170) / 85) * 0.8;
@@ -349,17 +375,6 @@ export class Renderer {
             if (above === EMPTY) open++;
             if (open >= 2) a = 170 + (s & 63);
           }
-        } else if (t === ISOPOD) {
-          const tab = this.creatureTable(w, w.kind[i]);
-          r = tab[s * 3];
-          g = tab[s * 3 + 1];
-          b = tab[s * 3 + 2];
-          const c = w.orgs.get(w.org[i]);
-          if (c && c.kind === "creature") {
-            r += c.genes.tint * TINT;
-            b -= c.genes.tint * TINT;
-          }
-          a = 235;
         } else if (t === WATER && top[i] && y < H - 1 && type[i + W] !== EMPTY) {
           [r, g, b] = this.waterTop;
           a = 170;
@@ -408,6 +423,19 @@ export class Renderer {
       d[o + 1] = m.c[1];
       d[o + 2] = m.c[2];
       d[o + 3] = 255 * m.a * lit;
+    }
+    // Creatures, on their own layer: drawn over whatever they are walking
+    // through (grass, a bush, dead leaves).
+    for (const c of w.creatures) {
+      const i = c.cells[0];
+      if (i === undefined || c.dead) continue;
+      const tab = this.creatureTable(w, c.species);
+      const s = shade[i];
+      const o = i * 4;
+      d[o] = tab[s * 3] + c.genes.tint * TINT;
+      d[o + 1] = tab[s * 3 + 1];
+      d[o + 2] = tab[s * 3 + 2] - c.genes.tint * TINT;
+      d[o + 3] = 245;
     }
     this.cellCanvas.getContext("2d")!.putImageData(this.cellImage, 0, 0);
   }

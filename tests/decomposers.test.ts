@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { letIn, sownGlass } from "./helpers";
-import { createWorld, H, ISOPOD, setCell, SOIL, stepLifeN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
+import { createWorld, H, setCell, SOIL, stepLifeN, totalUnits, totalWater, unitLedger, W, WASTE } from "../src/sim";
 import { emptyWorld, type World } from "../src/sim/world";
 
 const at = (x: number, y: number) => y * W + x;
@@ -66,7 +66,7 @@ describe("the whole cycle", () => {
     expect(w.fixed).toBeGreaterThan(w.burned);
     expect(totalUnits(w)).toBeGreaterThan(units);
     // There are animals, and the leaves that fell have not just piled up.
-    expect(count(w, ISOPOD)).toBeGreaterThan(0);
+    expect(w.creatures.length).toBeGreaterThan(0);
     expect(count(w, WASTE)).toBeLessThan(1500);
   });
 });

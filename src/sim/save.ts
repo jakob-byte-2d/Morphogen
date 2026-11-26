@@ -1,6 +1,7 @@
 import type { Creature } from "./creatures";
 import { SIZE } from "./dims";
 import type { Plant, Tip } from "./plants";
+import { EMPTY, ISOPOD, WASTE } from "./cells";
 import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
 import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
 import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
@@ -157,7 +158,7 @@ export function loadWorld(data: unknown): World | null {
       cells: cellList(r.cells),
       tips: (Array.isArray(r.tips) ? r.tips : []).map((t: Record<string, unknown>): Tip => ({
         i: int(t?.i, 0, SIZE - 1),
-        dx: int(t?.dx, -1, 1),
+        dx: int(t?.dx, -12, 12),
         len: int(t?.len, 0, 1000),
         max: int(t?.max, 0, 1000),
         main: t?.main === true,
@@ -169,6 +170,8 @@ export function loadWorld(data: unknown): World | null {
       dead: false,
     };
     p.genes = cleanPlantGenes(r.genes, plantGenesOf(plantSpecies[p.species]));
+    // Only a bush's branches lean by more than one (see LEAN in plants.ts).
+    if (plantSpecies[p.species].form !== "bush") for (const t of p.tips) t.dx = Math.sign(t.dx);
     if (w.orgs.has(p.id)) continue;
     w.plants.push(p);
     w.orgs.set(p.id, p);
@@ -192,8 +195,32 @@ export function loadWorld(data: unknown): World | null {
     };
     c.genes = cleanCreatureGenes(r.genes, creatureGenesOf(creatureSpecies[c.species]));
     if (w.orgs.has(c.id)) continue;
+    // Before version 18 a creature was a cell in the grid: its body goes into
+    // its store, and it moves onto the creature layer.
+    for (const i of c.cells) {
+      if (w.type[i] !== ISOPOD || w.org[i] !== c.id) continue;
+      c.store += w.food[i];
+      w.type[i] = EMPTY;
+      w.food[i] = 0;
+      w.kind[i] = 0;
+      w.org[i] = 0;
+      w.wet[i] = 0;
+    }
+    c.cells = c.cells.slice(0, 1);
+    if (c.cells.length === 1) {
+      if (w.critter[c.cells[0]] !== 0) continue;
+      w.critter[c.cells[0]] = c.id;
+    }
     w.creatures.push(c);
     w.orgs.set(c.id, c);
+  }
+  // Any old creature cell left over (its creature lost) becomes dead matter.
+  for (let i = 0; i < SIZE; i++) {
+    if (w.type[i] !== ISOPOD) continue;
+    w.type[i] = WASTE;
+    w.kind[i] = 0;
+    w.org[i] = 0;
+    w.wet[i] = 0;
   }
   const chunks = fromBase64(d.chunks as string, CHUNKS_X * CHUNKS_Y);
   if (chunks) w.wakeNext.set(chunks);
