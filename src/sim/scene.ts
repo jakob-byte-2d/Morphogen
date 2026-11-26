@@ -1,6 +1,6 @@
 import { EMPTY, SEED, SOIL, WASTE, WATER } from "./cells";
 import { packSeed, plantGenesOf } from "./genes";
-import { computeLight, emptyWorld, H, MAX_WET, SCALE, setCell, W, type World } from "./world";
+import { computeLight, emptyWorld, H, SCALE, setCell, W, WATER_UNITS, type World } from "./world";
 
 /** Integer interpolation between random heights every `step` columns. */
 function heights(w: World, base: number, spread: number, step: number): Int16Array {
@@ -50,8 +50,9 @@ export function createWorld(seed: number): World {
   const surface = heights(w, 94 * S, 6 * S, 12 * S);
   const pondL = 20 * S;
   const pondR = 52 * S;
-  /** The groundwater table: below it the ground is soaked through. */
+  /** The water table: groundwater fills the glass up to here, and the pond with it. */
   const table = 102 * S;
+  w.groundwater = (H - table) * W * WATER_UNITS;
 
   for (let x = 0; x < W; x++) {
     // A wide dip with a flat bottom and gently sloping sides.
@@ -67,9 +68,6 @@ export function createWorld(seed: number): World {
       const i = y * W + x;
       if (y >= top) {
         setCell(w, i, SOIL);
-        // Soaked below the table, moist above it, and dry at the far left.
-        const dry = x < 3 * S && y < top + 4 * S;
-        w.wet[i] = y >= table ? MAX_WET : dry ? 25 + w.rng.below(20) : 120 + w.rng.below(30);
         // The glass has AREA times as many cells as at scale 1, so each holds
         // a little less: plants, which are lines more than areas, have only
         // about SCALE times as many cells.

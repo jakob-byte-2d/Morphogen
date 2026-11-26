@@ -2,7 +2,7 @@ import { CREATURE_PART, EMPTY, FEED, FLOWER, LEAF, PLANT_PART, ROOT, SAND, SEED,
 import type { PlantSpecies } from "./species";
 import { H, SCALE, W } from "./dims";
 import { inheritPlant, packSeed, plantGenesOf, unpackSeed, type PlantGenes } from "./genes";
-import { clearCell, newOrgId, setCell, wake, WATER_UNITS, type World } from "./world";
+import { clearCell, newOrgId, REACH, setCell, wake, WATER_UNITS, waterTable, type World } from "./world";
 
 /** A growing point: the end of a stem, branch or blade of grass. */
 export interface Tip {
@@ -82,9 +82,6 @@ const MAX_TIPS = 6;
 const SHADE = 64;
 /** Slow-pass checks before a dead leaf nobody eats has rotted (about ten minutes). */
 const LITTER_ROTS = 1500;
-/** Moist soil at the surface gives this much water to the air at a time, down to SOIL_DRIES_TO. */
-const SOIL_BREATH = 8;
-const SOIL_DRIES_TO = 60;
 
 function isGround(t: number): boolean {
   return t === SOIL || t === SAND;
@@ -108,12 +105,11 @@ function cellCost(p: Plant): number {
 function place(w: World, p: Plant, i: number, type: number): boolean {
   const root = type === ROOT;
   if (!root && p.store < 1) return false;
-  const wet = type === ROOT ? w.wet[i] : 0;
   setCell(w, i, type);
   // Leaves and flowers start at a slightly different age each, so they do
   // not all fall at once. Grass blades never fall.
   const ages = type === FLOWER || (type === LEAF && w.plantSpecies[p.species].form !== "grass");
-  w.wet[i] = ages ? 1 + (w.shade[i] & 31) : wet;
+  w.wet[i] = ages ? 1 + (w.shade[i] & 31) : 0;
   w.org[i] = p.id;
   w.kind[i] = p.species;
   w.food[i] = root ? 1 : 3;
@@ -182,8 +178,7 @@ function killPlant(w: World, p: Plant): void {
   const left: number[] = [];
   for (const i of p.cells) {
     if (w.org[i] !== p.id || !PLANT_PART[w.type[i]]) continue;
-    // A root keeps its moisture as soil; a leaf's slot held its age, not water.
-    if (w.type[i] !== ROOT) w.wet[i] = 0;
+    w.wet[i] = 0;
     w.type[i] = w.type[i] === ROOT ? SOIL : WASTE;
     w.org[i] = 0;
     w.kind[i] = 0;
@@ -456,8 +451,10 @@ function growShoot(w: World, p: Plant, sp: PlantSpecies, stems: number[]): boole
 
 /** A plant that has lost its flowers flowers again at its highest point. */
 function regrowFlower(w: World, p: Plant, from: number[]): boolean {
+  // On top of the plant itself (a stem, or a blade of grass), never on top
+  // of another flower, so flowers do not pile up into a column.
   let top = -1;
-  for (const i of from) if (w.type[i] !== ROOT && (top < 0 || i < top)) top = i;
+  for (const i of from) if (w.type[i] !== ROOT && w.type[i] !== FLOWER && (top < 0 || i < top)) top = i;
   if (top < W) return false;
   for (const j of [top - W, top - 1, top + 1]) {
     if (Math.abs((j % W) - (top % W)) > 1 || w.type[j] !== EMPTY) continue;
@@ -511,6 +508,7 @@ function updatePlant(w: World, p: Plant): void {
   const cells = p.cells;
   // Old leaves and flowers fall: sooner in the shade, or when the plant is thirsty.
   const extra = p.thirst > 0 ? 2 : 0;
+  let deepest = -1;
   let n = 0;
   for (let k = 0; k < cells.length; k++) {
     const i = cells[k];
@@ -536,14 +534,19 @@ function updatePlant(w: World, p: Plant): void {
       income += light[i] >> 7;
     } else if (t === ROOT) {
       roots.push(i);
-      if (wet[i] > 12 && p.water < 30 + roots.length * 12) {
-        const take = Math.min(4, wet[i] - 12);
-        wet[i] -= take;
-        p.water += take;
-      }
+      if (i > deepest) deepest = i;
     } else flowers.push(i);
   }
   cells.length = n;
+
+  // Roots that reach down near the water table drink from the groundwater.
+  if (roots.length > 0 && ((deepest / W) | 0) >= waterTable(w) - REACH) {
+    const take = Math.min(30 + roots.length * 12 - p.water, 4 * roots.length, w.groundwater);
+    if (take > 0) {
+      p.water += take;
+      w.groundwater -= take;
+    }
+  }
 
   // Roots take nutrients from the ground around them.
   let taken = 0;
@@ -643,6 +646,7 @@ export function updatePlants(w: World): void {
  */
 export function slowPass(w: World): void {
   const { type, wet, food } = w;
+  const table = waterTable(w);
   // Nutrients spread slowly through the ground with the water in it, from
   // richer soil to poorer: each cell evens out with the one below it or
   // beside it, one cell in eight at a time.
@@ -668,7 +672,7 @@ export function slowPass(w: World): void {
       // just waits for it to move on.
       if (CREATURE_PART[type[below]]) continue;
       if (wet[i] < 255) wet[i]++;
-      const good = isBed(type[below]) && wet[below] > 40 && type[i - W] === EMPTY;
+      const good = isBed(type[below]) && ((below / W) | 0) >= table - REACH && type[i - W] === EMPTY;
       if (good && wet[i] >= SPROUT_AFTER && w.plants.length < MAX_PLANTS) germinate(w, i);
       else if (wet[i] >= SEED_ROTS_AFTER) {
         type[i] = WASTE;
@@ -702,11 +706,6 @@ export function slowPass(w: World): void {
       // Open water slowly evaporates into the air.
       clearCell(w, i);
       w.humidity += WATER_UNITS;
-    } else if (t === SOIL && type[i - W] === EMPTY && wet[i] > SOIL_DRIES_TO + SOIL_BREATH && w.rng.below(64) === 0) {
-      // Moist soil breathes out a little water too, so there is dew in the
-      // glass even when few plants are growing.
-      wet[i] -= SOIL_BREATH;
-      w.humidity += SOIL_BREATH;
     }
   }
 }

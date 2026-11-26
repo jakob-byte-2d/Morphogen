@@ -1,4 +1,4 @@
-import { ABSORB, EMPTY, FIELD_CAPACITY, PLANT_PART, POROUS, POWDER, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "./cells";
+import { ABSORB, EMPTY, PLANT_PART, POWDER, ROOT, SAND, SOIL, STONE, WASTE, WATER } from "./cells";
 import { releaseCreature, updateCreatures, type Creature } from "./creatures";
 import { MAX_ORG_ID } from "./genes";
 import { slowPass, updatePlants, type Plant } from "./plants";
@@ -13,7 +13,7 @@ export { AREA, H, SCALE, SIZE, TICKS_PER_SECOND, W } from "./dims";
  * Bump this whenever the rules change on purpose, and update the golden hash
  * in src/sim/golden.ts.
  */
-export const SIM_VERSION = 13;
+export const SIM_VERSION = 14;
 
 /**
  * The glass is split into chunks of CHUNK × CHUNK cells. Only chunks where
@@ -27,23 +27,26 @@ export const CHUNKS_Y = H / CHUNK;
 /** Every so many steps all chunks are woken, so nothing stays asleep for good. */
 const WAKE_ALL_EVERY = 16;
 
-/** Moisture one water cell carries into the soil. */
+/** Water in one water cell, in units. */
 export const WATER_UNITS = 32;
-export const MAX_WET = 255;
 
 /**
- * Soil or sand this wet is soaked through: it is below the groundwater
- * table. Where such ground meets open air, water seeps out, so open water
- * stands as high as the groundwater does.
+ * The groundwater is one body of water under the whole glass, like the
+ * water in a bath: every cell below its surface (the water table) holds as
+ * much as a water cell, so the table is a level line, one row per ROW_UNITS.
+ * Where the ground dips below it, the water stands in the open: the pond.
  */
-export const SATURATED = MAX_WET - 8;
-/**
- * Open water soaks into ground only up to here, well short of SATURATED:
- * water that has just seeped out of soaked ground does not go straight back.
- */
-const SOAKS_UP_TO = SATURATED - 2 * WATER_UNITS;
+const ROW_UNITS = W * WATER_UNITS;
 
-/** Moisture one dew event puts back into the ground. */
+/** Roots this close above the water table (or below it) drink from it; seeds this close sprout. */
+export const REACH = 12 * SCALE;
+
+/** The row of the water table: cells at this row and below are under it. */
+export function waterTable(w: World): number {
+  return H - Math.min(H, (w.groundwater / ROW_UNITS) | 0);
+}
+
+/** Water one dew event puts back. */
 const DEW = 8 * SCALE;
 /** Plants drink dew and drops until they hold this much water. */
 const PLANT_DRINKS_TO = 200 * SCALE;
@@ -63,7 +66,10 @@ export interface World {
   readonly type: Uint8Array;
   /** A fixed random shade per cell, so every cell looks a little different. */
   readonly shade: Uint8Array;
-  /** Moisture in soil and sand, 0–255. */
+  /**
+   * The age of a leaf, flower, seed or feed, 0–255. (It held moisture in
+   * soil and sand once; the ground now has one groundwater for the glass.)
+   */
   readonly wet: Uint8Array;
   /**
    * Nutrients, in units. In soil they are free for roots to take; in a plant
@@ -87,10 +93,12 @@ export interface World {
   awake: Uint8Array;
   wakeNext: Uint8Array;
   /**
-   * Water in the air, in moisture units. Plants breathe it out; it settles
-   * again as dew.
+   * Water in the air, in units. Plants and the pond breathe it out; it
+   * settles again as dew.
    */
   humidity: number;
+  /** The groundwater, in units: its surface is the water table (see waterTable). */
+  groundwater: number;
   /** Water that has escaped from the glass for good (it is not quite airtight). */
   lostWater: number;
   /** Plant species in this glass. Cells refer to them by index (kind). */
@@ -138,6 +146,7 @@ export function emptyWorld(
     wakeNext: new Uint8Array(CHUNKS_X * CHUNKS_Y).fill(1),
     kind: new Uint8Array(SIZE),
     humidity: 0,
+    groundwater: 0,
     lostWater: 0,
     plantSpecies: plantSpecies.map((p) => ({ ...p, colors: { ...p.colors }, traits: { ...p.traits } })),
     plants: [],
@@ -185,8 +194,6 @@ export function setCell(w: World, i: number, type: number): void {
 
 export function clearCell(w: World, i: number): void {
   wake(w, i);
-  // Moisture in a cell that disappears goes into the air.
-  if (POROUS[w.type[i]]) w.humidity += w.wet[i];
   w.type[i] = EMPTY;
   w.wet[i] = 0;
   w.food[i] = 0;
@@ -284,9 +291,14 @@ function fallPowder(w: World, x: number, y: number, i: number, mark: number): vo
   move(w, i, right ? b + 1 : b - 1, mark);
 }
 
-/** Water falls, soaks into soil and sand that has room, and spreads sideways. */
+/**
+ * Water falls. Where it comes to rest on the ground above the water table
+ * it sinks in and joins the groundwater (on a plant, it runs down to the
+ * ground); below the table it flows, as the pond.
+ */
 function flowWater(w: World, x: number, y: number, i: number, mark: number): void {
-  const { type, wet } = w;
+  const { type } = w;
+  const below = y >= waterTable(w);
   if (y < H - 1) {
     const b = i + W;
     const tb = type[b];
@@ -294,14 +306,8 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       move(w, i, b, mark);
       return;
     }
-    if (POROUS[tb] && wet[b] <= SOAKS_UP_TO) {
-      wet[b] += WATER_UNITS;
-      clearCell(w, i);
-      return;
-    }
-    // A drop on a plant: the plant drinks it, or it runs down through the
-    // plant to the ground, or off it. It never rests on the leaves. Dead
-    // leaves it runs through too.
+    // A drop on a plant: the plant drinks it, or it runs down to the
+    // ground. It never rests on the leaves (or on dead leaves).
     if (shoot(tb) || tb === WASTE) {
       const p = w.orgs.get(w.org[b]);
       if (p && p.kind === "plant" && p.water < PLANT_DRINKS_TO) {
@@ -309,15 +315,20 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
         clearCell(w, i);
         return;
       }
-      let j = b + W;
-      while (j < SIZE && (shoot(type[j]) || type[j] === WASTE)) j += W;
-      if (j < SIZE && POROUS[type[j]] && wet[j] <= SOAKS_UP_TO) {
-        wet[j] += WATER_UNITS;
-        clearCell(w, i);
+      if (!below) {
+        soak(w, i);
         return;
       }
       if (offPlant(w, x, i, mark)) return;
     }
+    // On the ground (or on water standing above the table): it sinks in.
+    if (!below && (tb === SOIL || tb === SAND || tb === ROOT || tb === WATER)) {
+      soak(w, i);
+      return;
+    }
+  }
+  if (y < H - 1) {
+    const b = i + W;
     const dl = x > 0 && type[b - 1] === EMPTY;
     const dr = x < W - 1 && type[b + 1] === EMPTY;
     if (dl || dr) {
@@ -326,93 +337,39 @@ function flowWater(w: World, x: number, y: number, i: number, mark: number): voi
       return;
     }
   }
-  const r = w.rng.nextU32();
-  const d = r & 1 ? 1 : -1;
+  const d = w.rng.nextU32() & 1 ? 1 : -1;
   for (let n = 0; n < 2; n++) {
     const dx = n === 0 ? d : -d;
     const nx = x + dx;
     if (nx < 0 || nx >= W) continue;
-    const k = i + dx;
-    if (type[k] === EMPTY) {
-      move(w, i, k, mark);
-      return;
-    }
-    if (POROUS[type[k]] && wet[k] <= SOAKS_UP_TO && (r & 6) === 0) {
-      wet[k] += WATER_UNITS;
-      clearCell(w, i);
+    if (type[i + dx] === EMPTY) {
+      move(w, i, i + dx, mark);
       return;
     }
   }
 }
 
-/**
- * Dry soil draws water up from moister soil below while the difference from
- * one cell to the next is bigger than this, so the surface stays moist
- * enough for seeds as long as there is water further down.
- */
-const CAPILLARY_STEP = 4;
-
-/**
- * Moisture spreads through soil and sand: sideways and upwards a little,
- * downwards whatever the soil cannot hold against gravity.
- */
-function spreadMoisture(w: World): void {
-  const { type, wet } = w;
-  // Runs every other step and shares with one side each time, alternating.
-  // The row is walked towards that side, so both sides get the same.
-  const side = (w.tick & 2) === 0 ? 1 : -1;
-  for (let y = H - 1; y >= 0; y--) {
-    const rowStart = y * W;
-    for (let n = 0; n < W; n++) {
-      const x = side === 1 ? n : W - 1 - n;
-      const i = rowStart + x;
-      const t = type[i];
-      if (!POROUS[t]) continue;
-      if (y < H - 1) {
-        const b = i + W;
-        if (POROUS[type[b]]) {
-          const excess = wet[i] - FIELD_CAPACITY[t];
-          const room = MAX_WET - wet[b];
-          if (excess > 0 && room > 0) {
-            const f = Math.min(room, (excess + 1) >> 1);
-            wet[i] -= f;
-            wet[b] += f;
-          } else if (wet[b] > wet[i] + CAPILLARY_STEP) {
-            // Capillary rise: dry soil draws water up from below.
-            const f = (wet[b] - wet[i]) >> 2;
-            wet[b] -= f;
-            wet[i] += f;
-          }
-        }
-      }
-      const nx = x + side;
-      if (nx >= 0 && nx < W) {
-        const k = i + side;
-        if (POROUS[type[k]]) {
-          const f = ((wet[i] - wet[k]) / 4) | 0;
-          wet[i] -= f;
-          wet[k] += f;
-        }
-      }
-      if (wet[i] >= SATURATED && (t === SOIL || t === SAND)) seep(w, x, y, i);
-    }
-  }
+/** The water in cell i sinks into the ground and joins the groundwater. */
+function soak(w: World, i: number): void {
+  clearCell(w, i);
+  w.groundwater += WATER_UNITS;
 }
 
 /**
- * Ground soaked through from below (part of the groundwater, not just wet
- * from the top) lets water out into open air beside or above it.
+ * Where the ground lies below the water table, water comes up out of it and
+ * fills the open cells to the table, from the bottom up.
  */
-function seep(w: World, x: number, y: number, i: number): void {
-  const { type, wet } = w;
-  if (y < H - 1 && !(POROUS[type[i + W]] && wet[i + W] >= SATURATED)) return;
-  let j = -1;
-  if (y > 0 && type[i - W] === EMPTY) j = i - W;
-  else if (x > 0 && type[i - 1] === EMPTY) j = i - 1;
-  else if (x < W - 1 && type[i + 1] === EMPTY) j = i + 1;
-  if (j < 0) return;
-  wet[i] -= WATER_UNITS;
-  setCell(w, j, WATER);
+function seep(w: World): void {
+  const { type } = w;
+  for (let y = H - 1; y >= waterTable(w); y--) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (type[i] !== EMPTY || (y < H - 1 && type[i + W] === EMPTY)) continue;
+      if (y < waterTable(w) || w.groundwater < WATER_UNITS) return;
+      setCell(w, i, WATER);
+      w.groundwater -= WATER_UNITS;
+    }
+  }
 }
 
 /**
@@ -438,21 +395,20 @@ export function computeLight(w: World): void {
 
 /**
  * Water in the air settles again as dew. It does not fall as drops: it goes
- * straight into whatever is on top in a random column. Plants drink it, soil
- * and sand soak it up, and only where the ground is soaked does it gather
- * into a puddle on the surface.
+ * straight onto whatever is on top in a random column. Plants drink it, and
+ * on the ground it sinks into the groundwater.
  */
 function condense(w: World): void {
-  // A little water escapes all the time, so the glass needs watering now and then.
-  // (Half a unit per step for every SCALE: plants, which keep the air moist,
-  // have about SCALE times as many cells as at scale 1.)
-  const leak = Math.min(w.humidity, (SCALE + (w.rng.nextU32() & 1)) >> 1);
-  w.humidity -= leak;
-  w.lostWater += leak;
+  // A little water escapes all the time (a unit every four steps: the water
+  // table sinks a couple of rows an hour), so the glass needs watering now and then.
+  if ((w.tick & 3) === 0 && w.humidity > 0) {
+    w.humidity--;
+    w.lostWater++;
+  }
   if (w.humidity < DEW * 4) return;
   // The more water in the air, the more dew.
   const events = Math.min(12 * SCALE, w.humidity >> 8) + (w.rng.below(4) === 0 ? 1 : 0);
-  const { type, wet } = w;
+  const { type } = w;
   for (let k = 0; k < events && w.humidity >= DEW; k++) {
     const x = w.rng.below(W);
     let i = x;
@@ -478,14 +434,10 @@ function condense(w: World): void {
       }
       continue;
     }
-    if (!POROUS[type[i]]) continue;
-    if (wet[i] <= MAX_WET - DEW) {
-      wet[i] += DEW;
+    const t = type[i];
+    if (t === SOIL || t === SAND || t === ROOT) {
+      w.groundwater += DEW;
       w.humidity -= DEW;
-    } else if (w.humidity >= WATER_UNITS && i >= W && type[i - W] === EMPTY) {
-      // Soaked ground: the dew gathers into a puddle.
-      setCell(w, i - W, WATER);
-      w.humidity -= WATER_UNITS;
     }
   }
 }
@@ -509,7 +461,7 @@ export function stepWorld(w: World): void {
   // Things fall and flow SCALE cells per step, so they keep their speed
   // in the glass.
   for (let pass = 0; pass < SCALE; pass++) movePass(w, pass);
-  if ((w.tick & 1) === 0) spreadMoisture(w);
+  if ((w.tick & 1) === 0) seep(w);
   // Light changes slowly (as plants grow), so it is worked out every few steps.
   if ((w.tick & 3) === 0) computeLight(w);
   updatePlants(w);
@@ -565,13 +517,10 @@ function movePass(w: World, pass: number): void {
   }
 }
 
-/** All water in the glass, in moisture units: in cells, in plants and in the air. */
+/** All water in the glass, in units: groundwater, open water, in plants and in the air. */
 export function totalWater(w: World): number {
-  let n = w.humidity;
-  for (let i = 0; i < SIZE; i++) {
-    if (w.type[i] === WATER) n += WATER_UNITS;
-    else if (POROUS[w.type[i]]) n += w.wet[i];
-  }
+  let n = w.humidity + w.groundwater;
+  for (let i = 0; i < SIZE; i++) if (w.type[i] === WATER) n += WATER_UNITS;
   for (const p of w.plants) n += p.water;
   return n;
 }

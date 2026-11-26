@@ -26,6 +26,7 @@ export function hashWorld(w: World): string {
   mix(w.creatureSpecies.length);
   for (const sp of w.creatureSpecies) for (const v of [sp.traits.size, sp.traits.speed, sp.traits.growth, sp.traits.mutation]) mix(v);
   mix(w.humidity);
+  mix(w.groundwater);
   mix(w.lostWater);
   for (const p of w.plants) {
     for (const v of [p.id, p.species, p.energy, p.water, p.store, p.thirst, p.age, p.base, p.maxLeaves, p.maxFlowers, p.cells.length]) mix(v);

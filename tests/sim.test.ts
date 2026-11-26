@@ -41,23 +41,22 @@ describe("falling and flowing", () => {
     for (let x = 0; x < W; x++) setCell(w, at(x, H - 1), STONE);
     for (let y = 0; y < 8; y++) setCell(w, at(36, y), WATER);
     stepWorldN(w, 400);
-    // A drop may have evaporated into the air; nothing else is lost.
-    expect(count(w, WATER) * 32 + w.humidity + w.lostWater).toBe(8 * 32);
+    // A drop may have evaporated into the air, or (resting on another drop,
+    // above the water table) sunk into the groundwater; nothing is lost.
+    expect(count(w, WATER) * 32 + w.humidity + w.groundwater + w.lostWater).toBe(8 * 32);
     let onFloor = 0;
     for (let x = 0; x < W; x++) if (w.type[at(x, H - 2)] === WATER) onFloor++;
     expect(onFloor).toBe(count(w, WATER));
     expect(onFloor).toBeGreaterThan(5);
   });
 
-  it("soaks water into dry soil", () => {
+  it("sinks water that lands on the ground into the groundwater", () => {
     const w = emptyWorld(3);
     for (let x = 0; x < W; x++) for (let y = H - 10; y < H; y++) setCell(w, at(x, y), SOIL);
     for (let y = 0; y < 5; y++) setCell(w, at(20, y), WATER);
     stepWorldN(w, 300);
     expect(count(w, WATER)).toBe(0);
-    let wet = 0;
-    for (let i = 0; i < w.wet.length; i++) wet += w.wet[i];
-    expect(wet).toBe(5 * 32);
+    expect(w.groundwater).toBe(5 * 32);
   });
 
   it("sinks sand through water", () => {
@@ -154,6 +153,7 @@ describe("start scene", () => {
     const water = count(w, WATER);
     expect(water).toBeGreaterThan(20);
     stepWorldN(w, 3000);
-    expect(count(w, WATER)).toBeGreaterThan(water * 0.7);
+    // The plants take up some of the groundwater as they grow, so it sinks a little.
+    expect(count(w, WATER)).toBeGreaterThan(water * 0.5);
   });
 });
