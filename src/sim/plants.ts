@@ -65,7 +65,6 @@ export const THIRST_LIMIT = 90;
 const SPROUT_AFTER = 25;
 /** ...and before it rots if it never gets the chance. */
 const SEED_ROTS_AFTER = 250;
-const MAX_PLANTS = 80;
 /** Slow-pass checks before uneaten feed rots (about a minute). */
 const FEED_ROTS_AFTER = 150;
 const MAX_STORE = 20 * SCALE;
@@ -673,7 +672,7 @@ export function slowPass(w: World): void {
       if (CREATURE_PART[type[below]]) continue;
       if (wet[i] < 255) wet[i]++;
       const good = isBed(type[below]) && ((below / W) | 0) >= table - REACH && type[i - W] === EMPTY;
-      if (good && wet[i] >= SPROUT_AFTER && w.plants.length < MAX_PLANTS) germinate(w, i);
+      if (good && wet[i] >= SPROUT_AFTER) germinate(w, i);
       else if (wet[i] >= SEED_ROTS_AFTER) {
         type[i] = WASTE;
         wet[i] = 0;

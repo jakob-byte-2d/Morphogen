@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { sownGlass } from "./helpers";
 import { applyTool, createWorld, hashWorld, loadWorld, saveWorld, stepLifeN, stepWorldN } from "../src/sim";
 
 describe("saving a glass", () => {
   it("carries on exactly as if it had never been saved", () => {
-    const a = createWorld(5);
+    const a = sownGlass(5);
     stepLifeN(a, 1500);
     applyTool(a, "creature", 22, 40, 0);
     applyTool(a, "creature", 40, 60, 0);

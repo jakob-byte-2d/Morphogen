@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { letIn, sownGlass } from "./helpers";
 import {
   addPlantSpecies,
   applyTool,
@@ -204,8 +205,9 @@ describe("saving genes", () => {
   });
 
   it("gives saved organisms without genes their species' own", () => {
-    const w = createWorld(13);
+    const w = letIn(sownGlass(13));
     stepLifeN(w, 600);
+    expect(w.creatures.length).toBeGreaterThan(0);
     const data = JSON.parse(JSON.stringify(saveWorld(w)));
     for (const c of data.creatures) delete c.genes;
     const back = loadWorld(data)!;

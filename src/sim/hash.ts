@@ -20,8 +20,6 @@ export function hashWorld(w: World): string {
   mix(w.nextOrgId);
   mix(w.fixed);
   mix(w.burned);
-  mix(w.arrivals.length);
-  for (const a of w.arrivals) for (const v of [a.life, a.species, a.x]) mix(v);
   mix(w.plantSpecies.length);
   for (const sp of w.plantSpecies) for (const v of [sp.traits.growth, sp.traits.seed, sp.traits.mutation]) mix(v);
   mix(w.creatureSpecies.length);
@@ -36,7 +34,7 @@ export function hashWorld(w: World): string {
     for (const t of p.tips) for (const v of [t.i, t.dx + 2, t.len, t.max, t.main ? 1 : 0, t.done ? 1 : 0]) mix(v);
   }
   for (const c of w.creatures) {
-    for (const v of [c.id, c.species, c.energy, c.store, c.age, c.mother, c.young, c.cells.length]) mix(v);
+    for (const v of [c.id, c.species, c.energy, c.store, c.age, c.mother, c.young, c.heading + 2, c.target + 1, c.cells.length]) mix(v);
     for (const v of [c.genes.size, c.genes.speed, c.genes.growth, c.genes.mutation, c.genes.tint + 16]) mix(v);
     for (const i of c.cells) mix(i);
   }

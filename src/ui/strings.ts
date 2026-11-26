@@ -4,7 +4,6 @@ export const t = {
   glass: "Terrariet. Dra med én finger for å bruke verktøyet, klyp for å zoome, dobbelttrykk for å zoome inn og ut.",
   tools: "Verktøy",
   catchUp: (percent: number) => `Spoler fram … ${percent} %`,
-  starting: (percent: number) => `Gjør klart glasset … ${percent} %`,
   seeds: "Velg frø",
   creatures: "Velg kryp",
   tool: {
@@ -96,7 +95,7 @@ export const t = {
   help: {
     water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
     soil: "Dra for å strø jord.",
-    seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer i fuktig jord.",
+    seed: "Trykk på frøet for å velge art, og dra for å så. Frø spirer bare der grunnvannet er nær, som rundt dammen. Er det tørt, må du vanne først.",
     creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe ut ett om gangen.",
     look: "Trykk på et dyr med lupen for å se hvem det er: navn, alder, vekt, hvor mett det er og hvem som er mor.",
     feed: "Dryss fôr som krypene kan spise. Fôr som ikke blir spist, råtner.",

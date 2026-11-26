@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { sownGlass } from "./helpers";
 import {
   applyTool,
   computeLight,
@@ -155,7 +156,7 @@ describe("shade", () => {
 
 describe("the closed glass", () => {
   it("keeps a true nutrient ledger: plants add from light, the rest only moves or is burnt", () => {
-    const w = createWorld(42);
+    const w = sownGlass(42);
     const ledger = unitLedger(w);
     const units = totalUnits(w);
     for (let k = 0; k < 10; k++) {
@@ -174,8 +175,8 @@ describe("the closed glass", () => {
     expect(totalWater(w) + w.lostWater).toBe(water);
   });
 
-  it("brings life to the start glass by itself", () => {
-    const w = createWorld(44);
+  it("grows in a new glass what the player sows", () => {
+    const w = sownGlass(44);
     stepLifeN(w, 1200);
     expect(w.plants.length).toBeGreaterThanOrEqual(3);
   });

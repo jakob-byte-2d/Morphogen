@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { letIn, sownGlass } from "./helpers";
 import {
   applyTool,
   createWorld,
@@ -147,24 +148,28 @@ describe("determinism", () => {
 
   it("matches the golden fingerprint", () => {
     expect(GOLDEN.simVersion).toBe(SIM_VERSION);
-    const w = createWorld(GOLDEN.seed);
-    stepLifeN(w, GOLDEN.life);
+    // Sown, with skrukketroll let in halfway.
+    const w = sownGlass(GOLDEN.seed);
+    stepLifeN(w, GOLDEN.life >> 1);
+    letIn(w);
+    stepLifeN(w, GOLDEN.life >> 1);
     stepWorldN(w, GOLDEN.ticks);
     expect(hashWorld(w)).toBe(GOLDEN.hash);
   });
 });
 
 describe("start scene", () => {
-  it("has soil in the bottom quarter and a pond that stays, and no sand or stones", () => {
+  it("has soil in the bottom quarter and a pond that stays, and no sand, stones or life", () => {
     const w = createWorld(42);
     expect(count(w, SOIL)).toBeGreaterThan(W * H * 0.15);
     expect(count(w, SOIL)).toBeLessThan(W * H * 0.3);
     expect(count(w, SAND)).toBe(0);
     expect(count(w, STONE)).toBe(0);
+    expect(w.plants.length + w.creatures.length).toBe(0);
     const water = count(w, WATER);
     expect(water).toBeGreaterThan(20);
     stepLifeN(w, 1000);
-    // The plants take up some of the groundwater as they grow, so it sinks a little.
+    // A little escapes, so it sinks a little.
     expect(count(w, WATER)).toBeGreaterThan(water * 0.5);
   });
 });
