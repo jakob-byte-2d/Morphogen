@@ -1,33 +1,14 @@
-/**
- * Sizes and timing, in a module of their own so every part of the engine can
- * use them at load time without import cycles.
- */
-
-/**
- * Cells per unit of length. Species sizes and many rules are given in units,
- * so organisms keep their size in the glass while the cells get finer. The
- * glass was 72 × 128 cells at scale 1.
- */
+/** The glass: W × H cells, seen from the side. Measures in the rules are in units of SCALE cells. */
+export const W = 144;
+export const H = 256;
 export const SCALE = 2;
-/** Cells per unit of area. */
-export const AREA = SCALE * SCALE;
-
-/** The glass is W cells wide and H cells tall. y = 0 is the top. */
-export const W = 72 * SCALE;
-export const H = 128 * SCALE;
 export const SIZE = W * H;
 
-/**
- * Simulation steps per second at normal speed. These fast steps are for what
- * moves: things falling, water flowing, creatures crawling.
- */
+/** Fast steps per second: for what falls (soil, water drops, seeds). */
 export const TICKS_PER_SECOND = 10;
-
-/**
- * Life (plants growing, leaves ageing, creatures eating, ageing and
- * breeding, rot, dew) goes one step every five minutes, so the glass lives
- * at the pace of a real one: a skrukketroll lives two to three weeks.
- */
+/** One life step every five minutes: for everything that lives, grows, ages and rots. */
 export const LIFE_EVERY = 5 * 60 * TICKS_PER_SECOND;
-/** Life steps in a day. */
 export const LIFE_PER_DAY = (24 * 60) / 5;
+
+/** Bump when the rules change on purpose (and update the golden hash in the tests). */
+export const SIM_VERSION = 1;

@@ -1,6 +1,7 @@
 import { loadWorld, saveWorld, type World } from "../sim";
 
-const GLASS_KEY = "morphogen.glass";
+/** Its own key: the first version, on the same site, keeps its glass. */
+const GLASS_KEY = "morphogen2.glass";
 
 /** Saves the glass in the browser, with the time, so time can pass while the app is closed. */
 export function storeGlass(w: World): void {

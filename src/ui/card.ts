@@ -1,8 +1,8 @@
-import { CREATURE_EVERY, fullness, grownUp, LIFE_EVERY, lifespanOf, TICKS_PER_SECOND, type Creature, type World } from "../sim";
+import { FULL, grownUp, LIFE_PER_DAY, SKRUKKETROLL, type Animal, type World } from "../sim";
 import { creatureIcon, iconCanvas } from "./icons";
 import { t } from "./strings";
 
-/** A creature's name. Which one comes from its number, so it is the same on every phone. */
+/** An animal's name. Which one comes from its number, so it is the same on every phone. */
 export function creatureName(id: number): string {
   // Stir the number well, so neighbours (mother and young) get different names.
   let h = id >>> 0;
@@ -14,22 +14,11 @@ export function creatureName(id: number): string {
   return t.names[(h >>> 0) % t.names.length];
 }
 
-/** Days lived, from creature updates. */
-function days(updates: number): number {
-  return (updates * CREATURE_EVERY * LIFE_EVERY) / TICKS_PER_SECOND / 86400;
+/** Its weight in milligrams: it grows until it is grown up, and a full belly weighs a little. */
+function weight(a: Animal): number {
+  const grown = Math.min(1, a.age / (a.life / 3));
+  return Math.round(44 * (0.15 + 0.85 * grown) + (a.energy / FULL) * 6);
 }
-
-/**
- * Its weight in milligrams: it grows until it is grown up (big-bodied ones
- * grow bigger), and what it has eaten and not yet passed on weighs too.
- */
-function weight(c: Creature): number {
-  const grown = Math.min(1, c.age / (lifespanOf(c) / 3));
-  const adult = 20 + 8 * c.genes.size;
-  return Math.round(adult * (0.15 + 0.85 * grown) + Math.min(c.store, 20) * 0.5);
-}
-
-const TRAITS = ["size", "speed", "growth"] as const;
 
 function el(tag: string, cls = "", text = ""): HTMLElement {
   const e = document.createElement(tag);
@@ -39,13 +28,13 @@ function el(tag: string, cls = "", text = ""): HTMLElement {
 }
 
 /**
- * The card that comes up when the magnifying glass finds a creature: who it
- * is, how old, how heavy, how full, and its family. It only reads the glass.
- * Tapping it closes it.
+ * The card that comes up when the magnifying glass finds an animal: who it
+ * is, how old, how heavy, how full, and its family. It only reads the
+ * glass. Tapping it closes it.
  */
 export class CreatureCard {
   readonly el = document.createElement("div");
-  creature: Creature | null = null;
+  animal: Animal | null = null;
 
   constructor(
     private light: (c: string) => string,
@@ -59,37 +48,35 @@ export class CreatureCard {
     this.el.addEventListener("click", onClose);
   }
 
-  show(c: Creature, w: World): void {
-    this.creature = c;
+  show(a: Animal, w: World): void {
+    this.animal = a;
     this.el.hidden = false;
     this.update(w);
   }
 
   hide(): void {
-    this.creature = null;
+    this.animal = null;
     this.el.hidden = true;
   }
 
-  /** Is the creature on the card still alive in this glass? */
+  /** Is the animal on the card still alive in this glass? */
   alive(w: World): boolean {
-    const c = this.creature;
-    return c !== null && !c.dead && w.orgs.get(c.id) === c;
+    const a = this.animal;
+    return a !== null && !a.dead && w.animals.includes(a);
   }
 
   update(w: World): void {
-    const c = this.creature;
-    if (!c) return;
-    const sp = w.creatureSpecies[c.species] ?? w.creatureSpecies[0];
+    const a = this.animal;
+    if (!a) return;
     const alive = this.alive(w);
-    const age = t.card.days(days(c.age));
-
+    const age = t.card.days(a.age / LIFE_PER_DAY);
     const head = el("div", "card-head");
     const words = el("div");
     words.append(
-      el("strong", "", creatureName(c.id)),
-      el("span", "card-sub", alive ? `${sp.name} · ${t.card.stage(grownUp(c), c.age > lifespanOf(c) * 0.8)}` : c.energy <= 0 ? t.card.starved(age) : t.card.died(age)),
+      el("strong", "", creatureName(a.id)),
+      el("span", "card-sub", alive ? `${SKRUKKETROLL.name} · ${t.card.stage(grownUp(a), a.age > a.life * 0.8)}` : a.starved ? t.card.starved(age) : t.card.died(age)),
     );
-    head.append(iconCanvas(creatureIcon(sp.diet, sp.color, this.light, this.dark)), words);
+    head.append(iconCanvas(creatureIcon(SKRUKKETROLL.color, this.light, this.dark)), words);
 
     const rows = el("dl", "card-rows");
     const row = (label: string, value: HTMLElement | string) => {
@@ -99,9 +86,9 @@ export class CreatureCard {
       rows.append(el("dt", "", label), v);
     };
     row(t.card.age, age);
-    row(t.card.weight, t.card.mg(weight(c)));
+    row(t.card.weight, t.card.mg(weight(a)));
     if (alive) {
-      const f = fullness(c);
+      const f = Math.min(1, a.energy / FULL);
       const bar = el("span", "card-bar");
       const fill = el("span", "card-fill");
       fill.style.width = `${Math.round(f * 100)}%`;
@@ -109,12 +96,9 @@ export class CreatureCard {
       bar.setAttribute("aria-label", f < 0.5 ? t.card.hungry : t.card.full);
       row(f < 0.5 ? t.card.hungry : t.card.full, bar);
     }
-    row(t.card.young, String(c.young));
-    row(t.card.mother, c.mother ? creatureName(c.mother) : t.card.fromOutside);
-    const traits = el("p", "card-traits");
-    traits.textContent = TRAITS.map((k) => `${t.traitName(k, false)} ${"●".repeat(c.genes[k])}${"○".repeat(5 - c.genes[k])}`).join("   ");
-
+    row(t.card.young, String(a.young));
+    row(t.card.mother, a.mother ? creatureName(a.mother) : t.card.fromOutside);
     this.el.classList.toggle("gone", !alive);
-    this.el.replaceChildren(head, rows, traits);
+    this.el.replaceChildren(head, rows);
   }
 }

@@ -1,75 +1,25 @@
-# Morphogen – plan
+# Morphogen 2 – plan
 
-Et lite terrarium i pikselgrafikk, sett fra siden. Hver rute i et rutenett er én celle: jord, sand, vann, plantedeler, kryp. Du steller glasset med noen få verktøy og ser et lukket kretsløp leve: planter vokser mot lyset, kryp spiser dem, alt som dør blir avfall, og nedbrytere gjør avfallet til næring igjen.
-
-Den første versjonen (sirkelceller med bindinger og genomer) ligger på grenen `v0-sirkler`. Det siste forsøket på et kretsløp med den motoren ligger på grenen `fase-5-kretslop`.
+En ny og så enkel som mulig versjon, bygget i lag: bakke, vann, visne blader, planter og dyr, hvert med sine egne korte regler. Den første versjonen (rute for rute, med næringsregnskap og grunnvann) ligger på `main`.
 
 ## Prinsipper
 
-- **Så enkelt som mulig.** Hvert steg bygger det minste som virker.
-- **Mobil først, minimalt grensesnitt.** Glasset fyller skjermen. Ingen tekst på knappene, verktøyene oppfører seg som ekte ting, og glasset viser selv hva det trenger.
-- **Udefinert uttrykk.** Frynsete overganger, en egen nyanse i hver rute, dempet palett, uskarp bakgrunn, støv i lufta, lys ovenfra med myke skygger. Organismer er myke klumper uten skarpe kanter.
-- **Fortere enn virkeligheten.** Et frø spirer på sekunder, en plante er voksen på minutter, glasset finner balansen på rundt en halvtime.
-- **Deterministisk.** Samme glass og samme handlinger gir alltid samme resultat, så glass kan lagres, spoles fram og senere deles.
-
-## Kontroller
-
-- **☰** øverst til høyre åpner menyen.
-- Nederst: **💧 vann, 🟫 jord, 🌱 frø, 🐛 kryp, 🥣 fôr, spade**. Én finger bruker verktøyet der du trykker og drar.
-- **Frø og kryp** har en liten rad som spretter opp, der du velger art. Siste plass er «＋ Ny».
-- **Zoom:** klyp med to fingre (opptil cirka 8×), dra med to fingre, dobbelttrykk for å zoome inn og ut.
-- **Glasset viser hva det trenger:** tørr jord blir lysere, tørste planter gulner, friske planter glitrer, avfall hoper seg opp, fôr som ikke blir spist råtner.
-
-## Arter
-
-- **Planter:** gress, blomst og busk. Vokser rute for rute mot lyset, med røtter i jorda.
-- **Bladlus:** små flekker i klynger. Spiser blader og fôr.
-- **Slim:** en myk masse som kryper langs bakken og spiser bladlus og fôr.
-- **Meitemark:** (fjernet i steg 14) svake streker i jorda som gjorde avfall om til næring.
-- **Sopp:** dukker opp av seg selv på avfall og gjør det om til næring.
-
-## Tempo og utviklermodus
-
-- Vanlig fart: 10 steg i sekundet. Vannet varer så du bare trenger å vanne et par ganger om dagen. Når du åpner appen igjen, spoles glasset fram (maks tilsvarende rundt én time).
-- **Utviklermodus** (`?dev` i adressen, eller sju trykk på versjonsnummeret): fart 1×, 10×, 100× og «maks», pause og ett steg om gangen, kart over fukt, næring og lys, tellere.
-
-## Meny
-
-Innstillinger (vibrasjon, tid mens appen er lukket, fart 1×/2×/4×; lyd kommer hvis spillet får lyd), informasjon, statistikk, arter, hjelp, ta bilde, nytt glass.
-
-## Teknisk
-
-- Rutenett på 144 × 256 (`SCALE` 2: størrelser i artene og reglene er gitt i enheter på 2 ruter). Hver rute har en type, en fast egen nyanse, fukt og næring; levende ruter peker til sin organisme.
-- Bare heltall og seedet tilfeldighet i motoren.
-- Tegning i tre lag: uskarp bakgrunn, lys og skygge (mykt), og rutene skarpe oppå.
-- Hvert steg får tester for reglene og en test som sjekker at samme seed gir samme glass.
+- **Så enkelt som mulig.** Hvert lag er én kort fil. Nye ting kommer som nye lag eller korte regler.
+- **Faste former.** Plantene vokser ikke fritt rute for rute, men viser mer og mer av en fast form per art.
+- **Langsomt.** Et livssteg hvert femte minutt. Planter vokser over dager, skrukketroll lever i to–tre uker, vannet synker omtrent en rad om dagen.
+- **Deterministisk.** Samme glass og samme handlinger gir samme resultat, så glasset kan lagres og spoles fram.
+- **Mobil først, minimalt grensesnitt.**
 
 ## Steg
 
-- [x] **0. Rydde.** Gammel versjon på egen gren, nytt skjelett, ny plan.
-- [x] **1. Glasset.** Luft, stein, jord, sand og vann. Lys ovenfra og skygger, uskarp bakgrunn, støv. Zoom og flytting. 💧, 🟫 og spade. Fartsmotor og `?dev`.
-- [x] **2. Planter.** Gress, blomst og busk som vokser mot lyset, med røtter. Frøvelger. Planter som gulner når de tørster og blir til avfall når de dør.
-- [x] **3. Kryp og fôr.** Bladlus, slim og 🥣.
-- [x] **4. Nedbrytere.** Meitemark og sopp. Vann som fordamper. Kretsløpet er lukket.
-- [x] **5. Tid.** Automatisk lagring, spoling når du kommer tilbake, app på hjemskjermen. Første gang er glasset allerede i gang.
-- [x] **6. Menyen.** Alt i menyen og full utviklermodus.
-- [x] **7. Lag din egen.** «＋» sist i frø- og krypvelgeren: farge, høyde og greiner for planter, farge og mat for kryp.
-- [x] **8. Vi tester sammen.** Lenke, skjermbilder og sjekkliste.
-- [x] **9. Ingen regn.** Fukten i lufta legger seg som dugg i jorda i stedet for å falle som dråper. Vann renner gjennom planter og blir aldri liggende på bladene. Dugg på glasset når lufta er fuktig.
-- [x] **10. Dobbel oppløsning.** 144 × 256 ruter. Planter og kryp like store som før, men med finere detaljer. Zoom til 16×.
-- [x] **11. Egenskaper og mutasjon.** Størrelse, fart, vekst og mutasjon for kryp; vekst, frøstørrelse og mutasjon for planter. Hvert individ har sine egne gener, og arten kan utvikle seg.
-- [x] **12. Jorda blir.** Døde røtter og meitemark blir jord igjen, og begravd avfall blir av og til humus, så jorda ikke spises opp. Steiner uten noe under faller. Fuktig jord fordamper litt, og fukt trekkes lettere opp, så overflaten ikke tørker ut.
-- [x] **13. Grunnvann, ingen steiner.** Under grunnvannsnivået er jorda gjennomvåt, og der den møter lufta siver vannet ut, så dammen står like høyt som grunnvannet. Vanner du mye, stiger det; tørker glasset, synker det. Meitemark lever sparsomt av næringen i jorda når det ikke er avfall.
-- [x] **14. Uten meitemark.** Meitemarken er borte; sopp og råte bryter ned det som dør, og avfallshauger råtner ned i jorda. Startglasset har bare jord, i den nederste firedelen.
-- [x] **15. Uavhengige planter, dyr fra start.** Ingenting legger seg oppå plantene: jord, sand, vann, frø, fôr, avfall og slim faller gjennom dem eller glir av (bladlus kan fortsatt klatre på dem). Et nytt glass sås med ni planter, og når de har vokst, kommer det bladlus og et lite slim, laget av næring fra jorda. Oppstarten spoles fram før du ser glasset. (Balansen er ikke justert.)
-- [x] **16. Ekte kretsløp.** Sol, vann og næring fra jorda blir plante. Plantene lever så lenge de har vann og lys, vokser seg stadig større og langs glasset, og feller gamle blader og blomster (gress visner fra tuppen). Skrukketroll (i stedet for bladlus) lever på bakken, spiser visne blader og bæsjer næring ned i jorda. Slimet spiser skrukketroll og gjør det samme. Dyrene har en levealder. Næringen er et regnskap: plantene lager ny av lys og luft, dyr og råte puster ut halvparten av det de bryter ned, så næringsbalansen er positiv mens glasset vokser. Litt vann slipper ut, så vannbalansen er negativ. Næring sprer seg sakte i jorda, og røttene er tynne. Visne blader holder ikke på vann, så dammen blir stående. Ingen sopp. Startglasset har et tynt lag visne blader. (Balansen er ikke justert.)
-- [x] **17. Bare planteetere, skygge fra bladene.** Slimet er borte: kjeden er plante → visne blader → skrukketroll → næring i jorda → plante. Skrukketrollene spiser aldri levende planter, og alle kryp du lager, lever som dem. Bare blader (og litt blomster) gir skygge, så skyggen følger hvor tett løvet er, både for plantene og på skjermen, der den er jevnet litt ut. (Balansen er ikke justert.)
-- [x] **18. Grunnvann som et badekar.** Grunnvannet er én vannmengde for hele glasset, og grunnvannsflaten er en vannrett linje regnet ut fra den. Vann som lander på bakken over linja, synker ned. Der bakken ligger under linja, står vannet åpent: dammen. Planter drikker når en rot når ned nær linja, og frø spirer der. Ingen fukt i hver jordrute lenger, så motoren er raskere. Gressets frøhoder stables ikke lenger til gule søyler.
-- [x] **19. Tempo som et ekte glass.** To klokker: det som faller, flyter og kryper går som før, mens livet går ett steg hvert femte minutt. Et skrukketroll lever 2–3 uker og blir voksent etter knapt en uke, blader lever omtrent en uke, og plantene vokser litt fra dag til dag. Glasset lever videre mens appen er lukket (opptil tre måneder) og spoles raskt fram. Dammen synker merkbart på en uke eller to uten vanning. Høyst 60 kryp. «+1 dag» og «+1 uke» i utviklermenyen.
-- [x] **20. Navn og lupe.** Hvert dyr har et navn (regnet ut fra nummeret, likt på alle telefoner) og husker mor og antall unger. Lupen i verktøylinja finner dyret nærmest fingeren: en ring følger det, og et kort viser navn, art, alder, om det er ungt, voksent eller gammelt, vekt, hvor mett det er, unger, mor og egenskaper. Kryp-verktøyet slipper ett dyr om gangen, og startglasset får seks enkeltdyr.
-- [x] **21. Tomt glass, levende skrukketroll.** Et nytt glass har jord og vann, men ingenting levende: du sår og slipper inn dyrene selv, og det er klart med en gang. Skrukketrollene går og hviler om hverandre, holder retningen når de går og snur når de møter noe, og går mot mat når de er sultne. Ingen grense for hvor mange dyr og planter det kan være; maten, lyset, vannet og plassen bestemmer.
-- [x] **22. Groper, blink og sult.** Busker og blomster spirer bare i en liten grop (jord eller visne blader tett inntil på begge sider), så du graver først og slipper frøet oppi; gress kan strøs rett på bakken. Et frø som har det det trenger, blinker grønt til det spirer. Skrukketrollene har sitt eget lag oppå rutenettet og går rett gjennom gress, busker og løvhauger, men klatrer ikke i plantene. De sulter i hjel på 3–4 dager mett og 1–1,5 døgn sultne, raskere når de går og leter, og kortet sier «Sultet i hjel». Busken har flere stengler som vifter ut fra roten, greiner seg utover og fyller en rund, tett krone med bær, med mørke, tykke stengler nederst. (Balansen er ikke justert.)
+- [x] **1. Glass, bakke og vann.** Jord faller og glir som sand. Vannet er én linje: dam under den, våt jord rundt den. Vannkanna drypper, og vannet fordamper sakte. Verktøy: vann, jord, spade.
+- [x] **2. Planter og frø.** Gress, blomst og busk med faste former som vokser når røttene når vannet, og visner uten. Gress spirer på bakken; blomster og busker i en grop eller mellom visne blader. Et frø som kan spire, blinker grønt.
+- [x] **3. Visne blader.** Planter slipper blader, som blir liggende som en haug og råtner sakte. Døde planter blir til løv.
+- [x] **4. Skrukketroll.** Går langs bakken (gjennom plantene), spiser visne blader, får unger når de er voksne og mette, sulter i hjel på noen dager uten mat og blir selv til løv. Lupa viser navn, alder, vekt, metthet, unger og mor.
+- [x] **5. Lagring og spoling.** Glasset lagres i nettleseren og spoles fram (opptil tre måneder) når appen åpnes igjen.
 
 ## Senere
 
-Deling med venner, flere glass, mer avanserte genomer, Google Play.
+- Lys og skygge (et eget lag).
+- Flere arter, eller egne arter.
+- Dele glass.

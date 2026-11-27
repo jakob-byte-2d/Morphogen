@@ -7,7 +7,6 @@ export interface DevState {
   stepOnce: boolean;
   /** Days to move the glass on (the quick way), asked for with the +1 dag / +1 uke buttons. */
   skipDays: number;
-  overlay: "none" | "wet" | "food" | "light";
 }
 
 /** Developer panel: speed, pause, single steps and a few numbers. Opened with ?dev. */
@@ -44,14 +43,6 @@ export class DevPanel {
       this.button(t.dev.day, () => (state.skipDays += 1)),
       this.button(t.dev.week, () => (state.skipDays += 7)),
     );
-    for (const o of ["none", "wet", "food", "light"] as const) {
-      const b = this.button(t.dev.overlays[o], () => {
-        state.overlay = o;
-        this.refresh();
-      });
-      b.dataset.overlay = o;
-      this.el.append(b);
-    }
     this.info.className = "dev-info";
     this.counts.className = "dev-info";
     this.el.append(this.info, this.counts);
@@ -60,8 +51,8 @@ export class DevPanel {
 
   private counts = document.createElement("div");
 
-  setCounts(plants: number, creatures: number, units: number, water: number): void {
-    this.counts.textContent = t.dev.counts(plants, creatures, units, water);
+  setCounts(plants: number, seeds: number, animals: number, line: number): void {
+    this.counts.textContent = t.dev.counts(plants, seeds, animals, line);
   }
 
   private button(label: string, fn: () => void): HTMLButtonElement {
@@ -79,9 +70,6 @@ export class DevPanel {
     for (const b of this.el.querySelectorAll<HTMLButtonElement>("button[data-speed]")) {
       const s = Number(b.dataset.speed);
       b.setAttribute("aria-pressed", String(s === 0 ? this.state.max : !this.state.max && s === this.state.speed));
-    }
-    for (const b of this.el.querySelectorAll<HTMLButtonElement>("button[data-overlay]")) {
-      b.setAttribute("aria-pressed", String(b.dataset.overlay === this.state.overlay));
     }
   }
 

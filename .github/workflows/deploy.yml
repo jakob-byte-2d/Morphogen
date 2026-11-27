@@ -1,6 +1,8 @@
 name: Publiser til GitHub Pages
 
-# Runs on every push to main. GitHub Pages is free for public repos;
+# Runs on every push to main, and when CI on the v2 branch asks for it.
+# Publishes main at the root and the v2 branch under /v2/.
+# GitHub Pages is free for public repos;
 # private repos need GitHub Pro. While the repo is private the jobs are
 # skipped instead of failing. Remove the `if:` line if you have Pro.
 #
@@ -33,6 +35,12 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Version 2, from its own branch, under /v2/.
+      - uses: actions/checkout@v7
+        with:
+          ref: v2
+          path: v2src
+      - run: cd v2src && npm ci && npm run build && cp -r dist ../dist/v2
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

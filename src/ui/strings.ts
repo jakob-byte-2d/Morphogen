@@ -5,17 +5,15 @@ export const t = {
   tools: "Verktøy",
   catchUp: (percent: number) => `Spoler fram … ${percent} %`,
   seeds: "Velg frø",
-  creatures: "Velg kryp",
   tool: {
     water: "Vann",
     soil: "Jord",
     seed: "Frø",
-    creature: "Kryp",
-    feed: "Fôr",
+    creature: "Skrukketroll",
     spade: "Spade",
     look: "Lupe",
   } as Record<string, string>,
-  /** The card that comes up when the magnifying glass finds a creature. */
+  /** The card that comes up when the magnifying glass finds an animal. */
   card: {
     close: "Lukk",
     age: "Alder",
@@ -31,7 +29,7 @@ export const t = {
     starved: (age: string) => `Sultet i hjel, ${age} gammel`,
     days: (d: number) => (d < 1 ? "under en dag" : `${Math.floor(d)} ${Math.floor(d) === 1 ? "dag" : "dager"}`),
   },
-  /** Every creature has a name; which one comes from its number, so it is the same on every phone. */
+  /** Every animal has a name; which one comes from its number, so it is the same on every phone. */
   names: [
     "Agnes", "Albert", "Alma", "Arne", "Astrid", "Birger", "Bjørg", "Borghild", "Dagny", "Edvard", "Einar", "Elsa",
     "Erling", "Frida", "Gerd", "Gunnar", "Gudrun", "Halvor", "Hedda", "Helga", "Henrik", "Hilda", "Ingeborg", "Ingrid",
@@ -45,8 +43,6 @@ export const t = {
     back: "Tilbake",
     settings: "Innstillinger",
     info: "Informasjon",
-    stats: "Statistikk",
-    species: "Arter",
     help: "Hjelp",
     snapshot: "Ta bilde",
     newGlass: "Nytt glass",
@@ -54,53 +50,20 @@ export const t = {
   settings: {
     vibration: "Vibrasjon",
     timeAway: "Tiden går mens appen er lukket",
-    speed: "Fart",
   },
   info: {
-    text: "Et lite terrarium der hver rute er én celle. Plantene bygger seg av lys, vann og næring fra jorda og vokser seg stadig større. Gamle blader faller av, og skrukketrollene spiser dem og bæsjer næring ned i jorda, som plantene vokser av igjen. Du steller glasset: vanner, sår, slipper ut kryp, gir fôr og graver.",
-    cycle: ["Planter", "Visne blader", "Skrukketroll", "Jord"],
-    cycleNote: "Lyset gir ny næring, og skrukketroll og råte puster ut noe av den igjen. Skyggen kommer av bladene: jo tettere løv, jo mørkere under. Litt vann slipper ut, så glasset må vannes av og til.",
+    text: "Et lite terrarium. Plantene vokser når røttene når vannet, og slipper visne blader og frø. Skrukketrollene spiser de visne bladene, får unger og blir selv til løv når de dør. Vannet fordamper sakte, så glasset må vannes av og til.",
     version: (app: string, sim: number) => `Versjon ${app} · motor ${sim}`,
     devOn: "Utviklermodus er på",
     devOff: "Utviklermodus er av",
   },
-  stats: {
-    age: (text: string) => `Glasset er ${text} gammelt.`,
-    plants: "Planter",
-    creatures: "Kryp",
-    water: "Vann i glasset",
-    soilFood: "Næring i jorda",
-    waste: "Visne blader",
-    records: "Rekorder",
-    glass: "Glasset",
-    oldestPlant: (text: string) => `Eldste plante: ${text}`,
-    mostCreatures: (n: number) => `Flest kryp på en gang: ${n}`,
-    duration: (seconds: number) => {
-      const d = Math.floor(seconds / 86400);
-      const h = Math.floor((seconds % 86400) / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      if (d > 0) return `${d} ${d === 1 ? "dag" : "dager"} ${h} t`;
-      return h > 0 ? `${h} t ${m} min` : `${m} min`;
-    },
-  },
-  /** A trait's name; plants and creatures share some. */
-  traitName: (k: string, _plant: boolean) =>
-    (({ growth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", mutation: "Mutasjon" }) as Record<string, string>)[k] ?? k,
-  speciesNow: (n: number, text: string) => `Nå, snitt av ${n}: ${text}`,
-  about: {
-    grass: "Lavt og tett. Brer seg utover.",
-    flower: "Stengler med blomster som slipper frø.",
-    bush: "Flere stengler fra roten og en rund, tett krone med bær.",
-    litter: "Spiser visne blader og fôr på bakken, aldri levende planter, og gjødsler jorda. Går rett gjennom gress og busker. Blir voksen etter knapt en uke og lever i to–tre uker, men sulter i hjel på noen dager uten mat.",
-  } as Record<string, string>,
   help: {
-    water: "Dra for å vanne. Vannet synker ned til grunnvannet, og dammen står like høyt som det. Tørr jord er lysere, og planter som tørster, blir gule.",
+    water: "Dra for å vanne. Vannet synker ned, og dammen og den våte jorda står like høyt. Vannet fordamper litt hver dag.",
     soil: "Dra for å strø jord.",
-    seed: "Trykk på frøet for å velge art, og dra for å så. Gress kan du strø rett på bakken. Busker og blomster må ned i en liten grop: grav en med spaden, og slipp frøet oppi. Frø spirer bare der grunnvannet er nær, som rundt dammen. Et frø som har det det trenger, blinker grønt til det spirer.",
-    creature: "Trykk på krypet for å velge art, og trykk i glasset for å slippe ut ett om gangen.",
-    look: "Trykk på et dyr med lupen for å se hvem det er: navn, alder, vekt, hvor mett det er og hvem som er mor.",
-    feed: "Dryss fôr som krypene kan spise. Fôr som ikke blir spist, råtner.",
-    spade: "Dra for å grave bort jord, blader eller planter.",
+    seed: "Trykk på frøet for å velge art, og dra for å så. Gress kan du strø rett på bakken. Busker og blomster må ned i en liten grop: grav en med spaden, og slipp frøet oppi (visne blader rundt frøet holder også). Frø spirer bare der vannet er nær nok. Et frø som har det det trenger, blinker grønt til det spirer.",
+    creature: "Trykk i glasset for å slippe ut ett skrukketroll. De spiser visne blader.",
+    spade: "Dra for å grave bort jord, planter og visne blader.",
+    look: "Trykk på et skrukketroll med lupen for å se hvem det er: navn, alder, vekt, hvor mett det er og hvem som er mor.",
     zoom: "Klyp med to fingre for å zoome og dra med to fingre for å flytte. Dobbelttrykk zoomer inn og ut.",
   } as Record<string, string>,
   newGlass: {
@@ -109,34 +72,6 @@ export const t = {
     no: "Avbryt",
   },
   snapshotName: "morphogen.png",
-  creator: {
-    newItem: "Ny",
-    newPlant: "Ny plante",
-    newCreature: "Nytt kryp",
-    name: "Navn",
-    plantName: (n: number) => `Min plante ${n}`,
-    creatureName: (n: number) => `Mitt kryp ${n}`,
-    form: "Form",
-    forms: { grass: "Gress", flower: "Blomst", bush: "Busk" } as Record<string, string>,
-    leafColor: "Bladfarge",
-    flowerColor: "Blomsterfarge",
-    height: "Høyde",
-    branches: "Greiner",
-    color: "Farge",
-    traits: { plantGrowth: "Vekst", seed: "Frø", size: "Størrelse", speed: "Fart", growth: "Vekst", mutation: "Mutasjon" },
-    /** What the two ends of each trait mean: the trade-off in a few words. */
-    ends: {
-      plantGrowth: ["Langsom, billig", "Rask, dyr"],
-      seed: ["Mange små", "Få store"],
-      size: ["Mange små", "Få store"],
-      speed: ["Treg, sparsom", "Rask, sulten"],
-      growth: ["Langsom, nøysom", "Rask, grådig"],
-      mutation: ["Ingen", "Mye"],
-    } as Record<string, [string, string]>,
-    make: "Lag",
-    cancel: "Avbryt",
-    full: "Glasset har ikke plass til flere arter.",
-  },
   dev: {
     pause: "Pause",
     play: "Spill",
@@ -144,10 +79,7 @@ export const t = {
     max: "maks",
     day: "+1 dag",
     week: "+1 uke",
-    info: (tick: number, fps: number, ms: number, tps: number) =>
-      `steg ${tick} · ${fps} fps · ${ms.toFixed(2)} ms/steg · ${tps} steg/s`,
-    overlays: { none: "Ingen", wet: "Fukt", food: "Næring", light: "Lys" } as Record<string, string>,
-    counts: (plants: number, creatures: number, units: number, water: number) =>
-      `${plants} planter · ${creatures} kryp · ${units} næring · ${water} vann`,
+    info: (tick: number, fps: number, ms: number, tps: number) => `steg ${tick} · ${fps} fps · ${ms.toFixed(2)} ms/steg · ${tps} steg/s`,
+    counts: (plants: number, seeds: number, animals: number, line: number) => `${plants} planter · ${seeds} frø · ${animals} skrukketroll · vann i rad ${line}`,
   },
 };

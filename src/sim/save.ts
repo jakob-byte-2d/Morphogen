@@ -1,229 +1,94 @@
-import type { Creature } from "./creatures";
-import { SIZE } from "./dims";
-import type { Plant, Tip } from "./plants";
-import { EMPTY, ISOPOD, WASTE } from "./cells";
-import { cleanCreatureGenes, cleanPlantGenes, creatureGenesOf, MAX_ORG_ID, plantGenesOf } from "./genes";
-import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
-import { CHUNKS_X, CHUNKS_Y, emptyWorld, SIM_VERSION, type World } from "./world";
+import { H, SIM_VERSION, SIZE, W } from "./dims";
+import { refreshTop } from "./ground";
+import { PLANTS } from "./species";
+import type { RngState } from "./rng";
+import { emptyWorld, type Animal, type Plant, type Seed, type World } from "./world";
 
-/** Oldest engine version whose saved glasses can still be loaded. */
-const SAVES_FROM = 15;
-
-const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-function toBase64(bytes: Uint8Array): string {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i];
-    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    const n = (a << 16) | (b << 8) | c;
-    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63];
-    out += i + 1 < bytes.length ? B64[(n >> 6) & 63] : "=";
-    out += i + 2 < bytes.length ? B64[n & 63] : "=";
-  }
-  return out;
+function toBase64(a: Uint8Array): string {
+  let s = "";
+  for (let k = 0; k < a.length; k += 4096) s += String.fromCharCode(...a.subarray(k, k + 4096));
+  return btoa(s);
 }
 
-function fromBase64(s: string, length: number): Uint8Array | null {
+function fromBase64(s: unknown, n: number): Uint8Array | null {
   if (typeof s !== "string") return null;
-  const out = new Uint8Array(length);
-  let o = 0;
-  for (let i = 0; i + 3 < s.length + 0 && o < length; i += 4) {
-    const v = [0, 1, 2, 3].map((k) => (s[i + k] === "=" ? 0 : B64.indexOf(s[i + k])));
-    if (v.some((x) => x < 0)) return null;
-    const n = (v[0] << 18) | (v[1] << 12) | (v[2] << 6) | v[3];
-    out[o++] = (n >> 16) & 255;
-    if (o < length) out[o++] = (n >> 8) & 255;
-    if (o < length) out[o++] = n & 255;
+  try {
+    const bin = atob(s);
+    if (bin.length !== n) return null;
+    const a = new Uint8Array(n);
+    for (let k = 0; k < n; k++) a[k] = bin.charCodeAt(k);
+    return a;
+  } catch {
+    return null;
   }
-  return o === length ? out : null;
 }
 
-/** A glass as plain data, ready for JSON. */
-export interface SavedGlass {
-  v: number;
-  seed: number;
-  tick: number;
-  life: number;
-  rng: number[];
-  humidity: number;
-  groundwater: number;
-  lostWater: number;
-  nextOrgId: number;
-  fixed?: number;
-  burned?: number;
-  cells: Record<"type" | "shade" | "wet" | "food" | "kind" | "org" | "light", string>;
-  /** Which parts of the glass are at rest; needed to carry on exactly. */
-  chunks: string;
-  plantSpecies: unknown[];
-  creatureSpecies: unknown[];
-  plants: unknown[];
-  creatures: unknown[];
+/** A whole number in [lo, hi], or the fallback. */
+function int(v: unknown, lo: number, hi: number, fallback = lo): number {
+  return typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi ? v : fallback;
 }
 
-export function saveWorld(w: World): SavedGlass {
+/** The glass as plain data (JSON), to keep and to load again. */
+export function saveWorld(w: World) {
   return {
     v: SIM_VERSION,
     seed: w.seed,
+    rng: w.rng.getState(),
     tick: w.tick,
     life: w.life,
-    rng: [...w.rng.getState()],
-    humidity: w.humidity,
-    groundwater: w.groundwater,
-    lostWater: w.lostWater,
-    nextOrgId: w.nextOrgId,
-    fixed: w.fixed,
-    burned: w.burned,
-    cells: {
-      type: toBase64(w.type),
-      shade: toBase64(w.shade),
-      wet: toBase64(w.wet),
-      food: toBase64(w.food),
-      kind: toBase64(w.kind),
-      org: toBase64(new Uint8Array(w.org.buffer, w.org.byteOffset, w.org.byteLength)),
-      // Light is worked out only every few steps, so it is part of the state.
-      light: toBase64(w.light),
-    },
-    chunks: toBase64(w.wakeNext),
-    plantSpecies: w.plantSpecies,
-    creatureSpecies: w.creatureSpecies,
-    plants: w.plants,
-    creatures: w.creatures,
+    nextId: w.nextId,
+    waterLine: w.waterLine,
+    ground: toBase64(w.ground),
+    litter: toBase64(w.litter),
+    drops: w.drops.map((d) => [d.x, d.y]),
+    seeds: w.seeds.map((s) => [s.id, s.species, s.x, s.y, s.ready, s.age]),
+    plants: w.plants.map((p) => [p.id, p.species, p.x, p.y, p.age, p.size, p.grow, p.thirst, p.life]),
+    animals: w.animals.map((a) => [a.id, a.x, a.dir, a.age, a.life, a.energy, a.mother, a.young]),
   };
 }
 
-function int(v: unknown, min: number, max: number): number {
-  const n = typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : min;
-  return Math.min(max, Math.max(min, n));
-}
+export type SavedWorld = ReturnType<typeof saveWorld>;
 
-function cellList(v: unknown): number[] {
-  return Array.isArray(v) ? v.map((i) => int(i, 0, SIZE - 1)) : [];
-}
-
-/**
- * Restores a saved glass. Saved data may be old, damaged or from someone
- * else, so every value is checked; returns null if it cannot be used.
- */
+/** Loads a saved glass, or null if the data is damaged or from another version. */
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
-  const d = data as Partial<SavedGlass>;
-  // Glasses saved from version 15 on (life at the pace of a real glass) carry on under newer rules.
-  if (typeof d.v !== "number" || d.v < SAVES_FROM || d.v > SIM_VERSION || !d.cells || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
-  const plantSpecies = (Array.isArray(d.plantSpecies) ? d.plantSpecies : []).slice(0, 64).map(normalizePlantSpecies);
-  const creatureSpecies = (Array.isArray(d.creatureSpecies) ? d.creatureSpecies : []).slice(0, 64).map(normalizeCreatureSpecies);
-  if (plantSpecies.length === 0 || creatureSpecies.length === 0) return null;
-  const w = emptyWorld(int(d.seed, 0, 0xffffffff), plantSpecies, creatureSpecies);
-  const c = d.cells;
-  const arrays = {
-    type: fromBase64(c.type, SIZE),
-    shade: fromBase64(c.shade, SIZE),
-    wet: fromBase64(c.wet, SIZE),
-    food: fromBase64(c.food, SIZE),
-    kind: fromBase64(c.kind, SIZE),
-    org: fromBase64(c.org, SIZE * 2),
-    light: fromBase64(c.light, SIZE),
-  };
-  if (Object.values(arrays).some((a) => a === null)) return null;
-  w.type.set(arrays.type!);
-  w.shade.set(arrays.shade!);
-  w.wet.set(arrays.wet!);
-  w.food.set(arrays.food!);
-  w.kind.set(arrays.kind!);
-  new Uint8Array(w.org.buffer).set(arrays.org!);
-  w.light.set(arrays.light!);
-  w.tick = int(d.tick, 0, 2 ** 52);
-  w.life = int(d.life, 0, 2 ** 31);
-  w.rng.setState(d.rng.map((v) => int(v, -(2 ** 31), 2 ** 32) | 0) as [number, number, number, number]);
-  w.humidity = int(d.humidity, 0, 2 ** 31);
-  w.groundwater = int(d.groundwater, 0, 2 ** 31);
-  w.lostWater = int(d.lostWater, 0, 2 ** 31);
-  w.nextOrgId = int(d.nextOrgId, 1, MAX_ORG_ID);
-  w.fixed = int(d.fixed, 0, 2 ** 52);
-  w.burned = int(d.burned, 0, 2 ** 52);
-
-  for (const raw of Array.isArray(d.plants) ? d.plants : []) {
-    const r = (raw ?? {}) as Record<string, unknown>;
-    const p: Plant = {
-      kind: "plant",
-      id: int(r.id, 1, MAX_ORG_ID),
-      species: int(r.species, 0, plantSpecies.length - 1),
-      energy: int(r.energy, -100000, 100000),
-      water: int(r.water, 0, 100000),
-      store: int(r.store, 0, 100000),
-      thirst: int(r.thirst, 0, 1000),
-      age: int(r.age, 0, 2 ** 31),
-      base: int(r.base, 0, SIZE - 1),
-      cells: cellList(r.cells),
-      tips: (Array.isArray(r.tips) ? r.tips : []).map((t: Record<string, unknown>): Tip => ({
-        i: int(t?.i, 0, SIZE - 1),
-        dx: int(t?.dx, -12, 12),
-        len: int(t?.len, 0, 1000),
-        max: int(t?.max, 0, 1000),
-        main: t?.main === true,
-        done: t?.done === true,
-      })),
-      maxLeaves: int(r.maxLeaves, 0, SIZE),
-      maxFlowers: int(r.maxFlowers, 0, SIZE),
-      genes: plantGenesOf(plantSpecies[0]),
-      dead: false,
-    };
-    p.genes = cleanPlantGenes(r.genes, plantGenesOf(plantSpecies[p.species]));
-    // Only a bush's branches lean by more than one (see LEAN in plants.ts).
-    if (plantSpecies[p.species].form !== "bush") for (const t of p.tips) t.dx = Math.sign(t.dx);
-    if (w.orgs.has(p.id)) continue;
-    w.plants.push(p);
-    w.orgs.set(p.id, p);
-  }
-  for (const raw of Array.isArray(d.creatures) ? d.creatures : []) {
-    const r = (raw ?? {}) as Record<string, unknown>;
-    const c: Creature = {
-      kind: "creature",
-      id: int(r.id, 1, MAX_ORG_ID),
-      species: int(r.species, 0, creatureSpecies.length - 1),
-      energy: int(r.energy, -100000, 100000),
-      store: int(r.store, 0, 100000),
-      age: int(r.age, 0, 2 ** 31),
-      cells: cellList(r.cells),
-      genes: creatureGenesOf(creatureSpecies[0]),
-      mother: int(r.mother, 0, MAX_ORG_ID),
-      young: int(r.young, 0, 100000),
-      heading: int(r.heading, -1, 1) || 1,
-      target: int(r.target, -1, SIZE - 1),
-      dead: false,
-    };
-    c.genes = cleanCreatureGenes(r.genes, creatureGenesOf(creatureSpecies[c.species]));
-    if (w.orgs.has(c.id)) continue;
-    // Before version 18 a creature was a cell in the grid: its body goes into
-    // its store, and it moves onto the creature layer.
-    for (const i of c.cells) {
-      if (w.type[i] !== ISOPOD || w.org[i] !== c.id) continue;
-      c.store += w.food[i];
-      w.type[i] = EMPTY;
-      w.food[i] = 0;
-      w.kind[i] = 0;
-      w.org[i] = 0;
-      w.wet[i] = 0;
-    }
-    c.cells = c.cells.slice(0, 1);
-    if (c.cells.length === 1) {
-      if (w.critter[c.cells[0]] !== 0) continue;
-      w.critter[c.cells[0]] = c.id;
-    }
-    w.creatures.push(c);
-    w.orgs.set(c.id, c);
-  }
-  // Any old creature cell left over (its creature lost) becomes dead matter.
-  for (let i = 0; i < SIZE; i++) {
-    if (w.type[i] !== ISOPOD) continue;
-    w.type[i] = WASTE;
-    w.kind[i] = 0;
-    w.org[i] = 0;
-    w.wet[i] = 0;
-  }
-  const chunks = fromBase64(d.chunks as string, CHUNKS_X * CHUNKS_Y);
-  if (chunks) w.wakeNext.set(chunks);
-  else w.wakeNext.fill(1);
+  const d = data as Record<string, unknown>;
+  if (d.v !== SIM_VERSION || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
+  const ground = fromBase64(d.ground, SIZE);
+  const litter = fromBase64(d.litter, W);
+  if (!ground || !litter) return null;
+  const big = 2 ** 31 - 1;
+  const w = emptyWorld(int(d.seed, 0, 2 ** 32));
+  w.rng.setState((d.rng as number[]).map((v) => v | 0) as RngState);
+  w.tick = int(d.tick, 0, Number.MAX_SAFE_INTEGER);
+  w.life = int(d.life, 0, big);
+  w.nextId = int(d.nextId, 1, big, 1);
+  w.waterLine = int(d.waterLine, 0, H * 256, H * 256);
+  w.ground.set(ground);
+  w.litter.set(litter);
+  w.settled = false;
+  refreshTop(w);
+  const rows = (v: unknown, n: number): number[][] =>
+    Array.isArray(v) ? v.filter((r): r is number[] => Array.isArray(r) && r.length === n && r.every((x) => Number.isInteger(x))) : [];
+  const x = (v: number) => Math.max(0, Math.min(W - 1, v));
+  const y = (v: number) => Math.max(0, Math.min(H - 1, v));
+  w.drops = rows(d.drops, 2).map(([a, b]) => ({ x: x(a), y: y(b) }));
+  w.seeds = rows(d.seeds, 6).map(([id, sp, a, b, ready, age]): Seed => ({ id, species: Math.max(0, Math.min(PLANTS.length - 1, sp)), x: x(a), y: y(b), ready, age }));
+  w.plants = rows(d.plants, 9).map(
+    ([id, sp, a, b, age, size, grow, thirst, life]): Plant => ({
+      id,
+      species: Math.max(0, Math.min(PLANTS.length - 1, sp)),
+      x: x(a),
+      y: y(b),
+      age,
+      size: Math.max(0, Math.min(PLANTS[Math.max(0, Math.min(PLANTS.length - 1, sp))].full, size)),
+      grow,
+      thirst,
+      life,
+    }),
+  );
+  w.animals = rows(d.animals, 8).map(
+    ([id, a, dir, age, life, energy, mother, young]): Animal => ({ id, x: x(a), dir: dir < 0 ? -1 : 1, age, life, energy, mother, young, dead: false, starved: false }),
+  );
   return w;
 }

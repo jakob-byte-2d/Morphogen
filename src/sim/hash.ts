@@ -1,42 +1,24 @@
 import type { World } from "./world";
 
-/** FNV-1a fingerprint of the whole state. Equal hashes mean equal glasses. */
+/** A fingerprint of the whole glass (FNV-1a), for tests: the same glass gives the same hash. */
 export function hashWorld(w: World): string {
   let h = 0x811c9dc5;
   const mix = (v: number) => {
-    h ^= v & 0xff;
+    h ^= v & 0xffff;
     h = Math.imul(h, 0x01000193);
-    h ^= (v >>> 8) & 0xff;
-    h = Math.imul(h, 0x01000193);
-    h ^= (v >>> 16) & 0xff;
-    h = Math.imul(h, 0x01000193);
-    h ^= (v >>> 24) & 0xff;
+    h ^= (v >>> 16) & 0xffff;
     h = Math.imul(h, 0x01000193);
   };
   mix(w.tick);
   mix(w.life);
+  mix(w.nextId);
+  mix(w.waterLine);
   for (const v of w.rng.getState()) mix(v);
-  for (const arr of [w.type, w.shade, w.wet, w.food, w.org, w.kind, w.light]) for (let i = 0; i < arr.length; i++) mix(arr[i]);
-  mix(w.nextOrgId);
-  mix(w.fixed);
-  mix(w.burned);
-  mix(w.plantSpecies.length);
-  for (const sp of w.plantSpecies) for (const v of [sp.traits.growth, sp.traits.seed, sp.traits.mutation]) mix(v);
-  mix(w.creatureSpecies.length);
-  for (const sp of w.creatureSpecies) for (const v of [sp.traits.size, sp.traits.speed, sp.traits.growth, sp.traits.mutation]) mix(v);
-  mix(w.humidity);
-  mix(w.groundwater);
-  mix(w.lostWater);
-  for (const p of w.plants) {
-    for (const v of [p.id, p.species, p.energy, p.water, p.store, p.thirst, p.age, p.base, p.maxLeaves, p.maxFlowers, p.cells.length]) mix(v);
-    for (const v of [p.genes.growth, p.genes.seed, p.genes.mutation, p.genes.tint + 16]) mix(v);
-    for (const i of p.cells) mix(i);
-    for (const t of p.tips) for (const v of [t.i, t.dx + 2, t.len, t.max, t.main ? 1 : 0, t.done ? 1 : 0]) mix(v);
-  }
-  for (const c of w.creatures) {
-    for (const v of [c.id, c.species, c.energy, c.store, c.age, c.mother, c.young, c.heading + 2, c.target + 1, c.cells.length]) mix(v);
-    for (const v of [c.genes.size, c.genes.speed, c.genes.growth, c.genes.mutation, c.genes.tint + 16]) mix(v);
-    for (const i of c.cells) mix(i);
-  }
+  for (let i = 0; i < w.ground.length; i++) mix(w.ground[i]);
+  for (let i = 0; i < w.litter.length; i++) mix(w.litter[i]);
+  for (const d of w.drops) [d.x, d.y].forEach(mix);
+  for (const s of w.seeds) [s.id, s.species, s.x, s.y, s.ready, s.age].forEach(mix);
+  for (const p of w.plants) [p.id, p.species, p.x, p.y, p.age, p.size, p.grow, p.thirst, p.life].forEach(mix);
+  for (const a of w.animals) [a.id, a.x, a.dir, a.age, a.life, a.energy, a.mother, a.young].forEach(mix);
   return (h >>> 0).toString(16).padStart(8, "0");
 }

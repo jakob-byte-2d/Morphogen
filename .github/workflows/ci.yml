@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
   pull_request:
 
 permissions:
@@ -21,3 +21,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # A push to v2 that passes publishes it (under /v2/) through the deploy workflow on main.
+  publish-v2:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/v2'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run deploy.yml --ref main --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,6 @@
 // Network first, so the app is always up to date; the cache is the fallback
 // when there is no connection.
-const CACHE = "morphogen-v1";
+const CACHE = "morphogen2-v1";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));

@@ -1,92 +1,61 @@
-import { EMPTY, FEED, SEED, SOIL, WATER } from "./cells";
-import { releaseCreature } from "./creatures";
-import { packSeed, plantGenesOf } from "./genes";
-import { normalizeCreatureSpecies, normalizePlantSpecies } from "./species";
-import { clearCell, H, SCALE, setCell, W, type World } from "./world";
+import { H, SCALE, W } from "./dims";
+import { refreshTop } from "./ground";
+import { dropSeed } from "./plants";
+import { FULL, spawnAnimal } from "./animals";
+import { EMPTY, SOIL, type World } from "./world";
 
-export type Tool = "water" | "soil" | "seed" | "creature" | "feed" | "spade";
+export type Tool = "water" | "soil" | "seed" | "creature" | "spade";
 
-/** Calls fn for every cell within radius r of (cx, cy). */
-function around(cx: number, cy: number, r: number, fn: (i: number) => void): void {
-  const r2 = r * r + r;
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy > r2) continue;
-      const x = cx + dx;
-      const y = cy + dy;
-      if (x < 0 || y < 0 || x >= W || y >= H) continue;
-      fn(y * W + x);
-    }
-  }
-}
+const inside = (x: number, y: number) => x >= 0 && x < W && y >= 0 && y < H;
 
 /**
- * Uses a tool once at cell (cx, cy). Called about ten times a second while
- * the player holds a finger on the glass.
+ * The player's tools, at cell (x, y). Called about ten times a second while
+ * a finger is held down (the creature once per tap). `species` is the seed
+ * chosen.
  */
-export function applyTool(w: World, tool: Tool, cx: number, cy: number, species = 0): void {
-  switch (tool) {
-    case "feed":
-      // A few flakes at a time, like fish food.
-      for (let k = 0; k < SCALE; k++) {
-        const x = cx + w.rng.below(4 * SCALE + 1) - 2 * SCALE;
-        const y = cy + w.rng.below(2 * SCALE + 1) - SCALE;
-        if (w.rng.below(2) !== 0 || x < 0 || y < 0 || x >= W || y >= H) continue;
-        const i = y * W + x;
-        if (w.type[i] !== EMPTY) continue;
-        setCell(w, i, FEED);
-        w.food[i] = 2;
-      }
-      break;
-    case "creature":
-      releaseCreature(w, cx, cy, species);
-      break;
-    case "seed": {
-      // About one seed every other time, somewhere under the finger.
-      const x = cx + w.rng.below(2 * SCALE + 1) - SCALE;
-      const y = cy + w.rng.below(2 * SCALE + 1) - SCALE;
-      if (w.rng.below(2) !== 0 || x < 0 || y < 0 || x >= W || y >= H) break;
-      const i = y * W + x;
-      if (w.type[i] !== EMPTY) break;
-      setCell(w, i, SEED);
-      w.kind[i] = Math.min(species, w.plantSpecies.length - 1);
-      w.food[i] = 1;
-      w.org[i] = packSeed(plantGenesOf(w.plantSpecies[w.kind[i]]));
-      break;
+export function applyTool(w: World, tool: Tool, x: number, y: number, species = 0): void {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (tool === "water") {
+    // The watering can: a couple of drops that fall.
+    for (let k = 0; k < 2; k++) {
+      const dx = x + w.rng.below(5) - 2;
+      if (inside(dx, y) && w.ground[y * W + dx] === EMPTY) w.drops.push({ x: dx, y });
     }
-    case "water":
-      around(cx, cy, SCALE, (i) => {
-        if (w.type[i] === EMPTY && w.rng.below(3) === 0) setCell(w, i, WATER);
-      });
-      break;
-    case "soil":
-      around(cx, cy, SCALE, (i) => {
-        if (w.type[i] !== EMPTY || w.rng.below(3) !== 0) return;
-        setCell(w, i, SOIL);
-        w.food[i] = 4;
-      });
-      break;
-    case "spade":
-      around(cx, cy, 2 * SCALE, (i) => {
-        if (w.type[i] !== EMPTY) clearCell(w, i);
-      });
-      break;
+  } else if (tool === "soil") {
+    // A pinch of soil that falls and settles.
+    for (let k = 0; k < 3; k++) {
+      const dx = x + w.rng.below(5) - 2;
+      const dy = y + w.rng.below(5) - 2;
+      if (inside(dx, dy) && w.ground[dy * W + dx] === EMPTY) {
+        w.ground[dy * W + dx] = SOIL;
+        w.settled = false;
+      }
+    }
+  } else if (tool === "seed") {
+    if (w.rng.below(3) === 0) dropSeed(w, species, x + w.rng.below(3) - 1, y);
+  } else if (tool === "creature") {
+    const a = spawnAnimal(w, x, FULL);
+    if (a) a.dropY = y;
+  } else if (tool === "spade") {
+    // Digs away soil, and the plants, seeds and dead leaves in it.
+    const r = 2 * SCALE;
+    const r2 = r * r + r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r2 || !inside(x + dx, y + dy)) continue;
+        const i = (y + dy) * W + x + dx;
+        if (w.ground[i] === SOIL) w.ground[i] = EMPTY;
+      }
+    }
+    const hit = (px: number, py: number) => (px - x) * (px - x) + (py - y) * (py - y) <= r2;
+    w.plants = w.plants.filter((p) => !hit(p.x, p.y));
+    w.seeds = w.seeds.filter((s) => !hit(s.x, s.y));
+    for (let dx = -r; dx <= r; dx++) {
+      const c = x + dx;
+      if (c >= 0 && c < W && hit(c, w.top[c] - 1)) w.litter[c] = 0;
+    }
+    refreshTop(w);
+    w.settled = false;
   }
-}
-
-/** Most species a glass can hold of each kind. */
-export const MAX_SPECIES = 64;
-
-/** Adds a plant species the player made. Returns its index, or -1 if the glass is full. */
-export function addPlantSpecies(w: World, raw: unknown): number {
-  if (w.plantSpecies.length >= MAX_SPECIES) return -1;
-  w.plantSpecies.push(normalizePlantSpecies(raw));
-  return w.plantSpecies.length - 1;
-}
-
-/** Adds a creature species the player made. Returns its index, or -1 if the glass is full. */
-export function addCreatureSpecies(w: World, raw: unknown): number {
-  if (w.creatureSpecies.length >= MAX_SPECIES) return -1;
-  w.creatureSpecies.push(normalizeCreatureSpecies(raw));
-  return w.creatureSpecies.length - 1;
 }

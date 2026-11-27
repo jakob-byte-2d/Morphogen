@@ -1,4 +1,4 @@
-import { H, W } from "../sim/world";
+import { H, W } from "../sim/dims";
 
 export const MIN_ZOOM = 1;
 export const MAX_ZOOM = 16;

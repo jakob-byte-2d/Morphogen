@@ -1,32 +1,27 @@
 import {
-  addCreatureSpecies,
-  addPlantSpecies,
   applyTool,
   createWorld,
   H,
   LIFE_EVERY,
   LIFE_PER_DAY,
-  sleepWorld,
+  PLANTS,
+  SCALE,
+  skip,
   stepWorld,
   TICKS_PER_SECOND,
-  SCALE,
-  type Creature,
+  type Animal,
   type Tool,
-  totalUnits,
-  totalWater,
   W,
+  waterLine,
   type World,
 } from "./sim";
 import { CreatureCard } from "./ui/card";
-import { Creator } from "./ui/creator";
 import { DevPanel, type DevState } from "./ui/dev";
-import { creatureIcon, plantIcon } from "./ui/icons";
+import { plantIcon } from "./ui/icons";
 import { attachInput } from "./ui/input";
 import { Menu } from "./ui/menu";
-import { loadLibrary, saveLibrary } from "./ui/library";
 import { Picker } from "./ui/picker";
 import { loadSettings, saveSettings } from "./ui/settings";
-import { forgetHistory, loadHistory, record, SAMPLE_EVERY, saveHistory } from "./ui/stats";
 import { forgetGlass, restoreGlass, storeGlass } from "./ui/storage";
 import { t } from "./ui/strings";
 import { Toolbar } from "./ui/toolbar";
@@ -35,7 +30,7 @@ import { Camera } from "./view/camera";
 import { darken, lighten } from "./view/palette";
 import { Renderer } from "./view/renderer";
 
-const APP_VERSION = "0.11";
+const APP_VERSION = "2.0";
 
 const params = new URLSearchParams(location.search);
 const seedParam = Number(params.get("seed"));
@@ -45,34 +40,24 @@ if (params.has("dev")) settings.devMode = true;
 
 /** Time passes while the app is closed: up to three months are made up for. */
 const MAX_CATCH_UP = 90 * 24 * 3600 * TICKS_PER_SECOND;
-const ticksFor = (ms: number) =>
-  settings.timeAway ? Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND * settings.speed))) : 0;
+const ticksFor = (ms: number) => (settings.timeAway ? Math.max(0, Math.min(MAX_CATCH_UP, Math.floor((ms / 1000) * TICKS_PER_SECOND))) : 0);
 
 // The glass from last time, if there is one (?seed=… or ?fresh starts a new one).
 let world: World;
 let catchUp = { left: 0, total: 0 };
 const saved = params.has("seed") || params.has("fresh") ? null : restoreGlass();
-const history = saved ? loadHistory() : (forgetHistory(), loadHistory());
 if (saved) {
   world = saved.world;
   const n = ticksFor(Date.now() - saved.savedAt);
   catchUp = { left: n, total: n };
 } else {
+  // A new glass has soil and water, and nothing living.
   world = createWorld(seed);
-  // Species the player has made before come along into a new glass.
-  const lib = loadLibrary();
-  for (const sp of lib.plants) addPlantSpecies(world, sp);
-  for (const sp of lib.creatures) addCreatureSpecies(world, sp);
-  // A new glass has soil and water, and nothing living: it is ready at once.
 }
-let nextSample = Math.ceil((world.tick + 1) / SAMPLE_EVERY) * SAMPLE_EVERY;
 
-/** Saves the glass and its history, unless it is being thrown away. */
 let discarding = false;
 function keep(): void {
-  if (discarding) return;
-  storeGlass(world);
-  saveHistory(history);
+  if (!discarding) storeGlass(world);
 }
 
 const app = document.getElementById("app")!;
@@ -93,121 +78,68 @@ glass.append(ring, catchUpLabel);
 
 /** Tools on the bar, in the order they appear. The magnifying glass only looks. */
 type BarTool = Tool | "look";
-const TOOLS: BarTool[] = ["water", "soil", "seed", "creature", "feed", "spade", "look"];
+const TOOLS: BarTool[] = ["water", "soil", "seed", "creature", "spade", "look"];
 let tool: BarTool = "water";
 let plantSpecies = 1;
-let creatureSpecies = 0;
 const light = (c: string) => lighten(c, 0.25);
 const dark = (c: string) => darken(c, 0.2);
 
 const seedPicker = new Picker(t.seeds, (k) => (plantSpecies = k));
-const creaturePicker = new Picker(t.creatures, (k) => (creatureSpecies = k));
-const creator = new Creator(light, dark);
-
-/** The last item in each row makes a new species, which joins the row and is chosen. */
-function fillPickers(): void {
-  seedPicker.setItems(
-    world.plantSpecies.map((sp) => ({ label: sp.name, icon: plantIcon(sp.form, sp.colors, light, dark) })),
-    plantSpecies,
-    {
-      label: t.creator.newItem,
-      open: () =>
-        creator.openPlant(world.plantSpecies.length - 2, (sp) => {
-          const k = addPlantSpecies(world, sp);
-          if (k < 0) return;
-          const lib = loadLibrary();
-          lib.plants.push(world.plantSpecies[k]);
-          saveLibrary(lib);
-          plantSpecies = k;
-          fillPickers();
-        }),
-    },
-  );
-  creaturePicker.setItems(
-    world.creatureSpecies.map((sp) => ({ label: sp.name, icon: creatureIcon(sp.diet, sp.color, light, dark) })),
-    creatureSpecies,
-    {
-      label: t.creator.newItem,
-      open: () =>
-        creator.openCreature(world.creatureSpecies.length - 2, (sp) => {
-          const k = addCreatureSpecies(world, sp);
-          if (k < 0) return;
-          const lib = loadLibrary();
-          lib.creatures.push(world.creatureSpecies[k]);
-          saveLibrary(lib);
-          creatureSpecies = k;
-          fillPickers();
-        }),
-    },
-  );
-}
-fillPickers();
-/** Tools that come with a row for choosing what to use. */
-const pickers: Partial<Record<BarTool, Picker>> = { seed: seedPicker, creature: creaturePicker };
-const closePickers = () => Object.values(pickers).forEach((p) => p.close());
+seedPicker.setItems(
+  PLANTS.map((sp) => ({ label: sp.name, icon: plantIcon(sp.form, sp.colors, light, dark) })),
+  plantSpecies,
+);
 
 const toolbar = new Toolbar(TOOLS, tool, (id, again) => {
   tool = id as BarTool;
   if (tool !== "look") card.hide();
-  const picker = pickers[tool];
-  const wasOpen = picker?.open ?? false;
-  closePickers();
-  // Choosing seeds or creatures opens their row; tapping the tool again closes it.
-  if (picker && !(again && wasOpen)) picker.openAt(toolbar.centerOf(tool), toolbar.el.offsetHeight + 4);
+  const wasOpen = seedPicker.open;
+  seedPicker.close();
+  // Choosing seeds opens their row; tapping the tool again closes it.
+  if (tool === "seed" && !(again && wasOpen)) seedPicker.openAt(toolbar.centerOf(tool), toolbar.el.offsetHeight + 4);
 });
-/** The magnifying glass's card, and how close to a creature a tap must be (in cells) to find it. */
+
+/** The magnifying glass's card, and how close to an animal a tap must be (in cells) to find it. */
 const card = new CreatureCard(light, dark, () => card.hide());
 const PICK_REACH = 8 * SCALE;
 function pick(x: number, y: number): void {
-  let best: Creature | null = null;
+  let best: Animal | null = null;
   let bestD = PICK_REACH * PICK_REACH;
-  for (const c of world.creatures) {
-    const i = c.cells[0];
-    if (i === undefined) continue;
-    const dx = (i % W) - x;
-    const dy = ((i / W) | 0) - y;
-    if (dx * dx + dy * dy <= bestD) {
-      bestD = dx * dx + dy * dy;
-      best = c;
+  for (const a of world.animals) {
+    const s = renderer.shownAt(a);
+    const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+    if (d <= bestD) {
+      bestD = d;
+      best = a;
     }
   }
-  if (!best) {
-    card.hide();
-    return;
-  }
-  card.show(best, world);
+  if (best) card.show(best, world);
+  else card.hide();
 }
 let cardDrawn = 0;
 
-app.append(toolbar.el, seedPicker.el, creaturePicker.el, creator.el, card.el);
+app.append(toolbar.el, seedPicker.el, card.el);
 
-/** What the tool uses: the chosen seed or creature. */
-const choice = () => (tool === "creature" ? creatureSpecies : plantSpecies);
-
-const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false, skipDays: 0, overlay: "none" };
+const dev: DevState = { speed: 1, max: false, paused: false, stepOnce: false, skipDays: 0 };
 const devPanel = new DevPanel(dev);
 app.append(devPanel.el);
 function showDev(): void {
   devPanel.el.hidden = !settings.devMode;
   if (!settings.devMode) {
-    Object.assign(dev, { speed: 1, max: false, paused: false, overlay: "none" });
+    Object.assign(dev, { speed: 1, max: false, paused: false });
     devPanel.refresh();
   }
 }
 showDev();
 
 const menu = new Menu(app, {
-  world: () => world,
   settings,
   settingsChanged: () => saveSettings(settings),
-  history: () => history,
   snapshot: () => renderer.snapshot(),
   newGlass() {
     discarding = true;
     forgetGlass();
-    forgetHistory();
-    const keepDev = params.has("dev") ? "?dev" : "";
-    location.replace(location.pathname + keepDev);
+    location.replace(location.pathname + (params.has("dev") ? "?dev" : ""));
   },
   toggleDev() {
     settings.devMode = !settings.devMode;
@@ -215,8 +147,6 @@ const menu = new Menu(app, {
     showDev();
   },
   version: APP_VERSION,
-  light,
-  dark,
 });
 
 /** The glass keeps the world's shape and fills the space between the menu and the tools. */
@@ -236,15 +166,13 @@ function layout(): void {
   glass.style.width = `${gw}px`;
   glass.style.height = `${gh}px`;
   glass.style.left = `${(innerWidth - gw) / 2}px`;
-  // Any spare height goes above the glass, so the tools sit right below it.
   glass.style.top = `${top + (availH - gh)}px`;
   camera.setSize(gw, gh);
 }
 addEventListener("resize", layout);
 layout();
 
-// One finger on the glass uses the tool about ten times a second, in real
-// time, whatever speed the simulation runs at.
+// One finger on the glass uses the tool about ten times a second, in real time.
 let stroke: { x: number; y: number } | null = null;
 let toolTimer = 0;
 attachInput(
@@ -252,18 +180,17 @@ attachInput(
   camera,
   {
     start(x, y) {
-      closePickers();
-      creator.close();
+      seedPicker.close();
       if (menu.isOpen) menu.close();
       if (settings.vibration && navigator.vibrate) navigator.vibrate(8);
       if (tool === "look") {
         pick(x, y);
         return;
       }
-      // A creature is let go once per tap; the other tools keep going while held.
+      // A skrukketroll is let go once per tap; the other tools keep going while held.
       stroke = tool === "creature" ? null : { x, y };
       toolTimer = 0;
-      applyTool(world, tool, x, y, choice());
+      applyTool(world, tool, x, y, plantSpecies);
     },
     move(x, y) {
       if (stroke) {
@@ -278,33 +205,11 @@ attachInput(
   (x, y, on) => {
     ring.style.display = on ? "block" : "none";
     if (!on) return;
-    const size = camera.scale * (tool === "spade" ? 5 : 3);
+    const size = camera.scale * (tool === "spade" ? 9 : 5);
     ring.style.width = ring.style.height = `${size}px`;
     ring.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
   },
 );
-
-function step(): void {
-  stepWorld(world);
-  sampleIfDue();
-}
-
-/**
- * Catching up: moves the glass on the quick way (see sleepWorld), at most to
- * the next life step at a time. Returns the fast steps it moved on.
- */
-function catchUpStep(): number {
-  const n = Math.min(catchUp.left, LIFE_EVERY - (world.tick % LIFE_EVERY));
-  sleepWorld(world, n);
-  sampleIfDue();
-  return n;
-}
-
-function sampleIfDue(): void {
-  if (world.tick < nextSample) return;
-  record(history, world);
-  nextSample = (Math.floor(world.tick / SAMPLE_EVERY) + 1) * SAMPLE_EVERY;
-}
 
 let last = performance.now();
 let acc = 0;
@@ -313,9 +218,6 @@ let ticks = 0;
 let stepMs = 0;
 let statTime = last;
 let lastDraw = 0;
-/** While catching up: milliseconds of stepping per frame, and how often the glass is drawn. */
-const CATCH_UP_MS = 40;
-const CATCH_UP_DRAW_EVERY = 250;
 
 function frame(now: number): void {
   const dt = Math.min(0.25, (now - last) / 1000);
@@ -326,7 +228,7 @@ function frame(now: number): void {
     toolTimer += dt;
     while (toolTimer >= 0.1 && tool !== "look") {
       toolTimer -= 0.1;
-      applyTool(world, tool, stroke.x, stroke.y, choice());
+      applyTool(world, tool, stroke.x, stroke.y, plantSpecies);
     }
   }
 
@@ -338,48 +240,45 @@ function frame(now: number): void {
 
   const t0 = performance.now();
   if (catchUp.left > 0) {
-    // Making up for the time the app was closed, as fast as the phone allows:
-    // most of each frame goes to the glass, which is drawn only now and then.
-    do {
-      catchUp.left -= catchUpStep();
-    } while (catchUp.left > 0 && performance.now() - t0 < CATCH_UP_MS);
-    const done = Math.round(100 * (1 - catchUp.left / catchUp.total));
-    catchUpLabel.textContent = t.catchUp(done);
+    // Making up for the time the app was closed, a day at a time per frame.
+    const n = Math.min(catchUp.left, LIFE_PER_DAY * LIFE_EVERY);
+    skip(world, n);
+    catchUp.left -= n;
+    catchUpLabel.textContent = t.catchUp(Math.round(100 * (1 - catchUp.left / catchUp.total)));
     catchUpLabel.classList.toggle("on", catchUp.left > 0);
     if (catchUp.left === 0) keep();
   } else if (dev.stepOnce) {
     dev.stepOnce = false;
-    step();
+    stepWorld(world);
     ticks++;
   } else if (!dev.paused) {
     if (dev.max) {
       do {
-        step();
+        stepWorld(world);
         ticks++;
       } while (performance.now() - t0 < 12);
     } else {
-      acc += dt * TICKS_PER_SECOND * (settings.devMode ? dev.speed : 1) * settings.speed;
+      acc += dt * TICKS_PER_SECOND * (settings.devMode ? dev.speed : 1);
       let n = 0;
-      while (acc >= 1 && n < 400) {
-        step();
+      while (acc >= 1 && n < 2000) {
+        stepWorld(world);
         acc -= 1;
         n++;
         ticks++;
       }
-      if (n >= 400) acc = 0;
+      if (n >= 2000) acc = 0;
     }
   }
   stepMs += performance.now() - t0;
 
-  // The creature under the magnifying glass: a ring follows it, and its card is kept up to date.
-  renderer.selected = card.creature && card.alive(world) ? card.creature.cells[0] : -1;
-  if (card.creature && now - cardDrawn > 250) {
+  // The animal under the magnifying glass: a ring follows it, and its card is kept up to date.
+  renderer.selected = card.animal && card.alive(world) ? card.animal.id : 0;
+  if (card.animal && now - cardDrawn > 250) {
     card.update(world);
     cardDrawn = now;
   }
 
-  if (catchUp.left === 0 || now - lastDraw > CATCH_UP_DRAW_EVERY) {
-    renderer.overlay = dev.overlay;
+  if (catchUp.left === 0 || now - lastDraw > 250) {
     renderer.draw(world, now / 1000, dt);
     lastDraw = now;
   }
@@ -388,7 +287,7 @@ function frame(now: number): void {
   if (settings.devMode && now - statTime > 500) {
     const secs = (now - statTime) / 1000;
     devPanel.setInfo(world.tick, Math.round(frames / secs), ticks ? stepMs / ticks : 0, Math.round(ticks / secs));
-    devPanel.setCounts(world.plants.length, world.creatures.length, totalUnits(world), Math.round(totalWater(world) / 32));
+    devPanel.setCounts(world.plants.length, world.seeds.length, world.animals.length, waterLine(world));
     frames = 0;
     ticks = 0;
     stepMs = 0;

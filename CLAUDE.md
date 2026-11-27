@@ -1,36 +1,32 @@
-# Morphogen – regler for kodeassistenter
+# Morphogen 2 – regler for kodeassistenter
 
-Et lite terrarium i pikselgrafikk sett fra siden, der hver rute i et rutenett er én celle. Spilleren steller glasset med noen få verktøy og ser et lukket kretsløp leve. Simuleringen må være **bit-for-bit deterministisk**, fordi glass lagres, spoles fram når appen åpnes igjen, og senere deles. Se ROADMAP.md for planen.
+Et lite terrarium i pikselgrafikk sett fra siden. Spilleren steller glasset med noen få verktøy og ser et kretsløp leve: planter, visne blader og skrukketroll. Dette er versjon 2 (grenen `v2`), bygget **så enkelt som mulig, i lag**. Den første versjonen ligger på `main`. Se ROADMAP.md.
 
 ## Kommandoer
 
 - `npm run dev` – utviklingsserver
-- `npm test` – tester (må alltid passere)
+- `npm test` – to tester (må alltid passere)
 - `npm run typecheck` – typesjekk
 - `npm run build` – produksjonsbygg
 
-## Struktur
+## Lagene
 
-- `src/sim/` – simuleringen. Ren TypeScript uten DOM.
-- `src/view/` – tegning og kamera. Leser verden, endrer den aldri.
-- `src/ui/` – knapper, velgere og meny. All tekst spilleren ser ligger i `src/ui/strings.ts` (norsk).
-- `src/main.ts` – starter appen og kjører løkka.
+Verden er noen få lag oppå hverandre, hvert i sin egen korte fil i `src/sim/`, med sine egne regler:
 
-## Determinisme (viktigst)
+- `ground.ts` – bakken: rutenett med luft, jord og stein. Jord faller og glir som sand; stein ligger. `world.top` er bakkehøyden i hver kolonne.
+- `water.ts` – vannet: ett tall, vannlinja (`world.waterLine`, i 1/256 rader). Under linja er luft dam og jord våt. Vannkanna hever den (dråper som faller), og den synker sakte (fordamping).
+- `litter.ts` – visne blader: ett tall per kolonne, tegnet som en haug. Råtner sakte.
+- `plants.ts` (+ `forms.ts`, `species.ts`) – planter og frø: lister. Hver plante har en **fast form** laget fra id-en, som vises mer og mer etter hvert som planten vokser. Planten vokser når røttene når vannlinja, ellers visner den. Frø spirer når vannet er nær (busker og blomster bare i en grop eller mellom visne blader).
+- `animals.ts` – skrukketroll: en liste. De står i en kolonne på bakken, spiser visne blader der, formerer seg, dør og blir til løv.
+- `step.ts` – klokka: raske steg (`TICKS_PER_SECOND`) for det som faller, og et livssteg hvert femte minutt (`LIFE_EVERY`) for alt som lever. `skip` spoler fram og hopper rett fra livssteg til livssteg.
 
-All kode i `src/sim/` må følge dette:
+Lagene leser hverandre, men hvert lag endrer bare sitt eget (bortsett fra at planter og dyr legger visne blader i løvlaget, og verktøyene i `tools.ts`).
 
-- Bare heltall i alt som påvirker tilstanden. Ingen `Math.random()`, ingen `Math.sin` og liknende. Bruk `world.rng` (`src/sim/rng.ts`).
-- Ingen avhengighet av sanntid (`Date`, `performance.now()`). Motoren går kun i faste steg, med to klokker: raske steg (`TICKS_PER_SECOND`) for det som faller, flyter og kryper, og et livssteg hvert femte minutt (`LIFE_EVERY`) for alt som lever, gror, eldes og råtner. Livsregler planlegges etter `world.life`, ikke `world.tick`. Når appen har vært lukket, spoles glasset fram med `sleepWorld` (alle livssteg, bare noen få raske steg før hvert).
-- Gå gjennom rutenettet og listene i fast rekkefølge. En rute som er flyttet i et steg, merkes så den ikke flyttes to ganger.
-- Ingen DOM eller nettleser-API-er i motoren.
-- Nye rutetyper legges til sist i `src/sim/cells.ts`, aldri i midten: lagrede glass bruker tallene.
-- **Næring og vann føres som regnskap.** Næring (`food`) lages bare av plantene (fotosyntese, telles i `world.fixed`) og forsvinner bare når dyr og råte forbrenner den (telles i `world.burned`); ellers flyttes den bare. `unitLedger` (= `totalUnits - fixed + burned`) skal være konstant når spilleren ikke gjør noe. Vann flyttes bare, bortsett fra det som slipper ut av glasset (`lostWater`): `totalWater + lostWater` skal være konstant. Grunnvannet er ett tall for hele glasset (`world.groundwater`), og grunnvannsflaten (`waterTable`) er en vannrett linje regnet ut fra det. Bare verktøyene legger til eller fjerner. Pass på `Uint8Array`: et felt som går under 0 eller over 255 bryter regnskapet. `wet` brukes bare til alder (blad, blomst, frø, fôr), så sett `wet` til 0 når en slik rute blir til noe annet. Skrukketrollene er ikke ruter: de ligger i et eget lag (`world.critter`, id per rute) oppå rutenettet, og kroppen deres (én enhet) står i `store`.
-- Endrer du reglene med vilje: øk `SIM_VERSION` og oppdater gullhashen. Endres gullhashen uten at du mente å endre reglene, er det en feil.
+## Regler for koden
 
-## Kode
-
-- TypeScript, strict. Kode og kommentarer på engelsk.
-- Tilfeldighet i tegningen (støv, glitter) er greit, så lenge den ikke påvirker verden.
-- Hold motoren rask: hvert steg går gjennom alle ruter, så unngå å lage objekter per rute.
+- **Deterministisk:** bare heltall i `src/sim/`, tilfeldighet bare fra `world.rng`, ingen sanntid og ingen DOM. Gå gjennom lister og rutenett i fast rekkefølge.
+- Endrer du reglene med vilje: øk `SIM_VERSION` og oppdater gullhashen i `tests/sim.test.ts`.
+- `src/view/` tegner lag for lag og endrer aldri verden. Det skrukketrollene gjør mellom livsstegene (rusler rundt), er bare tegning.
+- All tekst spilleren ser ligger i `src/ui/strings.ts` (norsk). Kode og kommentarer på engelsk. TypeScript strict.
+- Hold det enkelt: ingen balansetester og ingen store testsuiter. Legg heller til et nytt lag eller en ny kort regel enn å gjøre et lag komplisert.
 - Minimalt grensesnitt: ingen tekst på knappene, verktøy som oppfører seg som ekte ting.

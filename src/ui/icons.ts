@@ -20,12 +20,8 @@ export const ICONS: Record<string, Icon> = {
     r: [" gg     gg ", "gggG   Gggg", " ggGG GGgg ", "     G     ", "     G     ", "    sss    ", "   sssSs   ", "   ssSSs   ", "    sSS    "],
   },
   creature: {
-    c: { k: INK, r: "#e0503c", w: "#ffffff" },
-    r: ["   k   k   ", "    kkk    ", "   kwkwk   ", " k rrkrr k ", "  rrrkrrr  ", " krkrkrkrk ", "  rrrkrrr  ", " k rrkrr k ", "    rrr    "],
-  },
-  feed: {
-    c: { y: "#f5c24c", Y: "#d98f2b", o: "#9fc4dc", O: "#6f9cbc" },
-    r: ["  y    y   ", "     Y   y ", "  Y  y     ", " yYyYyYyYy ", "OOOOOOOOOOO", " ooooooooo ", "  ooooooo  "],
+    c: { a: "#9a9ca4", A: "#5c5e66", h: "#c4c6ce", k: INK },
+    r: ["           ", "           ", "    hhhh   ", "k  haAaAa  ", " kaAaAaAaa ", " aAaAaAaAaa", "  k k k k  "],
   },
   look: {
     c: { f: "#d8d2c8", g: "#7fb8e0", h: "#e8f6ff", d: "#a06a3a" },
@@ -44,31 +40,26 @@ const PLANT_ICONS: Record<string, string[]> = {
   bush: ["   lLl     ", "  lLLLll   ", " lLLlLLLl  ", " LLLLLlLLl ", "  lLLSLLl  ", "   LS SL   ", "     S     ", "     S     ", "ddddddddddd"],
 };
 
-export function plantIcon(form: string, colors: { leaf: string; stem: string; flower: string }, light: (c: string) => string, dark: (c: string) => string): Icon {
+export function plantIcon(form: string, colors: { leaf: string; stem: string; petal: string; center: string }, light: (c: string) => string, dark: (c: string) => string): Icon {
   return {
     c: {
       L: colors.leaf,
       l: light(colors.leaf),
       S: colors.stem,
-      p: colors.flower,
-      P: dark(colors.flower),
-      c: "#ffd84a",
+      p: colors.petal,
+      P: dark(colors.petal),
+      c: colors.center,
       d: "#5a4236",
     },
     r: PLANT_ICONS[form] ?? PLANT_ICONS.flower,
   };
 }
 
-/** Creature icons by diet, coloured from the species. */
-const CREATURE_ICONS: Record<string, string[]> = {
-  litter: ["           ", "           ", "    hhhh   ", "k  haAaAa  ", " kaAaAaAaa ", " aAaAaAaAaa", "  k k k k  "],
-};
+/** The skrukketroll's icon. */
+const BUG_ICON = ["           ", "           ", "    hhhh   ", "k  haAaAa  ", " kaAaAaAaa ", " aAaAaAaAaa", "  k k k k  "];
 
-export function creatureIcon(diet: string, color: string, light: (c: string) => string, dark: (c: string) => string): Icon {
-  return {
-    c: { a: color, A: dark(color), y: color, Y: dark(color), h: light(color), k: INK, p: color, P: dark(color), d: "#352a33" },
-    r: CREATURE_ICONS[diet] ?? CREATURE_ICONS.litter,
-  };
+export function creatureIcon(color: string, light: (c: string) => string, dark: (c: string) => string): Icon {
+  return { c: { a: color, A: dark(color), h: light(color), k: INK }, r: BUG_ICON };
 }
 
 /** Makes a canvas showing an icon; scale it up with CSS. */
