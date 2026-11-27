@@ -18,7 +18,7 @@ export function hashWorld(w: World): string {
   for (let i = 0; i < w.litter.length; i++) mix(w.litter[i]);
   for (const d of w.drops) [d.x, d.y].forEach(mix);
   for (const s of w.seeds) [s.id, s.species, s.x, s.y, s.ready, s.age].forEach(mix);
-  for (const p of w.plants) [p.id, p.species, p.x, p.y, p.age, p.size, p.grow, p.thirst, p.life].forEach(mix);
+  for (const p of w.plants) [p.id, p.species, p.x, p.y, p.root, p.age, p.size, p.grow, p.thirst, p.life].forEach(mix);
   for (const a of w.animals) [a.id, a.x, a.dir, a.age, a.life, a.energy, a.mother, a.young].forEach(mix);
   return (h >>> 0).toString(16).padStart(8, "0");
 }

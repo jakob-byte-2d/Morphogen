@@ -11,4 +11,4 @@ export const LIFE_EVERY = 5 * 60 * TICKS_PER_SECOND;
 export const LIFE_PER_DAY = (24 * 60) / 5;
 
 /** Bump when the rules change on purpose (and update the golden hash in the tests). */
-export const SIM_VERSION = 1;
+export const SIM_VERSION = 2;

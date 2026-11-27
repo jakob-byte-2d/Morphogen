@@ -9,11 +9,11 @@ export type Tool = "water" | "soil" | "seed" | "creature" | "spade";
 const inside = (x: number, y: number) => x >= 0 && x < W && y >= 0 && y < H;
 
 /**
- * The player's tools, at cell (x, y). Called about ten times a second while
- * a finger is held down (the creature once per tap). `species` is the seed
- * chosen.
+ * The player's tools, at cell (x, y). Called once when a finger touches the
+ * glass, and then (`held`) about ten times a second while it is held down
+ * (the creature only once per tap). `species` is the seed chosen.
  */
-export function applyTool(w: World, tool: Tool, x: number, y: number, species = 0): void {
+export function applyTool(w: World, tool: Tool, x: number, y: number, species = 0, held = false): void {
   x = Math.round(x);
   y = Math.round(y);
   if (tool === "water") {
@@ -33,7 +33,8 @@ export function applyTool(w: World, tool: Tool, x: number, y: number, species = 
       }
     }
   } else if (tool === "seed") {
-    if (w.rng.below(3) === 0) dropSeed(w, species, x + w.rng.below(3) - 1, y);
+    // One seed per tap; held down, about three a second.
+    if (!held || w.rng.below(3) === 0) dropSeed(w, species, held ? x + w.rng.below(3) - 1 : x, y);
   } else if (tool === "creature") {
     const a = spawnAnimal(w, x, FULL);
     if (a) a.dropY = y;

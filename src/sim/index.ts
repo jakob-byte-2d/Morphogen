@@ -2,6 +2,7 @@ export * from "./dims";
 export { EMPTY, SOIL, STONE, type Animal, type Drop, type Plant, type Seed, type World } from "./world";
 export { createWorld, lifeStep, skip, stepWorld } from "./step";
 export { waterLine } from "./water";
+export { heapHeight } from "./litter";
 export { canSprout, reachOf, WILTS } from "./plants";
 export { FULL, grownUp, HUNGRY, spawnAnimal } from "./animals";
 export { BERRY, CENTER, formOf, LEAF, PETAL, STEM, type Form, type FormKind } from "./forms";

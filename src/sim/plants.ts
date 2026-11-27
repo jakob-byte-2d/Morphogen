@@ -1,6 +1,6 @@
 import { H, W } from "./dims";
 import { formOf } from "./forms";
-import { addLitter } from "./litter";
+import { addLitter, heapHeight } from "./litter";
 import { PLANTS } from "./species";
 import { waterLine } from "./water";
 import { EMPTY, newId, type Plant, type Seed, type World } from "./world";
@@ -15,41 +15,56 @@ export function reachOf(p: Plant): number {
 export const WILTS = 48;
 const DIES = 2 * 288;
 
-/** Seeds wait this many life steps where they can sprout (an hour), and rot after two days elsewhere. */
-const SPROUT = 12;
+/**
+ * A seed sprouts at the second life step it can (after five to ten
+ * minutes), and rots after two days if it never can.
+ */
+const SPROUT = 2;
 const SEED_ROTS = 2 * 288;
-/** How near a seed the sides of its pit must be. */
-const PIT = 3;
+/** How deep bush and flower seeds must be buried (cells of soil, or of dead leaves, over them). */
+const BURIED = 2;
+/**
+ * A seedling's first growth steps (the first fifth of its growth) come
+ * quickly, one a life step: a little sprout with leaves within twenty minutes.
+ */
+const QUICK = 5;
 
-/** Does the seed lie still on the ground? */
+/** Does the seed lie still (on the ground, or in it)? */
 function resting(w: World, s: Seed): boolean {
   return s.y + 1 >= H || w.ground[(s.y + 1) * W + s.x] !== EMPTY;
 }
 
-/** Ground (or the glass) beside the seed on side d, within a few cells: the side of a pit. */
-function side(w: World, s: Seed, d: number): boolean {
-  for (let k = 1; k <= PIT; k++) {
-    const x = s.x + d * k;
-    if (x < 0 || x >= W) return true;
-    if (w.ground[s.y * W + x] !== EMPTY) return true;
-  }
-  return false;
+/** How deep the seed lies: cells of soil over it, or, lying on the ground, of dead leaves. */
+function depth(w: World, s: Seed): number {
+  let n = 0;
+  while (s.y - 1 - n >= 0 && w.ground[(s.y - 1 - n) * W + s.x] !== EMPTY) n++;
+  if (n === 0 && s.y === w.top[s.x] - 1) n = Math.max(0, heapHeight(w.litter[s.x]) - 1);
+  return n;
+}
+
+/** Where a seed comes up: the first open cell above it. */
+function footOf(w: World, s: Seed): number {
+  let y = s.y;
+  while (y > 0 && w.ground[y * W + s.x] !== EMPTY) y--;
+  return y;
 }
 
 /**
- * Can this seed sprout where it lies? On the ground, out of the water, with
- * the water line near enough below, and no plant right there. Bushes and
- * flowers need a little pit too (or dead leaves round them). The view asks
- * this as well, to make such a seed blink.
+ * Can this seed sprout where it lies? It must lie still, above the water
+ * line with the water near enough below, and with no plant right where it
+ * would come up. Bushes and flowers must be buried at least two cells deep
+ * (under soil, or under a heap of dead leaves); grass sprouts anywhere. The
+ * view asks this as well, to make such a seed blink.
  */
 export function canSprout(w: World, s: Seed): boolean {
   if (!resting(w, s) || s.y + 1 >= H) return false;
   const line = waterLine(w);
   const sp = PLANTS[s.species];
   if (s.y >= line || line - (s.y + 1) > sp.reach[0]) return false;
-  for (const p of w.plants) if (Math.abs(p.x - s.x) <= 2 && Math.abs(p.y - s.y) <= 3) return false;
-  if (!sp.pit) return true;
-  return w.litter[s.x] >= 2 || (side(w, s, -1) && side(w, s, 1));
+  const foot = footOf(w, s);
+  if (foot <= 0 || w.ground[foot * W + s.x] !== EMPTY) return false;
+  for (const p of w.plants) if (Math.abs(p.x - s.x) <= 2 && Math.abs(p.y - foot) <= 3) return false;
+  return !sp.pit || depth(w, s) >= BURIED;
 }
 
 /** Seeds fall a cell a step until they lie on the ground. */
@@ -74,7 +89,8 @@ function updateSeeds(w: World): void {
     if (s.ready >= SPROUT && canSprout(w, s)) {
       const sp = PLANTS[s.species];
       const life = sp.life - (sp.life >> 3) + w.rng.below((sp.life >> 2) + 1);
-      w.plants.push({ id: s.id, species: s.species, x: s.x, y: s.y, age: 0, size: 0, grow: 0, thirst: 0, life });
+      // It comes up at the surface over it, its roots where the seed lay.
+      w.plants.push({ id: s.id, species: s.species, x: s.x, y: footOf(w, s), root: s.y, age: 0, size: 0, grow: 0, thirst: 0, life });
       continue;
     }
     if (s.age < SEED_ROTS) w.seeds[n++] = s;
@@ -110,7 +126,7 @@ export function updatePlants(w: World): void {
     }
     // Standing in the pond it drowns; with its roots in the wet ground it drinks.
     if (p.y >= line) p.thirst += 2;
-    else if (line - (p.y + 1) <= reachOf(p)) p.thirst = Math.max(0, p.thirst - 4);
+    else if (line - (p.root + 1) <= reachOf(p)) p.thirst = Math.max(0, p.thirst - 4);
     else p.thirst++;
     if (p.thirst >= DIES) {
       die(w, p);
@@ -119,7 +135,7 @@ export function updatePlants(w: World): void {
     w.plants[n++] = p;
     if (p.thirst > 0) continue;
     if (p.size < sp.full) {
-      if (++p.grow >= sp.growEvery) {
+      if (++p.grow >= (p.size * QUICK < sp.full ? 1 : sp.growEvery)) {
         p.grow = 0;
         p.size++;
       }

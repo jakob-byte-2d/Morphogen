@@ -10,6 +10,11 @@ export function addLitter(w: World, x: number, n: number): void {
   w.litter[c] = Math.min(255, w.litter[c] + n);
 }
 
+/** How high a heap of n dead leaves stands (cells). */
+export function heapHeight(n: number): number {
+  return n === 0 ? 0 : Math.min(10, 1 + (((n - 1) / 3) | 0));
+}
+
 /** One leaf in a column rots away about every eight hours. */
 const ROT = 96;
 

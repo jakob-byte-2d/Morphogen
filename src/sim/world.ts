@@ -40,6 +40,8 @@ export interface Plant {
   /** Its foot: the cell just above the ground it grows from. */
   x: number;
   y: number;
+  /** Where its roots start: where the seed lay (at or below its foot). */
+  root: number;
   /** Life steps lived. */
   age: number;
   /** How far grown, from 0 to its species' full size. */

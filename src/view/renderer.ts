@@ -5,6 +5,7 @@ import {
   EMPTY,
   formOf,
   H,
+  heapHeight,
   LEAF,
   PETAL,
   PLANTS,
@@ -69,7 +70,7 @@ const PLANT_RGB = PLANTS.map((sp) => {
   rows[PETAL] = four(c.petal);
   rows[CENTER] = four(c.center);
   rows[BERRY] = four(c.petal);
-  return { rows, seed: hexToRgb(c.seed) };
+  return { rows, seed: hexToRgb(c.seed), root: hexToRgb(lighten(c.stem, 0.35)) };
 });
 const BUG = [darken(SKRUKKETROLL.color, 0.35), SKRUKKETROLL.color, lighten(SKRUKKETROLL.color, 0.25)].map(hexToRgb);
 
@@ -304,7 +305,7 @@ export class Renderer {
     for (let x = 0; x < W; x++) {
       const n = w.litter[x];
       if (n === 0) continue;
-      const h = Math.min(10, 1 + ((n - 1) / 3) | 0);
+      const h = heapHeight(n);
       for (let k = 0; k < h; k++) {
         const y = w.top[x] - 1 - k;
         if (y < 0) break;
@@ -325,6 +326,8 @@ export class Renderer {
       const shows = Math.max(14, ((p.size * 255) / sp.full) | 0);
       const fade = Math.min(0.8, p.thirst / (WILTS * 4));
       const rgb = PLANT_RGB[p.species].rows;
+      // The pale shoot from where the seed lay up to the surface.
+      for (let y = p.y + 1; y <= p.root; y++) if (w.ground[y * W + p.x] !== EMPTY) this.put(d, p.x, y, PLANT_RGB[p.species].root, 200);
       for (let k = 0; k < f.n; k++) {
         if (f.order[k] > shows) continue;
         const x = p.x + f.dx[k];

@@ -42,7 +42,7 @@ export function saveWorld(w: World) {
     litter: toBase64(w.litter),
     drops: w.drops.map((d) => [d.x, d.y]),
     seeds: w.seeds.map((s) => [s.id, s.species, s.x, s.y, s.ready, s.age]),
-    plants: w.plants.map((p) => [p.id, p.species, p.x, p.y, p.age, p.size, p.grow, p.thirst, p.life]),
+    plants: w.plants.map((p) => [p.id, p.species, p.x, p.y, p.age, p.size, p.grow, p.thirst, p.life, p.root]),
     animals: w.animals.map((a) => [a.id, a.x, a.dir, a.age, a.life, a.energy, a.mother, a.young]),
   };
 }
@@ -53,7 +53,8 @@ export type SavedWorld = ReturnType<typeof saveWorld>;
 export function loadWorld(data: unknown): World | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
-  if (d.v !== SIM_VERSION || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
+  // Version 1 had no roots below the foot; such glasses load with roots at the foot.
+  if ((d.v !== SIM_VERSION && d.v !== 1) || !Array.isArray(d.rng) || d.rng.length !== 4) return null;
   const ground = fromBase64(d.ground, SIZE);
   const litter = fromBase64(d.litter, W);
   if (!ground || !litter) return null;
@@ -74,8 +75,9 @@ export function loadWorld(data: unknown): World | null {
   const y = (v: number) => Math.max(0, Math.min(H - 1, v));
   w.drops = rows(d.drops, 2).map(([a, b]) => ({ x: x(a), y: y(b) }));
   w.seeds = rows(d.seeds, 6).map(([id, sp, a, b, ready, age]): Seed => ({ id, species: Math.max(0, Math.min(PLANTS.length - 1, sp)), x: x(a), y: y(b), ready, age }));
-  w.plants = rows(d.plants, 9).map(
-    ([id, sp, a, b, age, size, grow, thirst, life]): Plant => ({
+  const plantRows = d.v === 1 ? rows(d.plants, 9).map((r) => [...r, r[3]]) : rows(d.plants, 10);
+  w.plants = plantRows.map(
+    ([id, sp, a, b, age, size, grow, thirst, life, root]): Plant => ({
       id,
       species: Math.max(0, Math.min(PLANTS.length - 1, sp)),
       x: x(a),
@@ -85,6 +87,7 @@ export function loadWorld(data: unknown): World | null {
       grow,
       thirst,
       life,
+      root: Math.max(y(b), y(root)),
     }),
   );
   w.animals = rows(d.animals, 8).map(

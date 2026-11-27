@@ -16,7 +16,7 @@ Verden er noen få lag oppå hverandre, hvert i sin egen korte fil i `src/sim/`,
 - `ground.ts` – bakken: rutenett med luft, jord og stein. Jord faller og glir som sand; stein ligger. `world.top` er bakkehøyden i hver kolonne.
 - `water.ts` – vannet: ett tall, vannlinja (`world.waterLine`, i 1/256 rader). Under linja er luft dam og jord våt. Vannkanna hever den (dråper som faller), og den synker sakte (fordamping).
 - `litter.ts` – visne blader: ett tall per kolonne, tegnet som en haug. Råtner sakte.
-- `plants.ts` (+ `forms.ts`, `species.ts`) – planter og frø: lister. Hver plante har en **fast form** laget fra id-en, som vises mer og mer etter hvert som planten vokser. Planten vokser når røttene når vannlinja, ellers visner den. Frø spirer når vannet er nær (busker og blomster bare i en grop eller mellom visne blader).
+- `plants.ts` (+ `forms.ts`, `species.ts`) – planter og frø: lister. Hver plante har en **fast form** laget fra id-en, som vises mer og mer etter hvert som planten vokser. Planten vokser når røttene når vannlinja, ellers visner den. Frø spirer når vannet er nær nok, etter 5–10 minutter, og kommer opp ved overflaten over seg (gress hvor som helst, busker og blomster bare når de er gravd ned minst to ruter, under jord eller en tykk haug visne blader). De første vekstrinnene går raskt, resten sakte.
 - `animals.ts` – skrukketroll: en liste. De står i en kolonne på bakken, spiser visne blader der, formerer seg, dør og blir til løv.
 - `step.ts` – klokka: raske steg (`TICKS_PER_SECOND`) for det som faller, og et livssteg hvert femte minutt (`LIFE_EVERY`) for alt som lever. `skip` spoler fram og hopper rett fra livssteg til livssteg.
 

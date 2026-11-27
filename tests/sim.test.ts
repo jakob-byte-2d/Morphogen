@@ -5,9 +5,13 @@ import { applyTool, createWorld, hashWorld, LIFE_EVERY, LIFE_PER_DAY, loadWorld,
 function tended(seed: number, days: number): World {
   const w = createWorld(seed);
   for (const x of [14, 24, 120, 132]) for (let k = 0; k < 6; k++) applyTool(w, "seed", x, 150, 0);
+  // Bushes and flowers: a pit, a seed in it, and soil over it.
   for (const [x, sp] of [[8, 2], [34, 1], [110, 1], [126, 2]]) {
     applyTool(w, "spade", x, w.top[x]);
-    for (let k = 0; k < 6; k++) applyTool(w, "seed", x, 150, sp);
+    for (let k = 0; k < 30; k++) stepWorld(w);
+    applyTool(w, "seed", x, w.top[x] - 20, sp);
+    for (let k = 0; k < 40; k++) stepWorld(w);
+    for (let k = 0; k < 8; k++) applyTool(w, "soil", x, w.top[x] - 6, 0, k > 0);
   }
   for (let k = 0; k < 300; k++) stepWorld(w);
   for (let d = 1; d <= days; d++) {
@@ -26,7 +30,7 @@ describe("the glass", () => {
     expect(a.plants.length).toBeGreaterThan(0);
     expect(a.animals.length).toBeGreaterThan(0);
     // The rules themselves: this changes only when they are changed on purpose (then bump SIM_VERSION).
-    expect(hashWorld(a)).toBe("884439a0");
+    expect(hashWorld(a)).toBe("6741d968");
   });
 
   it("is the same after saving and loading, and goes on the same", () => {

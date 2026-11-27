@@ -163,6 +163,8 @@ function bush(id: number): Form {
   const far = (dx: number, dy: number) => isqrt(((dx * dx * ry * ry + dy * dy * rx * rx) * 10000) / whole);
 
   // Stems: one walk per stem, slanting by `lean` eighths (0 up, 8 at 45°, 12 out and a little up).
+  // Where each first stem is a little way out, a young bush has its first leaves.
+  const early: [number, number, number][] = [];
   const walk = (x: number, y: number, lean: number, stop: number, k: number) => {
     const side = Math.sign(lean);
     const a = Math.abs(lean);
@@ -177,6 +179,7 @@ function bush(id: number): Form {
       const d = far(x, y);
       if (d > stop || y > 0) return;
       b.add(x, y, STEM, d < 30 ? 0 : 1, (d * 255) / 100);
+      if (k <= 9 && len === 2) early.push([x, y, (d * 255) / 100 + 2]);
       // Now and then a branch, out and up.
       if (len > 4 && rand(id, k * 100 + len) % 9 === 0) walk(x, y, a >= 6 ? lean - side * 4 : lean + (side || 1) * 4, stop, k * 7 + len);
     }
@@ -189,6 +192,7 @@ function bush(id: number): Form {
     walk(0, 0, lean, 82, k + 1);
   }
 
+  for (const [x, y, o] of early) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [-1, -1], [1, -1]]) b.add(x + dx, y + dy, LEAF, 2, o);
   // Leaves fill the outer part of the dome, in clumps; the middle is bare stems.
   for (let dy = -ry; dy <= 0; dy++) {
     for (let dx = -rx; dx <= rx; dx++) {

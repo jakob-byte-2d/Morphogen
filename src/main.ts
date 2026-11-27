@@ -228,7 +228,7 @@ function frame(now: number): void {
     toolTimer += dt;
     while (toolTimer >= 0.1 && tool !== "look") {
       toolTimer -= 0.1;
-      applyTool(world, tool, stroke.x, stroke.y, plantSpecies);
+      applyTool(world, tool, stroke.x, stroke.y, plantSpecies, true);
     }
   }
 

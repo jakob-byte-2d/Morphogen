@@ -60,7 +60,7 @@ export const t = {
   help: {
     water: "Dra for å vanne. Vannet synker ned, og dammen og den våte jorda står like høyt. Vannet fordamper litt hver dag.",
     soil: "Dra for å strø jord.",
-    seed: "Trykk på frøet for å velge art, og dra for å så. Gress kan du strø rett på bakken. Busker og blomster må ned i en liten grop: grav en med spaden, og slipp frøet oppi (visne blader rundt frøet holder også). Frø spirer bare der vannet er nær nok. Et frø som har det det trenger, blinker grønt til det spirer.",
+    seed: "Trykk på frøet for å velge art. Ett trykk gir ett frø; holder du inne, kommer det flere. Gress kan du strø rett på bakken. Busker og blomster må graves ned minst to ruter: grav en grop med spaden, slipp frøet oppi og strø jord over (eller la det ligge under en tykk haug visne blader). Frø spirer bare der vannet er nær nok. Et frø som har det det trenger, blinker grønt, og etter fem–ti minutter spirer det opp mot overflaten.",
     creature: "Trykk i glasset for å slippe ut ett skrukketroll. De spiser visne blader.",
     spade: "Dra for å grave bort jord, planter og visne blader.",
     look: "Trykk på et skrukketroll med lupen for å se hvem det er: navn, alder, vekt, hvor mett det er og hvem som er mor.",
